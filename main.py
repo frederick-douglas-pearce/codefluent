@@ -49,6 +49,19 @@ async def get_sessions(limit: int = 50, project: str = None):
     return {"sessions": sessions[:limit], "metadata": data["metadata"]}
 
 
+@app.get("/api/scores")
+async def get_scores():
+    """Return cached fluency scores if they exist."""
+    scores_path = Path("data/scores.json")
+    if not scores_path.exists():
+        return {"scores": {}, "aggregate": {}}
+    with open(scores_path) as f:
+        cached = json.load(f)
+    scored = [r for r in cached.values() if "fluency_behaviors" in r]
+    aggregate = compute_aggregate(scored) if scored else {}
+    return {"scores": cached, "aggregate": aggregate}
+
+
 SCORING_PROMPT = """You are an AI Fluency Analyst. Analyze this Claude Code session's user prompts and score against Anthropic's 4D AI Fluency Framework and their 6 coding interaction patterns.
 
 ## AI Fluency Behavioral Indicators (score each true/false)

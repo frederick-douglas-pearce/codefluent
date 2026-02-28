@@ -456,12 +456,35 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   color: var(--text-secondary);
 }
 
+/* Tab panel animation */
+.tab-panel.active {
+  animation: fadeIn 0.25s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Empty State */
 .empty-state {
   text-align: center;
   padding: 48px;
   color: var(--text-muted);
   font-size: 15px;
+}
+.empty-state-box {
+  background: var(--bg-card);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 48px 24px;
+  text-align: center;
+}
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+.empty-state-box .empty-state {
+  padding: 0;
 }
 
 /* Footer */

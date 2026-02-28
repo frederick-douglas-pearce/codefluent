@@ -200,31 +200,79 @@ function renderUsageDashboard() {
   document.getElementById('stat-models-used').textContent = allModels.size
   document.getElementById('stat-models-detail').textContent = [...allModels].map(m => m.split('-').slice(0, 4).join('-')).join(', ')
 
-  // Token usage line chart
+  // Token usage stacked area chart (cache read, cache creation, input, output)
   destroyChart('usage')
   charts.usage = new Chart(document.getElementById('usage-chart').getContext('2d'), {
     type: 'line',
     data: {
       labels: daily.map(d => d.date),
-      datasets: [{
-        label: 'Total Tokens',
-        data: daily.map(d => d.totalTokens),
-        borderColor: '#D97706',
-        backgroundColor: 'rgba(217, 119, 6, 0.1)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 2,
-      }]
+      datasets: [
+        {
+          label: 'Cache Read',
+          data: daily.map(d => d.cacheReadTokens || 0),
+          borderColor: '#D97706',
+          backgroundColor: 'rgba(217, 119, 6, 0.35)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          borderWidth: 2,
+          order: 4,
+        },
+        {
+          label: 'Cache Creation',
+          data: daily.map(d => d.cacheCreationTokens || 0),
+          borderColor: '#B45309',
+          backgroundColor: 'rgba(180, 83, 9, 0.35)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          borderWidth: 2,
+          order: 3,
+        },
+        {
+          label: 'Input',
+          data: daily.map(d => d.inputTokens || 0),
+          borderColor: '#059669',
+          backgroundColor: 'rgba(5, 150, 105, 0.35)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          borderWidth: 2,
+          order: 2,
+        },
+        {
+          label: 'Output',
+          data: daily.map(d => d.outputTokens || 0),
+          borderColor: '#2563EB',
+          backgroundColor: 'rgba(37, 99, 235, 0.35)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          borderWidth: 2,
+          order: 1,
+        },
+      ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: { position: 'top' },
-        tooltip: { callbacks: { label: ctx => `${formatTokens(ctx.raw)} tokens` } }
+        tooltip: {
+          mode: 'index',
+          callbacks: { label: ctx => `${ctx.dataset.label}: ${formatTokens(ctx.raw)}` }
+        }
       },
       scales: {
-        y: { beginAtZero: true, ticks: { callback: v => formatTokens(v) } },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: { callback: v => formatTokens(v) }
+        },
         x: { ticks: { maxTicksLimit: 15 } }
       }
     }
@@ -239,14 +287,19 @@ function renderUsageDashboard() {
       datasets: [{
         label: 'Cost (USD)',
         data: daily.map(d => d.totalCost),
-        backgroundColor: '#059669',
+        backgroundColor: 'rgba(5, 150, 105, 0.8)',
+        hoverBackgroundColor: '#059669',
         borderRadius: 4,
+        barPercentage: 0.85,
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' } },
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { label: ctx => formatCost(ctx.raw) } }
+      },
       scales: {
         y: { beginAtZero: true, ticks: { callback: v => '$' + v.toFixed(2) } },
         x: { ticks: { maxTicksLimit: 15 } }
@@ -592,5 +645,22 @@ function renderRecCard(rec) {
     </div>`
 }
 
+// --- Load cached scores ---
+async function loadCachedScores() {
+  try {
+    const res = await fetch('/api/scores')
+    const data = await res.json()
+    if (data.aggregate?.average_score) {
+      state.scores = data
+      renderFluencyScore()
+    }
+  } catch (e) {
+    // Silently ignore — user can still run manual scoring
+  }
+}
+
 // --- Init ---
-document.addEventListener('DOMContentLoaded', loadData)
+document.addEventListener('DOMContentLoaded', () => {
+  loadData()
+  loadCachedScores()
+})
