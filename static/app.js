@@ -6,7 +6,7 @@ let state = {
   sessions: null,
   scores: null,
   quickwins: null,
-  activeTab: 'usage'
+  activeTab: 'fluency'
 }
 
 // --- Chart instances (destroy before re-creating) ---

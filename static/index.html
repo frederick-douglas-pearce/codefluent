@@ -22,15 +22,15 @@
     </header>
 
     <nav class="tabs">
-      <button class="tab active" data-tab="usage">Usage</button>
-      <button class="tab" data-tab="fluency">Fluency Score</button>
+      <button class="tab active" data-tab="fluency">Fluency Score</button>
+      <button class="tab" data-tab="usage">Usage</button>
       <button class="tab" data-tab="quickwins">Quick Wins</button>
       <button class="tab" data-tab="recommendations">Recommendations</button>
     </nav>
 
     <main class="content">
       <!-- Usage Tab -->
-      <div id="tab-usage" class="tab-panel active">
+      <div id="tab-usage" class="tab-panel">
         <div class="stat-cards">
           <div class="stat-card">
             <span class="label">Total Tokens</span>
@@ -71,7 +71,7 @@
       </div>
 
       <!-- Fluency Tab -->
-      <div id="tab-fluency" class="tab-panel">
+      <div id="tab-fluency" class="tab-panel active">
         <div class="scoring-controls">
           <label for="session-count">Analyze last</label>
           <select id="session-count">
