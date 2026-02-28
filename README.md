@@ -35,11 +35,11 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 
 | Usage | Fluency Score |
 |-------|---------------|
-| ![Usage tab](demo-usage.png) | ![Fluency tab](demo-fluency.png) |
+| ![Usage tab](images/demo-usage.png) | ![Fluency tab](images/demo-fluency.png) |
 
 | Quick Wins | Recommendations |
 |------------|-----------------|
-| ![Quick Wins tab](demo-quickwins.png) | ![Recommendations tab](demo-recommendations.png) |
+| ![Quick Wins tab](images/demo-quickwins.png) | ![Recommendations tab](images/demo-recommendations.png) |
 
 ## Features
 
