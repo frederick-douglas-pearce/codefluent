@@ -41,6 +41,20 @@ const BEHAVIOR_LABELS = {
   identifying_missing_context: 'Identifying Missing Context',
 }
 
+const BEHAVIOR_DESCRIPTIONS = {
+  iteration_and_refinement: 'Builds on Claude\'s responses by refining requests rather than accepting the first answer. Indicates deeper engagement with AI output.',
+  building_on_responses: 'Uses Claude\'s output as a foundation for further work — extending, combining, or adapting what was generated.',
+  clarifying_goals: 'Clearly states what they\'re trying to accomplish before or during the interaction, giving Claude better context.',
+  adjusting_approach: 'Changes strategy mid-conversation based on Claude\'s responses — pivoting when something isn\'t working.',
+  questioning_reasoning: 'Asks Claude to explain its rationale — "Why this approach?" or "What are the trade-offs?" Drives deeper understanding.',
+  providing_feedback: 'Gives explicit feedback on response quality — "That\'s not quite right" or "Good, but simplify it." Helps steer the conversation.',
+  specifying_format: 'Tells Claude how to structure output — "Use bullet points", "Show me a table", "Keep it under 5 lines."',
+  setting_interaction_terms: 'Defines how Claude should behave — "Push back if my approach is wrong", "Explain your uncertainty." Only ~30% of users do this.',
+  checking_facts: 'Verifies or questions factual claims in Claude\'s output — "Are you sure this API exists?" Guards against hallucination.',
+  providing_examples: 'Shows Claude examples of desired output — "Follow this pattern" or pasting a code snippet. Dramatically improves quality.',
+  identifying_missing_context: 'Spots gaps in Claude\'s knowledge — "What assumptions are you making?" or "What context would help you here?"',
+}
+
 const PATTERN_LABELS = {
   conceptual_inquiry: 'Conceptual Inquiry',
   generation_then_comprehension: 'Gen-Then-Comprehension',
@@ -418,7 +432,7 @@ function renderFluencyScore() {
     html += `
       <div class="behavior-bar">
         <div class="behavior-label">
-          <span class="behavior-name">${BEHAVIOR_LABELS[key]}</span>
+          <span class="behavior-name">${BEHAVIOR_LABELS[key]} <span class="info-icon" tabindex="0">i<span class="info-tooltip">${BEHAVIOR_DESCRIPTIONS[key]}</span></span></span>
           <span class="behavior-pct">${Math.round(userPct)}%</span>
         </div>
         <div class="bar-track">
