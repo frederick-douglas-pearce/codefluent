@@ -77,6 +77,7 @@ const RECOMMENDATIONS = {
     advice: "Tell Claude how to interact: 'Push back if my approach seems wrong', 'Explain your uncertainty'. Only ~30% of users do this.",
     action: "Add to your CLAUDE.md: 'Always explain trade-offs. Push back if my approach seems suboptimal.'",
     source: 'Anthropic AI Fluency Index (Feb 2026)',
+    prompt: "Before we start, here are my interaction preferences: always explain trade-offs between approaches, push back if my approach seems suboptimal, and flag any assumptions you're making. Let's begin.",
   },
   checking_facts: {
     threshold: 0.35,
@@ -85,6 +86,7 @@ const RECOMMENDATIONS = {
     advice: "When Claude produces code or technical claims, ask: 'Are you sure this API exists in v4?' Fact-checking drops 3.7pp when generating artifacts.",
     action: 'After code generation, ask one verification question before accepting.',
     source: 'Anthropic AI Fluency Index (Feb 2026)',
+    prompt: "Before I accept this code, can you verify: are all the APIs and methods you used actually available in the current version? List any that you're uncertain about.",
   },
   questioning_reasoning: {
     threshold: 0.40,
@@ -93,6 +95,7 @@ const RECOMMENDATIONS = {
     advice: "'Why did you choose this approach over X?' — especially for architecture decisions.",
     action: 'Before accepting a design, ask Claude to compare alternatives.',
     source: 'Anthropic AI Fluency Index (Feb 2026)',
+    prompt: "Why did you choose this approach? What are 2-3 alternative approaches you considered, and what are the trade-offs of each?",
   },
   identifying_missing_context: {
     threshold: 0.25,
@@ -101,6 +104,7 @@ const RECOMMENDATIONS = {
     advice: "Ask: 'What assumptions are you making here?' or 'What context would help you do this better?'",
     action: 'At the start of complex tasks, ask Claude what it needs to know.',
     source: 'Anthropic AI Fluency Index (Feb 2026)',
+    prompt: "Before you start, what assumptions are you making about this codebase? What additional context or files would help you do a better job?",
   },
   providing_examples: {
     threshold: 0.30,
@@ -109,6 +113,7 @@ const RECOMMENDATIONS = {
     advice: "Paste a code snippet and say 'follow this pattern'. Examples dramatically improve output quality.",
     action: 'When requesting code, include at least one example of the style you want.',
     source: 'Anthropic AI Fluency Index / Best Practices',
+    prompt: "Here's an example of the code style I want you to follow:\n\n```\n// [paste your example here]\n```\n\nPlease match this pattern for the new code you write.",
   },
 }
 
@@ -118,18 +123,21 @@ const PATTERN_RECOMMENDATIONS = {
     title: "You're Delegating Too Much",
     advice: "You're offloading entire tasks without engaging. Ask 'How does this work?' after code generation. Comprehension scores 86% for conceptual inquiry vs <40% for delegation.",
     source: 'Anthropic Coding Skills Formation Study (Jan 2026)',
+    prompt: "Before you implement this, walk me through your planned approach step by step. I want to understand the design before you write code.",
   },
   progressive_ai_reliance: {
     impact: 'high',
     title: 'You Start Engaged But Drift',
     advice: 'You begin sessions asking good questions but gradually let Claude drive. Set a rule: every 3rd prompt should be a comprehension question.',
     source: 'Anthropic Coding Skills Formation Study (Jan 2026)',
+    prompt: "Pause — before we continue, explain what the last change you made actually does and why it works. I want to make sure I understand before moving on.",
   },
   iterative_ai_debugging: {
     impact: 'medium',
     title: 'Understand Before Debugging',
     advice: "Before asking Claude to fix a bug, explain what you think is wrong. 'I think the issue is X because Y' forces understanding.",
     source: 'Anthropic Coding Skills Formation Study (Jan 2026)',
+    prompt: "I think the bug is caused by [describe your hypothesis]. Can you confirm whether I'm on the right track before fixing it? Explain what's actually happening.",
   },
 }
 
@@ -658,6 +666,14 @@ function renderRecCard(rec) {
       <div class="rec-title">${rec.title}</div>
       <div class="rec-advice">${rec.advice}</div>
       ${rec.action ? `<div class="rec-action">${rec.action}</div>` : ''}
+      ${rec.prompt ? `
+        <div class="rec-prompt-section">
+          <div class="rec-prompt-label">Try this prompt in Claude Code:</div>
+          <div class="prompt-box-wrapper">
+            <pre class="prompt-box">${rec.prompt}</pre>
+            <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
+          </div>
+        </div>` : ''}
       <div class="rec-source">${rec.source}</div>
     </div>`
 }
