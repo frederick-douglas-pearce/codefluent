@@ -8,10 +8,25 @@ CodeFluent reads your local Claude Code session data, scores your prompting beha
 
 Built at **PDX Hacks 2026**.
 
+### How It Compares
+
+Several tools exist for monitoring Claude Code usage — but they all measure *what happened*, not *how well you collaborated*:
+
+| Tool | What it measures | What's missing |
+|------|-----------------|----------------|
+| [ccusage](https://github.com/ryoppippi/ccusage) | Token counts, costs, model breakdown | No behavioral analysis |
+| [Sniffly](https://github.com/chiphuyen/sniffly) (Chip Huyen) | Usage stats, error analysis, message history | Analyzes *Claude's* errors, not user behavior |
+| [Claude-Code-Usage-Monitor](https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor) | Real-time token consumption, rate limit predictions | No quality scoring |
+| [Anthropic Official Analytics](https://code.claude.com/docs/en/analytics) | PRs merged, lines committed, team adoption | Org-level metrics, no individual fluency |
+| [DX Platform](https://getdx.com/) | Developer velocity, AI adoption rates | Enterprise focus, not behavioral |
+| **CodeFluent** | **Fluency behaviors, interaction patterns, personalized coaching** | **The gap everyone else leaves open** |
+
+Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code" but haven't shipped any behavioral scoring tool. CodeFluent fills that gap today.
+
 ### Why This Is Different
 
 - **Research-grounded, not vibes.** Every score maps to Anthropic's AI Fluency Index (Feb 2026) and Coding Skills Formation study (Jan 2026). The benchmark bars are real population data.
-- **Nothing else like it exists.** Tools like ccusage show token counts. GitHub Copilot shows acceptance rates. CodeFluent is the first tool that analyzes *how* you interact with AI and whether your patterns build or erode skills.
+- **First to score collaboration quality.** Existing tools count tokens or track errors. CodeFluent is the first to analyze *how* you interact with AI and whether your patterns build or erode skills.
 - **AI evaluating AI collaboration.** Claude scores your prompts against the fluency framework, creating a feedback loop: the AI tells you how to work with it more effectively.
 - **Completely local and private.** All session data stays on your machine. The only external calls are to the Anthropic API for scoring.
 - **Zero infrastructure.** No database, no auth, no build step. One command and you're analyzing your habits.
