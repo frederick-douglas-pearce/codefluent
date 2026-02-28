@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeFluent — Claude Code Self-Analyzer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="header-left">
+        <h1 class="logo">CodeFluent</h1>
+        <span class="subtitle">Claude Code Self-Analyzer</span>
+      </div>
+      <div class="header-right">
+        <span class="plan-badge">Max 5x</span>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="usage">Usage</button>
+      <button class="tab" data-tab="fluency">Fluency Score</button>
+      <button class="tab" data-tab="quickwins">Quick Wins</button>
+      <button class="tab" data-tab="recommendations">Recommendations</button>
+    </nav>
+
+    <main class="content">
+      <!-- Usage Tab -->
+      <div id="tab-usage" class="tab-panel active">
+        <div class="stat-cards">
+          <div class="stat-card">
+            <span class="label">Total Tokens</span>
+            <span class="stat-number" id="stat-total-tokens">&mdash;</span>
+            <span class="stat-detail" id="stat-tokens-detail"></span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Total Cost</span>
+            <span class="stat-number" id="stat-total-cost">&mdash;</span>
+            <span class="stat-detail" id="stat-cost-detail"></span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Days Active</span>
+            <span class="stat-number" id="stat-days-active">&mdash;</span>
+            <span class="stat-detail" id="stat-days-detail"></span>
+          </div>
+          <div class="stat-card">
+            <span class="label">Models Used</span>
+            <span class="stat-number" id="stat-models-used">&mdash;</span>
+            <span class="stat-detail" id="stat-models-detail"></span>
+          </div>
+        </div>
+
+        <div class="chart-container">
+          <h3>Daily Token Usage</h3>
+          <canvas id="usage-chart"></canvas>
+        </div>
+
+        <div class="chart-container">
+          <h3>Daily Cost</h3>
+          <canvas id="cost-chart"></canvas>
+        </div>
+
+        <div class="chart-container">
+          <h3>Model Usage Breakdown</h3>
+          <div id="model-breakdown"></div>
+        </div>
+      </div>
+
+      <!-- Fluency Tab -->
+      <div id="tab-fluency" class="tab-panel">
+        <div class="scoring-controls">
+          <label for="session-count">Analyze last</label>
+          <select id="session-count">
+            <option value="3">3</option>
+            <option value="5" selected>5</option>
+            <option value="10">10</option>
+            <option value="20">20</option>
+          </select>
+          <label>sessions</label>
+          <button class="btn btn-primary" id="run-scoring-btn">Run Analysis</button>
+        </div>
+        <div id="fluency-results"></div>
+      </div>
+
+      <!-- Quick Wins Tab -->
+      <div id="tab-quickwins" class="tab-panel">
+        <div class="quickwins-controls">
+          <button class="btn btn-primary" id="load-quickwins-btn">Generate Suggestions</button>
+        </div>
+        <div id="quickwins-results"></div>
+      </div>
+
+      <!-- Recommendations Tab -->
+      <div id="tab-recommendations" class="tab-panel">
+        <div id="recommendations-content">
+          <p class="empty-state">Run a fluency analysis first to get personalized recommendations.</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      Built on <a href="https://www.anthropic.com/research/AI-fluency-index">Anthropic's AI Fluency Research</a>
+      &middot; PDX Hacks 2026
+    </footer>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
