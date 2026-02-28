@@ -162,6 +162,9 @@ function formatCost(n) {
   return '$' + n.toFixed(2)
 }
 
+// Disable Chart.js animations for reliable rendering
+Chart.defaults.animation = false
+
 function destroyChart(name) {
   if (charts[name]) {
     charts[name].destroy()
