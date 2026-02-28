@@ -213,7 +213,7 @@ def compute_aggregate(scored_sessions: list) -> dict:
 
 QUICKWINS_PROMPT = """The user has a Claude Code Max plan and is underutilizing their token allocation.
 
-Here are their active GitHub repositories:
+Here are their active GitHub repositories with recent commits and README status:
 {repos}
 
 Here are their open issues:
@@ -223,6 +223,8 @@ Suggest 3-5 quick tasks they could assign to Claude Code right now. Each should 
 - Completable in 15-30 minutes of Claude Code time
 - Genuinely useful (not busywork)
 - Specific enough to copy-paste as a Claude Code prompt
+- NOT duplicating work already done (check recent commits to avoid suggesting completed work)
+- NOT suggesting adding a README if one already exists
 
 Respond with ONLY a JSON array:
 [
@@ -236,6 +238,31 @@ Respond with ONLY a JSON array:
 ]"""
 
 
+def _get_repo_context(owner: str, repo_name: str) -> dict:
+    """Fetch recent commits and README status for a repo."""
+    context = {"recent_commits": [], "has_readme": False}
+    try:
+        commits_result = subprocess.run(
+            ["gh", "api", f"repos/{owner}/{repo_name}/commits",
+             "--jq", ".[0:5] | .[] | .commit.message"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if commits_result.returncode == 0:
+            messages = [line.split("\n")[0] for line in commits_result.stdout.strip().split("\n") if line]
+            context["recent_commits"] = messages
+    except Exception:
+        pass
+    try:
+        readme_result = subprocess.run(
+            ["gh", "api", f"repos/{owner}/{repo_name}/readme", "--jq", ".name"],
+            capture_output=True, text=True, timeout=5,
+        )
+        context["has_readme"] = readme_result.returncode == 0 and bool(readme_result.stdout.strip())
+    except Exception:
+        pass
+    return context
+
+
 @app.get("/api/quickwins")
 async def get_quickwins():
     """Generate quick win suggestions from GitHub repos."""
@@ -244,7 +271,18 @@ async def get_quickwins():
             ["gh", "repo", "list", "--json", "name,url,pushedAt,description", "--limit", "20"],
             capture_output=True, text=True, timeout=10,
         )
-        repos = repos_result.stdout if repos_result.returncode == 0 else "[]"
+        repos_list = json.loads(repos_result.stdout) if repos_result.returncode == 0 else []
+
+        # Get the owner from the first repo URL
+        owner = ""
+        if repos_list:
+            owner = repos_list[0]["url"].split("/")[-2]
+
+        # Enrich repos with recent commits and README status (top 10 most recent)
+        for repo in repos_list[:10]:
+            ctx = _get_repo_context(owner, repo["name"])
+            repo["recent_commits"] = ctx["recent_commits"]
+            repo["has_readme"] = ctx["has_readme"]
 
         issues_result = subprocess.run(
             ["gh", "issue", "list", "--json", "title,url,labels,repository", "--state", "open", "--limit", "30"],
@@ -252,7 +290,7 @@ async def get_quickwins():
         )
         issues = issues_result.stdout if issues_result.returncode == 0 else "[]"
 
-        prompt = QUICKWINS_PROMPT.format(repos=repos, issues=issues)
+        prompt = QUICKWINS_PROMPT.format(repos=json.dumps(repos_list, indent=2), issues=issues)
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
