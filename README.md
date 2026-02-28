@@ -2,9 +2,19 @@
 
 **Personal AI fluency analytics for Claude Code users.**
 
+Millions of developers use AI coding assistants daily, but nobody knows if they're using them *well*. Anthropic's research shows most users exhibit only 3 of 11 key fluency behaviors, and that interaction patterns directly predict whether developers build skills or lose them.
+
 CodeFluent reads your local Claude Code session data, scores your prompting behaviors against [Anthropic's AI Fluency Research](https://www.anthropic.com/research/AI-fluency-index), and gives you actionable recommendations to become a more effective AI collaborator.
 
 Built at **PDX Hacks 2026**.
+
+### Why This Is Different
+
+- **Research-grounded, not vibes.** Every score maps to Anthropic's AI Fluency Index (Feb 2026) and Coding Skills Formation study (Jan 2026). The benchmark bars are real population data.
+- **Nothing else like it exists.** Tools like ccusage show token counts. GitHub Copilot shows acceptance rates. CodeFluent is the first tool that analyzes *how* you interact with AI and whether your patterns build or erode skills.
+- **AI evaluating AI collaboration.** Claude scores your prompts against the fluency framework, creating a feedback loop: the AI tells you how to work with it more effectively.
+- **Completely local and private.** All session data stays on your machine. The only external calls are to the Anthropic API for scoring.
+- **Zero infrastructure.** No database, no auth, no build step. One command and you're analyzing your habits.
 
 ## Screenshots
 
