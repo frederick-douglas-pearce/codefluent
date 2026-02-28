@@ -344,6 +344,9 @@ function renderUsageDashboard() {
 
   // Model breakdown
   renderModelBreakdown(daily)
+
+  // Usage pace
+  renderUsagePace(daily)
 }
 
 function renderModelBreakdown(daily) {
@@ -372,6 +375,71 @@ function renderModelBreakdown(daily) {
         </div>
       </div>`
   }).join('')
+}
+
+// --- Usage Pace ---
+function renderUsagePace(daily) {
+  if (!daily.length) return
+  const container = document.getElementById('usage-pace')
+
+  const today = daily[daily.length - 1]
+  const last7 = daily.slice(-7)
+  const last30 = daily.slice(-30)
+
+  const avgDaily = daily.reduce((s, d) => s + d.totalCost, 0) / daily.length
+  const avg7 = last7.reduce((s, d) => s + d.totalCost, 0) / last7.length
+  const todayCost = today.totalCost
+  const todayTokens = today.totalTokens
+
+  // Pace comparison: today vs average
+  const todayPct = avgDaily > 0 ? Math.round((todayCost / avgDaily) * 100) : 0
+  const paceLabel = todayPct > 120 ? 'Above average' : todayPct > 80 ? 'On pace' : 'Below average'
+  const paceClass = todayPct > 120 ? 'pace-high' : todayPct > 80 ? 'pace-normal' : 'pace-low'
+
+  // Rolling windows
+  const cost7 = last7.reduce((s, d) => s + d.totalCost, 0)
+  const tokens7 = last7.reduce((s, d) => s + d.totalTokens, 0)
+  const cost30 = last30.reduce((s, d) => s + d.totalCost, 0)
+  const tokens30 = last30.reduce((s, d) => s + d.totalTokens, 0)
+
+  // Monthly projection from last 7 day avg
+  const projectedMonthly = avg7 * 30
+
+  // Bar width capped at 100%
+  const barWidth = Math.min(todayPct, 200)
+
+  container.innerHTML = `
+    <h3>Usage Pace</h3>
+    <div class="pace-grid">
+      <div class="pace-card">
+        <div class="pace-card-title">Today</div>
+        <div class="pace-card-value">${formatCost(todayCost)}</div>
+        <div class="pace-card-detail">${formatTokens(todayTokens)} tokens</div>
+        <div class="pace-bar-track">
+          <div class="pace-bar-fill ${paceClass}" style="width: ${Math.min(barWidth, 100)}%"></div>
+          <div class="pace-bar-avg" style="left: ${Math.min(100, 100)}%" title="Daily average: ${formatCost(avgDaily)}"></div>
+        </div>
+        <div class="pace-bar-labels">
+          <span class="${paceClass}">${paceLabel} (${todayPct}% of avg)</span>
+          <span>avg: ${formatCost(avgDaily)}/day</span>
+        </div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Last 7 Days</div>
+        <div class="pace-card-value">${formatCost(cost7)}</div>
+        <div class="pace-card-detail">${formatTokens(tokens7)} tokens · avg ${formatCost(avg7)}/day</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Last 30 Days</div>
+        <div class="pace-card-value">${formatCost(cost30)}</div>
+        <div class="pace-card-detail">${formatTokens(tokens30)} tokens · ${last30.length} active days</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Monthly Projection</div>
+        <div class="pace-card-value">${formatCost(projectedMonthly)}</div>
+        <div class="pace-card-detail">Based on last 7-day avg of ${formatCost(avg7)}/day</div>
+      </div>
+    </div>`
 }
 
 // --- Fluency Scoring ---
