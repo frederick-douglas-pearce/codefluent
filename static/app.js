@@ -64,6 +64,15 @@ const PATTERN_LABELS = {
   iterative_ai_debugging: 'Iterative AI Debugging',
 }
 
+const PATTERN_DESCRIPTIONS = {
+  conceptual_inquiry: 'Asks conceptual questions to understand how things work, then writes code manually. Highest comprehension scores (86%).',
+  generation_then_comprehension: 'Generates code with AI first, then asks follow-up questions to understand what was produced.',
+  hybrid_code_explanation: 'Requests code and explanations simultaneously — "Write X and explain how it works."',
+  ai_delegation: 'Entirely delegates tasks to AI with minimal engagement or understanding. Lowest comprehension scores (<40%).',
+  progressive_ai_reliance: 'Starts sessions engaged and asking questions, but gradually offloads more work to AI without checking understanding.',
+  iterative_ai_debugging: 'Uses AI to debug code without trying to understand the root cause — repeatedly asks "fix this" without learning.',
+}
+
 const HIGH_QUALITY_PATTERNS = ['conceptual_inquiry', 'generation_then_comprehension', 'hybrid_code_explanation']
 
 const PATTERN_COLORS = ['#D97706', '#059669', '#2563EB', '#DC2626', '#7C3AED', '#EC4899']
@@ -477,9 +486,12 @@ function renderFluencyScore() {
 
   patternEntries.forEach(([p, count], i) => {
     const pct = totalSessions > 0 ? Math.round(count / totalSessions * 100) : 0
+    const qualityTag = HIGH_QUALITY_PATTERNS.includes(p)
+      ? '<span class="pattern-quality-tag quality-high">High</span>'
+      : '<span class="pattern-quality-tag quality-low">Low</span>'
     html += `
       <div class="pattern-legend-item">
-        <span>${PATTERN_LABELS[p] || p}</span>
+        <span>${PATTERN_LABELS[p] || p} ${qualityTag} <span class="info-icon" tabindex="0">i<span class="info-tooltip">${PATTERN_DESCRIPTIONS[p] || ''}</span></span></span>
         <span>${count} (${pct}%)</span>
       </div>`
   })

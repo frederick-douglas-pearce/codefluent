@@ -322,10 +322,24 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .pattern-legend-item {
   display: flex;
   justify-content: space-between;
-  padding: 6px 0;
+  align-items: center;
+  padding: 8px 0;
   font-size: 14px;
   border-bottom: 1px solid var(--border);
 }
+.pattern-quality-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.pattern-quality-tag.quality-high { background: var(--success-light); color: var(--success); }
+.pattern-quality-tag.quality-low { background: var(--danger-light); color: var(--danger); }
 .pattern-quality {
   margin-top: 16px;
   padding: 12px;
