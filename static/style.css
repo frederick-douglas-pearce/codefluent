@@ -402,19 +402,23 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 12px;
-  position: relative;
+  overflow: hidden;
+}
+.prompt-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 8px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border);
 }
 .prompt-text {
   font-size: 13px;
   white-space: pre-wrap;
   font-family: 'SF Mono', 'Fira Code', monospace;
   margin: 0;
+  padding: 12px;
 }
 .copy-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   padding: 4px 10px;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -453,12 +457,20 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 }
 .rec-prompt-section { margin: 12px 0 8px; }
 .rec-prompt-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-.prompt-box-wrapper { position: relative; }
-.prompt-box {
+.prompt-box-wrapper {
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 12px 60px 12px 12px;
+  overflow: hidden;
+}
+.prompt-box-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.prompt-box {
+  padding: 12px;
   font-size: 13px;
   white-space: pre-wrap;
   font-family: 'SF Mono', 'Fira Code', monospace;

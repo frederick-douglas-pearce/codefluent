@@ -200,7 +200,8 @@ function showLoader(tabId) {
 }
 
 function copyPrompt(btn) {
-  const text = btn.previousElementSibling.textContent
+  const wrapper = btn.closest('.task-prompt') || btn.closest('.prompt-box-wrapper')
+  const text = (wrapper.querySelector('.prompt-text') || wrapper.querySelector('.prompt-box')).textContent
   navigator.clipboard.writeText(text)
   btn.textContent = 'Copied!'
   setTimeout(() => btn.textContent = 'Copy', 2000)
@@ -580,8 +581,10 @@ function renderQuickWins() {
         <span class="task-category category-${categoryIcons[s.category] || 'feature'}">${s.category}</span>
       </div>
       <div class="task-prompt">
+        <div class="prompt-header">
+          <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
+        </div>
         <pre class="prompt-text">${s.prompt}</pre>
-        <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
       </div>
     </div>
   `).join('')
@@ -670,8 +673,10 @@ function renderRecCard(rec) {
         <div class="rec-prompt-section">
           <div class="rec-prompt-label">Try this prompt in Claude Code:</div>
           <div class="prompt-box-wrapper">
+            <div class="prompt-box-header">
+              <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
+            </div>
             <pre class="prompt-box">${rec.prompt}</pre>
-            <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
           </div>
         </div>` : ''}
       <div class="rec-source">${rec.source}</div>
