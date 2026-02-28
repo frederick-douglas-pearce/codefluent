@@ -3,7 +3,7 @@
 ---
 
 ## Setup Before Demo
-- Browser open to `http://localhost:8000`
+- Browser open to `http://localhost:8001`
 - ccusage data already exported to `data/ccusage/`
 - Prompts already extracted via `uv run python extract_prompts.py`
 - At least 5 sessions pre-scored (results cached in `data/scores.json`)
@@ -26,10 +26,10 @@
 
 ## Usage Dashboard (0:30 – 1:00) — The Data
 
-> "Let's start with the basics. This is my real Claude Code usage — 117 sessions over 2 months."
+> "Let's start with the basics. This is my real Claude Code usage — 51 active days over 2 months."
 
 **Actions:**
-1. Point to stat cards: "I've used [X] million tokens at a cost of [Y] dollars."
+1. Point to stat cards: "I've used 642 million tokens at a cost of $562."
 2. Point to daily chart: "You can see the pattern — heavy build days, quiet days."
 3. Point to model breakdown: "Mostly Opus for complex work, some Sonnet for quick tasks."
 
@@ -43,12 +43,12 @@
 
 **Actions:**
 1. Click "Fluency Score" tab
-2. Point to the overall score: "I got a [72] out of 100."
+2. Point to the overall score: "I got a 67 out of 100."
 3. Walk down the behavior bars:
-   - "Iteration — 85%. I'm good at building on Claude's responses rather than accepting the first answer."
-   - "But look — Setting Interaction Terms, only 15%. I almost never tell Claude *how* to work with me."
-   - "Checking Facts — 25%. I'm trusting Claude's output without verifying. And Anthropic's research shows this actually gets *worse* when you're generating code."
-4. Point to coding pattern chart: "Anthropic studied 6 coding interaction patterns. Users who ask conceptual questions scored 86% on comprehension. Users who just delegate? Under 40%. Most of my sessions use high-quality patterns, but I've got a few delegation sessions."
+   - "Iteration & Refinement — 100%. Building on Responses — 100%. I'm good at iterating rather than accepting the first answer."
+   - "But look — Setting Interaction Terms, only 12%. I almost never tell Claude *how* to work with me. Providing Examples — also 12%."
+   - "Checking Facts — 50%, above the Anthropic benchmark of 25%. But Identifying Missing Context — 75%, way above the 20% benchmark. That's a strength."
+4. Point to coding pattern chart: "Anthropic studied 6 coding interaction patterns. Users who ask conceptual questions scored 86% on comprehension. Users who just delegate? Under 40%. 88% of my sessions use high-quality patterns — mostly Conceptual Inquiry."
 
 > "These aren't made-up metrics. The scoring rubric comes directly from two Anthropic research papers published in the last five weeks."
 
