@@ -3,20 +3,58 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI
+import os
+from time import time
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pathlib import Path
+from pydantic import BaseModel, Field, field_validator
 import json
 import subprocess
 from anthropic import Anthropic
 
 app = FastAPI(title="CodeFluent")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+_PORT = os.environ.get("PORT", "8000")
+CORS_ORIGINS = os.environ.get("CORS_ORIGINS", f"http://localhost:{_PORT}").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 client = Anthropic()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+class ScoreRequest(BaseModel):
+    session_ids: list[str] = Field(..., min_length=1, max_length=50)
+    force_rescore: bool = False
+
+    @field_validator("session_ids", mode="before")
+    @classmethod
+    def validate_session_ids(cls, v):
+        if not isinstance(v, list):
+            raise ValueError("session_ids must be a list")
+        for sid in v:
+            if not isinstance(sid, str) or len(sid) > 200:
+                raise ValueError("Each session_id must be a string under 200 chars")
+        return v
+
+
+_score_timestamps: list[float] = []
+RATE_LIMIT = 10
+
+
+def _check_rate_limit():
+    now = time()
+    _score_timestamps[:] = [t for t in _score_timestamps if now - t < 60]
+    if len(_score_timestamps) >= RATE_LIMIT:
+        raise HTTPException(status_code=429, detail="Rate limit exceeded. Max 10 scoring requests per minute.")
+    _score_timestamps.append(now)
 
 
 @app.get("/")
@@ -38,7 +76,7 @@ async def get_usage():
 
 
 @app.get("/api/sessions")
-async def get_sessions(limit: int = 50, project: str = None):
+async def get_sessions(limit: int = Query(default=50, ge=1, le=500), project: str = Query(default=None, max_length=500)):
     """Serve extracted prompt data."""
     path = Path("data/prompts/sessions.json")
     if not path.exists():
@@ -134,10 +172,11 @@ SCORING_PROMPT = """You are an AI Fluency Analyst. Analyze this Claude Code sess
 
 
 @app.post("/api/score")
-async def score_sessions(request: dict):
+async def score_sessions(request: ScoreRequest):
     """Score sessions for AI fluency using Anthropic API."""
-    session_ids = request.get("session_ids", [])
-    force = request.get("force_rescore", False)
+    _check_rate_limit()
+    session_ids = request.session_ids
+    force = request.force_rescore
 
     scores_path = Path("data/scores.json")
     cached = {}
