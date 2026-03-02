@@ -10,9 +10,29 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:codefluent.dashboard"
+  ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codefluent",
+          "title": "CodeFluent",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "codefluent": [
+        {
+          "type": "webview",
+          "id": "codefluent.dashboard",
+          "name": "Dashboard"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "codefluent.openPanel",
@@ -23,11 +43,15 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile"
+    "pretest": "npm run compile",
+    "test": "jest --verbose"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^25.3.3",
     "@types/vscode": "^1.85.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.3.0"
   },
   "dependencies": {
