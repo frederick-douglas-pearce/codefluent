@@ -30,16 +30,55 @@ export class CodeFluentPanel {
     CodeFluentPanel.currentPanel = new CodeFluentPanel(panel, extensionUri)
   }
 
+  private static readonly API_BASE = 'http://localhost:8001'
+
   private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel
     this.extensionUri = extensionUri
 
     this.panel.webview.html = this.getHtmlContent()
 
+    this.panel.webview.onDidReceiveMessage(
+      (msg) => this.handleMessage(msg),
+    )
+
     this.panel.onDidDispose(() => {
       this.disposed = true
       CodeFluentPanel.currentPanel = undefined
     })
+  }
+
+  private async handleMessage(msg: { type: string; requestId: string; payload?: any }) {
+    const { type, requestId, payload } = msg
+
+    const routes: Record<string, { path: string; method?: string; body?: any }> = {
+      getUsage: { path: '/api/usage' },
+      getSessions: { path: '/api/sessions' },
+      runScoring: { path: '/api/score', method: 'POST', body: payload },
+      getQuickwins: { path: '/api/quickwins' },
+      getCachedScores: { path: '/api/scores' },
+    }
+
+    const route = routes[type]
+    if (!route) { return }
+
+    try {
+      const url = `${CodeFluentPanel.API_BASE}${route.path}`
+      const options: RequestInit = {}
+      if (route.method === 'POST') {
+        options.method = 'POST'
+        options.headers = { 'Content-Type': 'application/json' }
+        options.body = JSON.stringify(route.body)
+      }
+      const res = await fetch(url, options)
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      }
+      const data = await res.json()
+      this.panel.webview.postMessage({ type, requestId, data })
+    } catch (err: any) {
+      this.panel.webview.postMessage({ type, requestId, error: err.message || 'Request failed' })
+    }
   }
 
   private getHtmlContent(): string {

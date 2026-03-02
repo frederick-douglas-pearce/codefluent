@@ -1,10 +1,32 @@
 // CodeFluent — VS Code Webview Application
-// API calls proxy to FastAPI on localhost:8001
+// Uses postMessage IPC to communicate with the extension host
 
-const API_BASE = 'http://localhost:8001'
-
-// Acquire VS Code API for future postMessage use
 const vscode = acquireVsCodeApi()
+
+// --- postMessage IPC ---
+const pendingRequests = new Map()
+let requestCounter = 0
+
+function postMessageRequest(type, payload) {
+  const requestId = `req-${++requestCounter}-${Date.now()}`
+  return new Promise((resolve, reject) => {
+    pendingRequests.set(requestId, { resolve, reject })
+    vscode.postMessage({ type, requestId, payload })
+  })
+}
+
+window.addEventListener('message', event => {
+  const msg = event.data
+  if (!msg.requestId) return
+  const pending = pendingRequests.get(msg.requestId)
+  if (!pending) return
+  pendingRequests.delete(msg.requestId)
+  if (msg.error) {
+    pending.reject(new Error(msg.error))
+  } else {
+    pending.resolve(msg.data)
+  }
+})
 
 // --- State ---
 let state = {
@@ -177,8 +199,8 @@ function switchTab(tabName) {
 async function loadData() {
   try {
     const [usage, sessions] = await Promise.all([
-      fetch(`${API_BASE}/api/usage`).then(r => r.json()),
-      fetch(`${API_BASE}/api/sessions`).then(r => r.json()),
+      postMessageRequest('getUsage'),
+      postMessageRequest('getSessions'),
     ])
     state.usage = usage
     state.sessions = sessions
@@ -464,12 +486,7 @@ async function runScoring(count) {
 
   try {
     const ids = state.sessions.sessions.slice(0, count).map(s => s.id)
-    const res = await fetch(`${API_BASE}/api/score`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_ids: ids })
-    })
-    state.scores = await res.json()
+    state.scores = await postMessageRequest('runScoring', { session_ids: ids })
     renderFluencyScore()
   } catch (e) {
     document.getElementById('fluency-results').innerHTML =
@@ -634,8 +651,7 @@ async function loadQuickWins() {
   showLoader('quickwins-results')
 
   try {
-    const res = await fetch(`${API_BASE}/api/quickwins`)
-    state.quickwins = await res.json()
+    state.quickwins = await postMessageRequest('getQuickwins')
     renderQuickWins()
   } catch (e) {
     document.getElementById('quickwins-results').innerHTML =
@@ -772,8 +788,7 @@ function renderRecCard(rec) {
 // --- Load cached scores ---
 async function loadCachedScores() {
   try {
-    const res = await fetch(`${API_BASE}/api/scores`)
-    const data = await res.json()
+    const data = await postMessageRequest('getCachedScores')
     if (data.aggregate?.average_score) {
       state.scores = data
       renderFluencyScore()
