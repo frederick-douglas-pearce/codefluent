@@ -1,4 +1,4 @@
-import { scoreSessions, computeAggregate, ScoreResult, AggregateResult } from '../../src/scoring'
+import { scoreSessions, computeAggregate, ScoreResult } from '../../src/scoring'
 import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
