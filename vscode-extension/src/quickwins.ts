@@ -1,5 +1,14 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import Anthropic from '@anthropic-ai/sdk'
+
+const GITHUB_NAME_RE = /^[a-zA-Z0-9._-]+$/
+
+export function validateGitHubName(name: string): string {
+  if (!GITHUB_NAME_RE.test(name)) {
+    throw new Error(`Invalid GitHub name: ${name}`)
+  }
+  return name
+}
 
 const QUICKWINS_PROMPT = `The user has a Claude Code Max plan and is underutilizing their token allocation.
 
@@ -27,13 +36,18 @@ Respond with ONLY a JSON array:
   }
 ]`
 
+const EXEC_OPTS: { timeout: number; encoding: 'utf8'; stdio: ['pipe', 'pipe', 'pipe'] } = {
+  timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+}
+
 function getRepoContext(owner: string, repoName: string): { recent_commits: string[]; has_readme: boolean } {
   const context: { recent_commits: string[]; has_readme: boolean } = { recent_commits: [], has_readme: false }
 
   try {
-    const commitsOutput = execSync(
-      `gh api repos/${owner}/${repoName}/commits --jq '.[0:5] | .[] | .commit.message'`,
-      { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
+    const commitsOutput = execFileSync(
+      'gh',
+      ['api', `repos/${owner}/${repoName}/commits`, '--jq', '.[0:5] | .[] | .commit.message'],
+      EXEC_OPTS,
     )
     context.recent_commits = commitsOutput.trim().split('\n')
       .filter(l => l)
@@ -43,8 +57,9 @@ function getRepoContext(owner: string, repoName: string): { recent_commits: stri
   }
 
   try {
-    const readmeOutput = execSync(
-      `gh api repos/${owner}/${repoName}/readme --jq '.name'`,
+    const readmeOutput = execFileSync(
+      'gh',
+      ['api', `repos/${owner}/${repoName}/readme`, '--jq', '.name'],
       { timeout: 5000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
     )
     context.has_readme = !!readmeOutput.trim()
@@ -55,10 +70,10 @@ function getRepoContext(owner: string, repoName: string): { recent_commits: stri
   return context
 }
 
-function detectWorkspaceRepo(workspacePath?: string): { owner: string; name: string } | undefined {
+export function detectWorkspaceRepo(workspacePath?: string): { owner: string; name: string } | undefined {
   if (!workspacePath) return undefined
   try {
-    const remoteUrl = execSync('git remote get-url origin', {
+    const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], {
       cwd: workspacePath,
       timeout: 5000,
       encoding: 'utf8',
@@ -66,7 +81,9 @@ function detectWorkspaceRepo(workspacePath?: string): { owner: string; name: str
     }).trim()
     // Handle both HTTPS (https://github.com/owner/repo.git) and SSH (git@github.com:owner/repo.git)
     const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/)
-    if (match) return { owner: match[1], name: match[2] }
+    if (match) {
+      return { owner: validateGitHubName(match[1]), name: validateGitHubName(match[2]) }
+    }
   } catch {
     // not a git repo or no remote
   }
@@ -83,16 +100,18 @@ export async function getQuickWins(client: Anthropic, workspacePath?: string): P
     if (scopedRepo) {
       // Scoped to current workspace repo
       owner = scopedRepo.owner
-      const repoOutput = execSync(
-        `gh repo view ${scopedRepo.owner}/${scopedRepo.name} --json name,url,pushedAt,description`,
-        { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
+      const repoOutput = execFileSync(
+        'gh',
+        ['repo', 'view', `${scopedRepo.owner}/${scopedRepo.name}`, '--json', 'name,url,pushedAt,description'],
+        EXEC_OPTS,
       )
       reposList = [JSON.parse(repoOutput)]
     } else {
       // Fallback to all repos
-      const reposOutput = execSync(
-        'gh repo list --json name,url,pushedAt,description --limit 20',
-        { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
+      const reposOutput = execFileSync(
+        'gh',
+        ['repo', 'list', '--json', 'name,url,pushedAt,description', '--limit', '20'],
+        EXEC_OPTS,
       )
       reposList = JSON.parse(reposOutput)
       owner = reposList.length > 0
@@ -109,11 +128,9 @@ export async function getQuickWins(client: Anthropic, workspacePath?: string): P
     const repoScope = scopedRepo ? `${scopedRepo.owner}/${scopedRepo.name}` : ''
     let issuesOutput = '[]'
     try {
-      const repoFlag = repoScope ? ` --repo ${repoScope}` : ''
-      issuesOutput = execSync(
-        `gh issue list --json title,url,labels,repository --state open --limit 30${repoFlag}`,
-        { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
-      )
+      const issueArgs = ['issue', 'list', '--json', 'title,url,labels,repository', '--state', 'open', '--limit', '30']
+      if (repoScope) issueArgs.push('--repo', repoScope)
+      issuesOutput = execFileSync('gh', issueArgs, EXEC_OPTS)
     } catch {
       // ignore
     }

@@ -118,7 +118,8 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     }
 
     if (type === 'runInTerminal' && msg.prompt) {
-      const escaped = msg.prompt.replace(/"/g, '\\"')
+      // Single-quote wrapping: replace ' with '\'' (end quote, escaped quote, start quote)
+      const escaped = msg.prompt.replace(/'/g, "'\\''")
       const terminal = vscode.window.createTerminal({
         name: `Claude Code: ${msg.repo || 'Quick Win'}`,
         shellPath: '/bin/bash',
@@ -126,7 +127,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         env: { PATH: process.env.PATH || '' },
       })
       terminal.show()
-      terminal.sendText(`claude "${escaped}"`)
+      terminal.sendText(`claude '${escaped}'`)
       return
     }
 

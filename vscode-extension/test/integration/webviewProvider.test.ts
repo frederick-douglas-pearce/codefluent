@@ -176,21 +176,21 @@ describe('CodeFluentViewProvider', () => {
       )
       expect(mockTerminal.show).toHaveBeenCalled()
       expect(mockTerminal.sendText).toHaveBeenCalledWith(
-        'claude "Add tests for the auth module"',
+        "claude 'Add tests for the auth module'",
       )
     })
 
-    it('escapes double quotes in prompts', async () => {
+    it('escapes single quotes in prompts', async () => {
       const mockTerminal = { show: jest.fn(), sendText: jest.fn() }
       ;(vscode.window.createTerminal as jest.Mock).mockReturnValue(mockTerminal)
 
       await sendMessage({
         type: 'runInTerminal',
-        prompt: 'Fix the "broken" thing',
+        prompt: "it's a test",
       })
 
       expect(mockTerminal.sendText).toHaveBeenCalledWith(
-        'claude "Fix the \\"broken\\" thing"',
+        "claude 'it'\\''s a test'",
       )
     })
 
@@ -202,6 +202,65 @@ describe('CodeFluentViewProvider', () => {
 
       expect(vscode.window.createTerminal).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'Claude Code: Quick Win' }),
+      )
+    })
+
+    it('neutralizes backtick injection', async () => {
+      const mockTerminal = { show: jest.fn(), sendText: jest.fn() }
+      ;(vscode.window.createTerminal as jest.Mock).mockReturnValue(mockTerminal)
+
+      await sendMessage({
+        type: 'runInTerminal',
+        prompt: 'test`whoami`end',
+      })
+
+      // Single-quoted strings don't interpret backticks
+      expect(mockTerminal.sendText).toHaveBeenCalledWith(
+        "claude 'test`whoami`end'",
+      )
+    })
+
+    it('neutralizes $() injection', async () => {
+      const mockTerminal = { show: jest.fn(), sendText: jest.fn() }
+      ;(vscode.window.createTerminal as jest.Mock).mockReturnValue(mockTerminal)
+
+      await sendMessage({
+        type: 'runInTerminal',
+        prompt: 'test$(id)end',
+      })
+
+      // Single-quoted strings don't interpret $()
+      expect(mockTerminal.sendText).toHaveBeenCalledWith(
+        "claude 'test$(id)end'",
+      )
+    })
+
+    it('handles combined injection attempts with single quotes', async () => {
+      const mockTerminal = { show: jest.fn(), sendText: jest.fn() }
+      ;(vscode.window.createTerminal as jest.Mock).mockReturnValue(mockTerminal)
+
+      await sendMessage({
+        type: 'runInTerminal',
+        prompt: "test'; rm -rf /",
+      })
+
+      expect(mockTerminal.sendText).toHaveBeenCalledWith(
+        "claude 'test'\\''; rm -rf /'",
+      )
+    })
+
+    it('passes double quotes through without special handling', async () => {
+      const mockTerminal = { show: jest.fn(), sendText: jest.fn() }
+      ;(vscode.window.createTerminal as jest.Mock).mockReturnValue(mockTerminal)
+
+      await sendMessage({
+        type: 'runInTerminal',
+        prompt: 'Fix the "broken" thing',
+      })
+
+      // Double quotes are safe inside single quotes
+      expect(mockTerminal.sendText).toHaveBeenCalledWith(
+        'claude \'Fix the "broken" thing\'',
       )
     })
   })
