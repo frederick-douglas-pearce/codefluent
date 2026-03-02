@@ -7,6 +7,7 @@ __pycache__/
 # VS Code extension
 vscode-extension/node_modules/
 vscode-extension/out/
+vscode-extension/*.vsix
 
 # Playwright MCP
 .playwright-mcp/
