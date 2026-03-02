@@ -183,6 +183,12 @@ async function loadData() {
 }
 
 // --- Helpers ---
+function escapeHtml(str) {
+  if (typeof str !== 'string') return String(str)
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;')
+}
+
 function formatTokens(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
   if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K'
@@ -208,13 +214,27 @@ function showLoader(tabId) {
     '<div class="scoring-loader"><div class="spinner"></div><p>Analyzing sessions with Claude...</p></div>'
 }
 
-function copyPrompt(btn) {
-  const wrapper = btn.closest('.task-prompt') || btn.closest('.prompt-box-wrapper')
-  const text = (wrapper.querySelector('.prompt-text') || wrapper.querySelector('.prompt-box')).textContent
-  navigator.clipboard.writeText(text)
-  btn.textContent = 'Copied!'
-  setTimeout(() => btn.textContent = 'Copy', 2000)
-}
+// --- Event Delegation (replaces inline onclick handlers) ---
+document.addEventListener('click', (e) => {
+  const target = e.target
+
+  // Copy button
+  if (target.classList.contains('copy-btn')) {
+    const wrapper = target.closest('.task-prompt') || target.closest('.prompt-box-wrapper')
+    const text = (wrapper.querySelector('.prompt-text') || wrapper.querySelector('.prompt-box')).textContent
+    navigator.clipboard.writeText(text)
+    target.textContent = 'Copied!'
+    setTimeout(() => target.textContent = 'Copy', 2000)
+    return
+  }
+
+  // Session item expand/collapse
+  const sessionItem = target.closest('.session-item')
+  if (sessionItem) {
+    sessionItem.classList.toggle('expanded')
+    return
+  }
+})
 
 // --- Usage Dashboard ---
 function renderUsageDashboard() {
@@ -367,7 +387,7 @@ function renderModelBreakdown(daily) {
     return `
       <div class="model-bar-item">
         <div class="model-bar-label">
-          <span>${shortName}</span>
+          <span>${escapeHtml(shortName)}</span>
           <span>${formatCost(cost)} (${pct}%)</span>
         </div>
         <div class="model-bar-track">
@@ -467,7 +487,7 @@ async function runScoring(count) {
     renderFluencyScore()
   } catch (e) {
     document.getElementById('fluency-results').innerHTML =
-      `<p class="empty-state">Error: ${e.message}</p>`
+      `<p class="empty-state">Error: ${escapeHtml(e.message)}</p>`
   } finally {
     btn.disabled = false
     btn.textContent = 'Run Analysis'
@@ -562,7 +582,7 @@ function renderFluencyScore() {
       : '<span class="pattern-quality-tag quality-low">Low</span>'
     html += `
       <div class="pattern-legend-item">
-        <span>${PATTERN_LABELS[p] || p} ${qualityTag} <span class="info-icon" tabindex="0">i<span class="info-tooltip">${PATTERN_DESCRIPTIONS[p] || ''}</span></span></span>
+        <span>${PATTERN_LABELS[p] || escapeHtml(p)} ${qualityTag} <span class="info-icon" tabindex="0">i<span class="info-tooltip">${PATTERN_DESCRIPTIONS[p] || ''}</span></span></span>
         <span>${count} (${pct}%)</span>
       </div>`
   })
@@ -584,16 +604,16 @@ function renderFluencyScore() {
     const date = session?.started_at ? new Date(session.started_at).toLocaleDateString() : ''
     const project = session?.project || ''
     html += `
-      <div class="session-item" onclick="this.classList.toggle('expanded')">
+      <div class="session-item">
         <div class="session-header">
-          <span class="session-id">${project} (${date})</span>
+          <span class="session-id">${escapeHtml(project)} (${date})</span>
           <span class="session-score" style="color: ${scoreData.overall_score >= 70 ? 'var(--success)' : scoreData.overall_score >= 50 ? 'var(--warning)' : 'var(--danger)'}">
             ${scoreData.overall_score}/100
           </span>
         </div>
         <div class="session-detail">
-          <p>${scoreData.one_line_summary || ''}</p>
-          <p>Pattern: ${PATTERN_LABELS[scoreData.coding_pattern] || scoreData.coding_pattern}</p>
+          <p>${escapeHtml(scoreData.one_line_summary || '')}</p>
+          <p>Pattern: ${PATTERN_LABELS[scoreData.coding_pattern] || escapeHtml(scoreData.coding_pattern)}</p>
         </div>
       </div>`
   }
@@ -636,7 +656,7 @@ async function loadQuickWins() {
     renderQuickWins()
   } catch (e) {
     document.getElementById('quickwins-results').innerHTML =
-      `<p class="empty-state">Error: ${e.message}</p>`
+      `<p class="empty-state">Error: ${escapeHtml(e.message)}</p>`
   } finally {
     btn.disabled = false
     btn.textContent = 'Generate Suggestions'
@@ -656,18 +676,18 @@ function renderQuickWins() {
   const html = suggestions.map(s => `
     <div class="task-card">
       <div class="task-header">
-        <span class="task-title">${s.task}</span>
+        <span class="task-title">${escapeHtml(s.task)}</span>
       </div>
       <div class="task-meta">
-        <span class="task-repo">${s.repo}</span>
-        <span class="task-time">~${s.estimated_minutes} min</span>
-        <span class="task-category category-${categoryIcons[s.category] || 'feature'}">${s.category}</span>
+        <span class="task-repo">${escapeHtml(s.repo)}</span>
+        <span class="task-time">~${escapeHtml(s.estimated_minutes)} min</span>
+        <span class="task-category category-${escapeHtml(categoryIcons[s.category] || 'feature')}">${escapeHtml(s.category)}</span>
       </div>
       <div class="task-prompt">
         <div class="prompt-header">
-          <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
+          <button class="copy-btn">Copy</button>
         </div>
-        <pre class="prompt-text">${s.prompt}</pre>
+        <pre class="prompt-text">${escapeHtml(s.prompt)}</pre>
       </div>
     </div>
   `).join('')
@@ -757,7 +777,7 @@ function renderRecCard(rec) {
           <div class="rec-prompt-label">Try this prompt in Claude Code:</div>
           <div class="prompt-box-wrapper">
             <div class="prompt-box-header">
-              <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
+              <button class="copy-btn">Copy</button>
             </div>
             <pre class="prompt-box">${rec.prompt}</pre>
           </div>
