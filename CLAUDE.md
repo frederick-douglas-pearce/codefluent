@@ -6,11 +6,15 @@
 - Flag assumptions you're making
 
 ## Project Overview
-CodeFluent is a VS Code extension that provides AI fluency analytics for Claude Code users. It parses local JSONL session files, uses `ccusage` for token/cost data, scores prompting behaviors via the Anthropic API, and provides personalized coaching — all from a sidebar panel in VS Code.
+CodeFluent provides AI fluency analytics for Claude Code users. It parses local JSONL session files, uses `ccusage` for token/cost data, scores prompting behaviors via the Anthropic API, and provides personalized coaching.
 
-The project also contains the original FastAPI web app (`webapp/`) from the initial prototype but the VS Code extension under `vscode-extension/` is the primary product.
+The project ships **two production interfaces** for the same core functionality:
+- **VS Code extension** (`vscode-extension/`) — sidebar panel for VS Code users
+- **Web app** (`webapp/`) — FastAPI + vanilla JS for users on any editor
 
-Originally built at PDX Hacks 2026. Now in **production deployment** phase — emphasis on reliability, test coverage, security, and publishing to the VS Code Marketplace.
+Both are actively maintained and held to the same production standards.
+
+Originally built at PDX Hacks 2026. Now in **production deployment** phase — emphasis on reliability, test coverage, security, and publishing.
 
 ## Tech Stack
 - **Runtime:** Node.js v22.18.0 (VS Code extension host)
@@ -22,7 +26,7 @@ Originally built at PDX Hacks 2026. Now in **production deployment** phase — e
 - **GitHub:** `gh` CLI tool (already installed and authenticated)
 - **Testing:** Jest 30 + ts-jest
 - **Data:** Local JSONL files from `~/.claude/projects/`
-- **Original backend:** Python 3.12.3 / FastAPI / `uv` (prototype, not actively maintained)
+- **Web app backend:** Python 3.12.3 / FastAPI / `uv`
 
 ## Project Structure
 ```
@@ -58,7 +62,7 @@ codefluent/
 │   │   ├── unit/scoring.test.ts
 │   │   └── integration/{extension,webviewProvider}.test.ts
 │   └── out/                   # Compiled JS (gitignored)
-├── webapp/                    # Original FastAPI web app (prototype, not actively maintained)
+├── webapp/                    # FastAPI web app
 │   ├── main.py                # FastAPI backend
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
 │   ├── static/                # Web frontend (HTML/CSS/JS)
@@ -89,7 +93,7 @@ code --install-extension codefluent-0.1.0.vsix
 
 # Debug: press F5 in VS Code with vscode-extension/ open
 
-# --- Original Web App (reference, in webapp/) ---
+# --- Web App ---
 
 cd webapp
 uv sync
@@ -153,7 +157,7 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. XSS and injection tests exist and must stay green.
 - **No regressions:** `npm test` must pass (currently 113 tests) before any commit to main.
-- **Webapp is frozen.** The `webapp/` directory is the original hackathon prototype. Don't invest effort there — all new work goes into the VS Code extension.
+- **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 
 ## JSONL Data Format (VERIFIED against real data)
 

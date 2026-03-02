@@ -4,7 +4,7 @@
 
 Millions of developers use AI coding assistants daily, but nobody knows if they're using them *well*. Anthropic's research shows most users exhibit only 3 of 11 key fluency behaviors, and that interaction patterns directly predict whether developers build skills or lose them.
 
-CodeFluent is a VS Code extension that reads your local Claude Code session data, scores your prompting behaviors against [Anthropic's AI Fluency Research](https://www.anthropic.com/research/AI-fluency-index), and gives you actionable recommendations to become a more effective AI collaborator.
+CodeFluent reads your local Claude Code session data, scores your prompting behaviors against [Anthropic's AI Fluency Research](https://www.anthropic.com/research/AI-fluency-index), and gives you actionable recommendations to become a more effective AI collaborator. Available as a **VS Code extension** and a **standalone web app**.
 
 Originally built at PDX Hacks 2026, now in active development for production release.
 
@@ -65,7 +65,7 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 
 ## Install
 
-### From VSIX (recommended)
+### VS Code Extension
 
 ```bash
 git clone https://github.com/frederick-douglas-pearce/codefluent.git
@@ -78,12 +78,24 @@ code --install-extension codefluent-0.1.0.vsix
 
 Then reload VS Code. The CodeFluent icon appears in the activity bar.
 
+### Web App
+
+```bash
+git clone https://github.com/frederick-douglas-pearce/codefluent.git
+cd codefluent/webapp
+uv sync
+npx ccusage@latest daily --json > ../data/ccusage/daily.json
+uv run python extract_prompts.py
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then open `http://localhost:8000` in your browser.
+
 ### Prerequisites
 
-- VS Code 1.85+
-- Node.js 22+ (for `npx ccusage`)
-- An [Anthropic API key](https://console.anthropic.com/)
-- `gh` CLI authenticated (for Quick Wins)
+- **Both:** Node.js 22+ (for `npx ccusage`), an [Anthropic API key](https://console.anthropic.com/), `gh` CLI authenticated (for Quick Wins)
+- **VS Code extension:** VS Code 1.85+
+- **Web app:** Python 3.12+ / `uv`
 
 ### Configure
 
@@ -94,14 +106,17 @@ The extension looks for your API key in this order:
 3. VS Code secret storage (persisted after first prompt)
 4. Interactive prompt (stored in VS Code secrets for next time)
 
+The web app reads `ANTHROPIC_API_KEY` from the environment or a `.env` file in the `webapp/` directory.
+
 ## Tech Stack
 
-- **Extension:** TypeScript / VS Code WebviewViewProvider
-- **Frontend:** Vanilla HTML/CSS/JS + Chart.js (bundled locally)
+- **VS Code extension:** TypeScript / VS Code WebviewViewProvider
+- **Web app:** Python / FastAPI / `uv`
+- **Frontend (both):** Vanilla HTML/CSS/JS + Chart.js (bundled locally)
 - **Scoring:** Anthropic API (`claude-sonnet-4-20250514`)
 - **Usage data:** [ccusage](https://github.com/ryoppippi/ccusage) (reads Claude Code sessions)
 - **GitHub integration:** `gh` CLI
-- **Testing:** Jest + ts-jest
+- **Testing:** Jest + ts-jest (extension)
 
 ## Project Structure
 
@@ -126,7 +141,7 @@ codefluent/
 │   │   └── integration/       # Integration tests (extension, webview)
 │   ├── package.json
 │   └── tsconfig.json
-├── webapp/                    # Original FastAPI web app (prototype)
+├── webapp/                    # FastAPI web app (standalone alternative)
 │   ├── main.py                # FastAPI backend
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
 │   └── static/                # Web frontend (HTML/CSS/JS)
