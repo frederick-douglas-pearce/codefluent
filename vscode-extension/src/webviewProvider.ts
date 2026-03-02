@@ -7,6 +7,7 @@ import { getUsageData } from './usage'
 import { scoreSessions, computeAggregate, scoreClaudeMd } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
+import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codefluent.dashboard'
@@ -118,16 +119,15 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     }
 
     if (type === 'runInTerminal' && msg.prompt) {
-      // Single-quote wrapping: replace ' with '\'' (end quote, escaped quote, start quote)
-      const escaped = msg.prompt.replace(/'/g, "'\\''")
+      const escaped = escapePromptForShell(msg.prompt)
       const terminal = vscode.window.createTerminal({
         name: `Claude Code: ${msg.repo || 'Quick Win'}`,
-        shellPath: '/bin/bash',
-        shellArgs: ['--norc', '--noprofile'],
+        shellPath: getDefaultShell(),
+        shellArgs: getShellArgs(),
         env: { PATH: process.env.PATH || '' },
       })
       terminal.show()
-      terminal.sendText(`claude '${escaped}'`)
+      terminal.sendText(getClaudeCommand(escaped))
       return
     }
 

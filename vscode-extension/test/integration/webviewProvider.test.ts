@@ -21,6 +21,8 @@ jest.mock('../../src/scoring')
 jest.mock('../../src/quickwins')
 jest.mock('@anthropic-ai/sdk')
 
+import { getDefaultShell, getShellArgs, getClaudeCommand, escapePromptForShell } from '../../src/platform'
+
 import { getAllSessions } from '../../src/parser'
 import { getUsageData } from '../../src/usage'
 import { scoreSessions, computeAggregate } from '../../src/scoring'
@@ -171,12 +173,13 @@ describe('CodeFluentViewProvider', () => {
       expect(vscode.window.createTerminal).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Claude Code: my-repo',
-          shellPath: '/bin/bash',
+          shellPath: getDefaultShell(),
+          shellArgs: getShellArgs(),
         }),
       )
       expect(mockTerminal.show).toHaveBeenCalled()
       expect(mockTerminal.sendText).toHaveBeenCalledWith(
-        "claude 'Add tests for the auth module'",
+        getClaudeCommand(escapePromptForShell('Add tests for the auth module')),
       )
     })
 
@@ -190,7 +193,7 @@ describe('CodeFluentViewProvider', () => {
       })
 
       expect(mockTerminal.sendText).toHaveBeenCalledWith(
-        "claude 'it'\\''s a test'",
+        getClaudeCommand(escapePromptForShell("it's a test")),
       )
     })
 
@@ -216,7 +219,7 @@ describe('CodeFluentViewProvider', () => {
 
       // Single-quoted strings don't interpret backticks
       expect(mockTerminal.sendText).toHaveBeenCalledWith(
-        "claude 'test`whoami`end'",
+        getClaudeCommand(escapePromptForShell('test`whoami`end')),
       )
     })
 
@@ -231,7 +234,7 @@ describe('CodeFluentViewProvider', () => {
 
       // Single-quoted strings don't interpret $()
       expect(mockTerminal.sendText).toHaveBeenCalledWith(
-        "claude 'test$(id)end'",
+        getClaudeCommand(escapePromptForShell('test$(id)end')),
       )
     })
 
@@ -245,7 +248,7 @@ describe('CodeFluentViewProvider', () => {
       })
 
       expect(mockTerminal.sendText).toHaveBeenCalledWith(
-        "claude 'test'\\''; rm -rf /'",
+        getClaudeCommand(escapePromptForShell("test'; rm -rf /")),
       )
     })
 
@@ -260,7 +263,7 @@ describe('CodeFluentViewProvider', () => {
 
       // Double quotes are safe inside single quotes
       expect(mockTerminal.sendText).toHaveBeenCalledWith(
-        'claude \'Fix the "broken" thing\'',
+        getClaudeCommand(escapePromptForShell('Fix the "broken" thing')),
       )
     })
   })

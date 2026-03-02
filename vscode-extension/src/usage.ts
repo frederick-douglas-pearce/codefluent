@@ -1,4 +1,5 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
+import { getNpxCommand } from './platform'
 
 export interface UsageData {
   daily?: any
@@ -9,15 +10,15 @@ export interface UsageData {
 export function getUsageData(): UsageData {
   const result: UsageData = {}
 
-  const commands: Array<{ key: keyof UsageData; args: string }> = [
-    { key: 'daily', args: 'daily --json' },
-    { key: 'monthly', args: 'monthly --json' },
-    { key: 'session', args: 'session --json -o desc' },
+  const commands: Array<{ key: keyof UsageData; args: string[] }> = [
+    { key: 'daily', args: ['ccusage@latest', 'daily', '--json'] },
+    { key: 'monthly', args: ['ccusage@latest', 'monthly', '--json'] },
+    { key: 'session', args: ['ccusage@latest', 'session', '--json', '-o', 'desc'] },
   ]
 
   for (const { key, args } of commands) {
     try {
-      const output = execSync(`npx ccusage@latest ${args}`, {
+      const output = execFileSync(getNpxCommand(), args, {
         timeout: 30000,
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe'],

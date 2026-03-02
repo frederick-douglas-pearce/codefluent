@@ -32,6 +32,14 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 - **Completely local and private.** All session data stays on your machine. The only external calls are to the Anthropic API for scoring.
 - **Zero infrastructure.** No database, no auth, no build step. Install the `.vsix` and go.
 
+## Supported Platforms
+
+| Platform | VS Code Extension | Web App |
+|----------|:-:|:-:|
+| Linux | Yes | Yes |
+| macOS | Yes | Yes |
+| Windows | Yes | Yes |
+
 ## Screenshots
 
 | Usage | Fluency Score |

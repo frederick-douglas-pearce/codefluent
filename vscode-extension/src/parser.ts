@@ -145,7 +145,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
   if (!sessionId) sessionId = path.basename(filepath, '.jsonl')
 
   const projectName = projectCwd
-    ? projectCwd.replace(/\/+$/, '').split('/').pop()!
+    ? path.basename(projectCwd)
     : path.basename(path.dirname(filepath))
 
   timestamps.sort()
