@@ -3,3 +3,10 @@ data/
 __pycache__/
 .env
 *.pyc
+
+# VS Code extension
+vscode-extension/node_modules/
+vscode-extension/out/
+
+# Playwright MCP
+.playwright-mcp/
