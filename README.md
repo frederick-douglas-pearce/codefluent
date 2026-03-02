@@ -124,12 +124,13 @@ codefluent/
 │   │   └── integration/       # Integration tests (extension, webview)
 │   ├── package.json
 │   └── tsconfig.json
-├── main.py                    # Original FastAPI backend (reference)
-├── extract_prompts.py         # Original Python prompt extractor (reference)
-├── static/                    # Original web frontend (reference)
+├── webapp/                    # Original FastAPI web app (reference)
+│   ├── main.py                # FastAPI backend
+│   ├── extract_prompts.py     # Python JSONL prompt extractor
+│   └── static/                # Web frontend (HTML/CSS/JS)
+├── docs/                      # Design docs and specs
 ├── images/                    # Demo screenshots
-├── CLAUDE.md                  # AI coding instructions
-└── pyproject.toml
+└── CLAUDE.md                  # AI coding instructions
 ```
 
 ## Development

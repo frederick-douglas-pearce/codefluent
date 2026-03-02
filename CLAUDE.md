@@ -52,15 +52,14 @@ codefluent/
 │   │   ├── unit/scoring.test.ts
 │   │   └── integration/{extension,webviewProvider}.test.ts
 │   └── out/                   # Compiled JS (gitignored)
-├── main.py                    # Original FastAPI backend (reference)
-├── extract_prompts.py         # Original Python prompt extractor (reference)
-├── static/                    # Original web frontend (reference)
-│   ├── index.html
-│   ├── app.js
-│   └── style.css
+├── webapp/                    # Original FastAPI web app (reference)
+│   ├── main.py                # FastAPI backend
+│   ├── extract_prompts.py     # Python JSONL prompt extractor
+│   ├── static/                # Web frontend (HTML/CSS/JS)
+│   ├── pyproject.toml         # Python dependencies
+│   └── uv.lock
 ├── data/                      # Generated data (gitignored)
-├── images/                    # Demo screenshots
-└── pyproject.toml             # Python config (reference)
+└── images/                    # Demo screenshots
 ```
 
 ## Key Commands
@@ -84,17 +83,12 @@ code --install-extension codefluent-0.1.0.vsix
 
 # Debug: press F5 in VS Code with vscode-extension/ open
 
-# --- Original Backend (reference) ---
+# --- Original Web App (reference, in webapp/) ---
 
-# Generate usage data
-npx ccusage@latest daily --json > data/ccusage/daily.json
-npx ccusage@latest monthly --json > data/ccusage/monthly.json
-npx ccusage@latest session --json -o desc > data/ccusage/session.json
-
-# Extract prompts
+cd webapp
+uv sync
+npx ccusage@latest daily --json > ../data/ccusage/daily.json
 uv run python extract_prompts.py
-
-# Start FastAPI server
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
