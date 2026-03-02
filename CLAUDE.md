@@ -51,7 +51,8 @@ codefluent/
 │   │   ├── scoring.ts         # Fluency scoring via Anthropic API
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub repo scoping + task suggestions
-│   │   └── cache.ts           # Persistent score caching (globalStorageUri)
+│   │   ├── cache.ts           # Persistent score caching (globalStorageUri)
+│   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
 │   ├── media/
 │   │   ├── index.html         # Webview HTML template (nonce-based CSP)
 │   │   ├── app.js             # Frontend logic, charts, IPC
@@ -59,7 +60,7 @@ codefluent/
 │   │   ├── icon.svg           # Activity bar icon (amber brackets)
 │   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
 │   ├── test/
-│   │   ├── unit/scoring.test.ts
+│   │   ├── unit/{scoring,quickwins,xss,platform}.test.ts
 │   │   └── integration/{extension,webviewProvider}.test.ts
 │   └── out/                   # Compiled JS (gitignored)
 ├── webapp/                    # FastAPI web app
@@ -297,12 +298,13 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 113 Jest tests
+npm test                   # Runs all 171 Jest tests
 
 # Test structure:
 # test/unit/scoring.test.ts                    — scoreSessions + computeAggregate
 # test/unit/quickwins.test.ts                  — GitHub name validation, repo detection, arg safety
 # test/unit/xss.test.ts                        — escapeHtml payloads + source-level XSS vector coverage
+# test/unit/platform.test.ts                   — cross-platform shell, escaping, npx helpers
 # test/integration/extension.test.ts           — activation, status bar, commands
 # test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests
 # src/__mocks__/vscode.ts                      — VS Code API mock for Jest

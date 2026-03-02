@@ -34,11 +34,13 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 
 ## Supported Platforms
 
-| Platform | VS Code Extension | Web App |
-|----------|:-:|:-:|
-| Linux | Yes | Yes |
-| macOS | Yes | Yes |
-| Windows | Yes | Yes |
+| Platform | VS Code Extension | Web App | Shell used |
+|----------|:-:|:-:|------------|
+| Linux | Yes | Yes | `/bin/bash` |
+| macOS | Yes | Yes | `/bin/bash` |
+| Windows | Yes | Yes | `cmd.exe` |
+
+Terminal launch, shell escaping, subprocess invocation, and session path resolution all adapt automatically to the host platform. No configuration required.
 
 ## Screenshots
 
@@ -75,9 +77,22 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 
 ### VS Code Extension
 
+**Linux / macOS:**
+
 ```bash
 git clone https://github.com/frederick-douglas-pearce/codefluent.git
 cd codefluent/vscode-extension
+npm install
+npm run compile
+npx @vscode/vsce package --allow-missing-repository
+code --install-extension codefluent-0.1.0.vsix
+```
+
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/frederick-douglas-pearce/codefluent.git
+cd codefluent\vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
@@ -88,6 +103,8 @@ Then reload VS Code. The CodeFluent icon appears in the activity bar.
 
 ### Web App
 
+**Linux / macOS:**
+
 ```bash
 git clone https://github.com/frederick-douglas-pearce/codefluent.git
 cd codefluent/webapp
@@ -97,13 +114,37 @@ uv run python extract_prompts.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/frederick-douglas-pearce/codefluent.git
+cd codefluent\webapp
+uv sync
+npx ccusage@latest daily --json > ..\data\ccusage\daily.json
+uv run python extract_prompts.py
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
 Then open `http://localhost:8000` in your browser.
 
 ### Prerequisites
 
-- **Both:** Node.js 22+ (for `npx ccusage`), an [Anthropic API key](https://console.anthropic.com/), `gh` CLI authenticated (for Quick Wins)
+- **All platforms:** Node.js 22+ (for `npx ccusage`), an [Anthropic API key](https://console.anthropic.com/), `gh` CLI authenticated (for Quick Wins), Git
 - **VS Code extension:** VS Code 1.85+
 - **Web app:** Python 3.12+ / `uv`
+- **Windows:** No additional dependencies. The extension automatically uses `cmd.exe` and `npx.cmd` where needed.
+
+### Session Data Location
+
+Claude Code stores session files at `~/.claude/projects/` on all platforms:
+
+| Platform | Path |
+|----------|------|
+| Linux | `~/.claude/projects/` |
+| macOS | `~/.claude/projects/` |
+| Windows | `C:\Users\<username>\.claude\projects\` |
+
+The extension resolves this automatically via the system home directory.
 
 ### Configure
 
@@ -138,7 +179,8 @@ codefluent/
 │   │   ├── scoring.ts         # Fluency scoring via Anthropic API
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub integration + task suggestions
-│   │   └── cache.ts           # Persistent score caching
+│   │   ├── cache.ts           # Persistent score caching
+│   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
 │   ├── media/
 │   │   ├── index.html         # Webview UI
 │   │   ├── app.js             # Frontend logic + Chart.js rendering
@@ -175,7 +217,7 @@ npm run watch          # Continuous TypeScript compilation
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (113 tests across 5 suites)
+npm test               # Run all Jest tests (171 tests across 6 suites)
 ```
 
 ### Packaging
