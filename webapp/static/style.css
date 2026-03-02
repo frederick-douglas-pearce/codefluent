@@ -260,6 +260,17 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   font-size: 14px;
 }
 .behavior-name { font-weight: 500; }
+.config-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-light);
+  padding: 1px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
 .behavior-pct { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .bar-track {
   height: 12px;

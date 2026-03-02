@@ -4,7 +4,7 @@ import * as path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
 import { getAllSessions } from './parser'
 import { getUsageData } from './usage'
-import { scoreSessions, computeAggregate } from './scoring'
+import { scoreSessions, computeAggregate, scoreClaudeMd } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 
@@ -189,8 +189,11 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     this.cache.write(cached)
 
+    // Score CLAUDE.md if present in workspace
+    const configBehaviors = await this.scoreWorkspaceClaudeMd(client, force)
+
     const scored = Object.values(results).filter((r: any) => r.fluency_behaviors)
-    const aggregate = scored.length ? computeAggregate(scored) : {}
+    const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {}
 
     this.updateStatusBar(aggregate)
 
@@ -211,11 +214,59 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   private async handleGetCachedScores() {
     const cached = this.cache.read()
     const scored = Object.values(cached).filter((r: any) => r.fluency_behaviors)
-    const aggregate = scored.length ? computeAggregate(scored) : {}
+
+    // Load cached config score
+    const configBehaviors = this.getCachedConfigBehaviors()
+    const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {}
 
     this.updateStatusBar(aggregate)
 
     return { scores: cached, aggregate }
+  }
+
+  private async scoreWorkspaceClaudeMd(
+    client: Anthropic,
+    forceRescore: boolean,
+  ): Promise<Record<string, boolean> | undefined> {
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    if (!workspacePath) return undefined
+
+    const claudeMdPath = path.join(workspacePath, 'CLAUDE.md')
+    let content: string
+    try {
+      content = fs.readFileSync(claudeMdPath, 'utf8')
+    } catch {
+      return undefined
+    }
+
+    const hash = ScoreCache.contentHash(content)
+    const configCache = this.cache.readConfig()
+    const projectKey = workspacePath
+
+    if (!forceRescore && configCache[projectKey]?.hash === hash) {
+      return configCache[projectKey].fluency_behaviors
+    }
+
+    try {
+      const result = await scoreClaudeMd(content, client)
+      configCache[projectKey] = {
+        hash,
+        fluency_behaviors: result.fluency_behaviors,
+        one_line_summary: result.one_line_summary,
+      }
+      this.cache.writeConfig(configCache)
+      return result.fluency_behaviors
+    } catch {
+      return undefined
+    }
+  }
+
+  private getCachedConfigBehaviors(): Record<string, boolean> | undefined {
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    if (!workspacePath) return undefined
+
+    const configCache = this.cache.readConfig()
+    return configCache[workspacePath]?.fluency_behaviors
   }
 
   private updateStatusBar(aggregate: any) {

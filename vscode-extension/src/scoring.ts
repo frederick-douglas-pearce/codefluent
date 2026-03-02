@@ -16,6 +16,12 @@ export interface AggregateResult {
   average_score: number
   behavior_prevalence: Record<string, number>
   pattern_distribution: Record<string, number>
+  config_behaviors?: Record<string, boolean>
+}
+
+export interface ConfigScoreResult {
+  fluency_behaviors: Record<string, boolean>
+  one_line_summary: string
 }
 
 const SCORING_PROMPT = `You are an AI Fluency Analyst. Analyze this Claude Code session's user prompts and score against Anthropic's 4D AI Fluency Framework and their 6 coding interaction patterns.
@@ -84,6 +90,69 @@ const BEHAVIORS = [
   'adjusting_approach', 'building_on_responses', 'providing_feedback',
 ]
 
+const CONFIG_SCORING_PROMPT = `You are an AI Fluency Analyst. Analyze this CLAUDE.md project configuration file and determine which AI fluency behaviors it establishes as project conventions.
+
+A CLAUDE.md file sets persistent instructions for Claude Code sessions. When a user defines behaviors here (e.g., "always explain trade-offs", "push back if wrong"), those behaviors apply to every session in the project — even if the user doesn't repeat them in individual prompts.
+
+## AI Fluency Behavioral Indicators (score each true/false)
+
+Score true if the CLAUDE.md content establishes, encourages, or implies the behavior as a project convention:
+
+1. **iteration_and_refinement** — Instructions that encourage iterative development or refinement workflows
+2. **clarifying_goals** — Clear project goals, acceptance criteria, or task descriptions
+3. **specifying_format** — Output format requirements (code style, naming conventions, file structure)
+4. **providing_examples** — Example code, patterns, or templates to follow
+5. **setting_interaction_terms** — Rules for how Claude should behave ("push back", "explain reasoning", "ask before changing")
+6. **checking_facts** — Instructions to verify claims, check API existence, or validate assumptions
+7. **questioning_reasoning** — Encouragement to explain rationale or compare alternatives
+8. **identifying_missing_context** — Instructions to ask for context or flag assumptions
+9. **adjusting_approach** — Guidelines for when to change strategy or try alternatives
+10. **building_on_responses** — Workflow patterns that build on previous outputs
+11. **providing_feedback** — Feedback mechanisms or quality standards defined
+
+## CLAUDE.md Content
+
+{content}
+
+## Respond with ONLY a JSON object:
+
+{
+  "fluency_behaviors": {
+    "iteration_and_refinement": true/false,
+    "clarifying_goals": true/false,
+    "specifying_format": true/false,
+    "providing_examples": true/false,
+    "setting_interaction_terms": true/false,
+    "checking_facts": true/false,
+    "questioning_reasoning": true/false,
+    "identifying_missing_context": true/false,
+    "adjusting_approach": true/false,
+    "building_on_responses": true/false,
+    "providing_feedback": true/false
+  },
+  "one_line_summary": "Brief assessment of this CLAUDE.md's fluency impact."
+}`
+
+export async function scoreClaudeMd(
+  content: string,
+  client: Anthropic,
+): Promise<ConfigScoreResult> {
+  const truncated = content.slice(0, 4000)
+  const prompt = CONFIG_SCORING_PROMPT.replace('{content}', truncated)
+
+  const response = await client.messages.create({
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1024,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  let text = (response.content[0] as any).text.trim()
+  if (text.startsWith('```')) {
+    text = text.split('\n').slice(1).join('\n').replace(/```\s*$/, '').trim()
+  }
+  return JSON.parse(text)
+}
+
 export async function scoreSessions(
   sessionIds: string[],
   allSessions: Record<string, ParsedSession>,
@@ -134,12 +203,19 @@ export async function scoreSessions(
   return results
 }
 
-export function computeAggregate(scoredSessions: any[]): AggregateResult {
+export function computeAggregate(
+  scoredSessions: any[],
+  configBehaviors?: Record<string, boolean>,
+): AggregateResult {
   const n = scoredSessions.length
   const prevalence: Record<string, number> = {}
 
   for (const b of BEHAVIORS) {
-    const count = scoredSessions.filter(s => s.fluency_behaviors?.[b]).length
+    const count = scoredSessions.filter(s => {
+      const sessionHas = s.fluency_behaviors?.[b]
+      const configHas = configBehaviors?.[b]
+      return sessionHas || configHas
+    }).length
     prevalence[b] = n ? Math.round((count / n) * 100) / 100 : 0
   }
 
@@ -153,10 +229,16 @@ export function computeAggregate(scoredSessions: any[]): AggregateResult {
     ? Math.round(scoredSessions.reduce((sum, s) => sum + (s.overall_score || 0), 0) / n)
     : 0
 
-  return {
+  const result: AggregateResult = {
     sessions_scored: n,
     average_score: avgScore,
     behavior_prevalence: prevalence,
     pattern_distribution: patterns,
   }
+
+  if (configBehaviors) {
+    result.config_behaviors = configBehaviors
+  }
+
+  return result
 }

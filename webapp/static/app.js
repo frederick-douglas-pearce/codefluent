@@ -508,6 +508,7 @@ function renderFluencyScore() {
   // Behavior bars
   html += '<div class="behaviors-section"><h3>Fluency Behaviors vs. Anthropic Benchmarks</h3>'
   const prevalence = aggregate.behavior_prevalence || {}
+  const configBehaviors = aggregate.config_behaviors || {}
   for (const [key, benchmark] of Object.entries(BENCHMARKS)) {
     const userPct = (prevalence[key] || 0) * 100
     const benchPct = benchmark * 100
@@ -515,10 +516,12 @@ function renderFluencyScore() {
     if (userPct < benchPct - 15) colorClass = 'color-danger'
     else if (userPct < benchPct) colorClass = 'color-warning'
 
+    const configTag = configBehaviors[key] ? ' <span class="config-tag">CLAUDE.md</span>' : ''
+
     html += `
       <div class="behavior-bar">
         <div class="behavior-label">
-          <span class="behavior-name">${BEHAVIOR_LABELS[key]} <span class="info-icon" tabindex="0">i<span class="info-tooltip">${BEHAVIOR_DESCRIPTIONS[key]}</span></span></span>
+          <span class="behavior-name">${BEHAVIOR_LABELS[key]}${configTag} <span class="info-icon" tabindex="0">i<span class="info-tooltip">${BEHAVIOR_DESCRIPTIONS[key]}</span></span></span>
           <span class="behavior-pct">${Math.round(userPct)}%</span>
         </div>
         <div class="bar-track">

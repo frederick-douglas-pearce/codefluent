@@ -60,7 +60,16 @@ async def get_scores():
     with open(scores_path) as f:
         cached = json.load(f)
     scored = [r for r in cached.values() if "fluency_behaviors" in r]
-    aggregate = compute_aggregate(scored) if scored else {}
+
+    # Load cached config behaviors
+    config_cache = _load_config_cache()
+    config_behaviors = None
+    for entry in config_cache.values():
+        if "fluency_behaviors" in entry:
+            config_behaviors = entry["fluency_behaviors"]
+            break
+
+    aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
     return {"scores": cached, "aggregate": aggregate}
 
 
@@ -178,13 +187,131 @@ async def score_sessions(request: dict):
     with open(scores_path, "w") as f:
         json.dump(cached, f, indent=2)
 
+    # Score CLAUDE.md files from scored sessions' projects
+    config_behaviors = None
+    config_cache = _load_config_cache()
+    scored_projects = set()
+    for sid in session_ids:
+        session = all_sessions.get(sid)
+        if session and session.get("project_path_encoded"):
+            scored_projects.add(session["project_path_encoded"])
+
+    for encoded_path in scored_projects:
+        project_dir = _decode_project_path(encoded_path)
+        claude_md_path = Path(project_dir) / "CLAUDE.md"
+        if not claude_md_path.exists():
+            continue
+        try:
+            content = claude_md_path.read_text()
+            content_hash = _config_content_hash(content)
+            cache_key = project_dir
+            if not force and config_cache.get(cache_key, {}).get("hash") == content_hash:
+                config_behaviors = config_cache[cache_key]["fluency_behaviors"]
+            else:
+                result = score_claude_md(content)
+                config_cache[cache_key] = {
+                    "hash": content_hash,
+                    "fluency_behaviors": result["fluency_behaviors"],
+                    "one_line_summary": result.get("one_line_summary", ""),
+                }
+                _save_config_cache(config_cache)
+                config_behaviors = result["fluency_behaviors"]
+        except Exception:
+            pass
+
     scored = [r for r in results.values() if "fluency_behaviors" in r]
-    aggregate = compute_aggregate(scored) if scored else {}
+    aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
 
     return {"scores": results, "aggregate": aggregate}
 
 
-def compute_aggregate(scored_sessions: list) -> dict:
+CONFIG_SCORING_PROMPT = """You are an AI Fluency Analyst. Analyze this CLAUDE.md project configuration file and determine which AI fluency behaviors it establishes as project conventions.
+
+A CLAUDE.md file sets persistent instructions for Claude Code sessions. When a user defines behaviors here (e.g., "always explain trade-offs", "push back if wrong"), those behaviors apply to every session in the project — even if the user doesn't repeat them in individual prompts.
+
+## AI Fluency Behavioral Indicators (score each true/false)
+
+Score true if the CLAUDE.md content establishes, encourages, or implies the behavior as a project convention:
+
+1. **iteration_and_refinement** — Instructions that encourage iterative development or refinement workflows
+2. **clarifying_goals** — Clear project goals, acceptance criteria, or task descriptions
+3. **specifying_format** — Output format requirements (code style, naming conventions, file structure)
+4. **providing_examples** — Example code, patterns, or templates to follow
+5. **setting_interaction_terms** — Rules for how Claude should behave ("push back", "explain reasoning", "ask before changing")
+6. **checking_facts** — Instructions to verify claims, check API existence, or validate assumptions
+7. **questioning_reasoning** — Encouragement to explain rationale or compare alternatives
+8. **identifying_missing_context** — Instructions to ask for context or flag assumptions
+9. **adjusting_approach** — Guidelines for when to change strategy or try alternatives
+10. **building_on_responses** — Workflow patterns that build on previous outputs
+11. **providing_feedback** — Feedback mechanisms or quality standards defined
+
+## CLAUDE.md Content
+
+{{content}}
+
+## Respond with ONLY a JSON object:
+
+{{{{
+  "fluency_behaviors": {{{{
+    "iteration_and_refinement": true/false,
+    "clarifying_goals": true/false,
+    "specifying_format": true/false,
+    "providing_examples": true/false,
+    "setting_interaction_terms": true/false,
+    "checking_facts": true/false,
+    "questioning_reasoning": true/false,
+    "identifying_missing_context": true/false,
+    "adjusting_approach": true/false,
+    "building_on_responses": true/false,
+    "providing_feedback": true/false
+  }}}},
+  "one_line_summary": "Brief assessment of this CLAUDE.md's fluency impact."
+}}}}"""
+
+
+def _config_content_hash(content: str) -> str:
+    """Simple hash: first 100 chars + length."""
+    return content[:100] + ":" + str(len(content))
+
+
+def score_claude_md(content: str) -> dict:
+    """Score a CLAUDE.md file for fluency behaviors."""
+    truncated = content[:4000]
+    prompt = CONFIG_SCORING_PROMPT.replace("{{content}}", truncated)
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = response.content[0].text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    return json.loads(text)
+
+
+def _load_config_cache() -> dict:
+    """Load config scores cache."""
+    cache_path = Path("data/config_scores.json")
+    if cache_path.exists():
+        with open(cache_path) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_config_cache(cache: dict) -> None:
+    """Save config scores cache."""
+    cache_path = Path("data/config_scores.json")
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(cache_path, "w") as f:
+        json.dump(cache, f, indent=2)
+
+
+def _decode_project_path(encoded: str) -> str:
+    """Decode encoded project path (e.g., '-home-user-project' -> '/home/user/project')."""
+    return "/" + encoded.lstrip("-").replace("-", "/")
+
+
+def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> dict:
     """Compute aggregate fluency metrics across scored sessions."""
     behaviors = [
         "iteration_and_refinement", "clarifying_goals", "specifying_format",
@@ -195,7 +322,10 @@ def compute_aggregate(scored_sessions: list) -> dict:
     n = len(scored_sessions)
     prevalence = {}
     for b in behaviors:
-        count = sum(1 for s in scored_sessions if s.get("fluency_behaviors", {}).get(b, False))
+        count = sum(
+            1 for s in scored_sessions
+            if s.get("fluency_behaviors", {}).get(b, False) or (config_behaviors or {}).get(b, False)
+        )
         prevalence[b] = round(count / n, 2) if n else 0
 
     patterns = {}
@@ -205,12 +335,17 @@ def compute_aggregate(scored_sessions: list) -> dict:
 
     avg_score = round(sum(s.get("overall_score", 0) for s in scored_sessions) / n) if n else 0
 
-    return {
+    result = {
         "sessions_scored": n,
         "average_score": avg_score,
         "behavior_prevalence": prevalence,
         "pattern_distribution": patterns,
     }
+
+    if config_behaviors:
+        result["config_behaviors"] = config_behaviors
+
+    return result
 
 
 QUICKWINS_PROMPT = """The user has a Claude Code Max plan and is underutilizing their token allocation.
