@@ -1,78 +1,153 @@
 # CLAUDE.md — CodeFluent
 
 ## Project Overview
-CodeFluent is a personal analytics dashboard for Claude Code users. It uses `ccusage` for token/cost data, a lightweight JSONL prompt extractor for AI fluency scoring, and the Anthropic API as a scoring engine. Everything runs locally.
+CodeFluent is a VS Code extension that provides AI fluency analytics for Claude Code users. It parses local JSONL session files, uses `ccusage` for token/cost data, scores prompting behaviors via the Anthropic API, and provides personalized coaching — all from a sidebar panel in VS Code.
 
-**THIS IS A HACKATHON PROJECT. You have ~2.5 hours. Prioritize working code over perfect code. Ship fast, polish later.**
+The project also contains the original FastAPI web app (`main.py`, `extract_prompts.py`, `static/`) for reference, but the VS Code extension under `vscode-extension/` is the primary product.
+
+Built at **PDX Hacks 2026**.
 
 ## Tech Stack
-- **Runtime:** Python 3.12.3, Node v22.18.0
-- **Package manager:** `uv` (always use `uv` instead of `pip`)
-- **Backend:** FastAPI + uvicorn
-- **Frontend:** Vanilla HTML/CSS/JS (NO frameworks, NO build step, NO npm for frontend)
-- **Charts:** Chart.js loaded from CDN (https://cdn.jsdelivr.net/npm/chart.js)
-- **API:** Anthropic Python SDK (`anthropic` package)
-- **Usage data:** `ccusage` (installed globally via npx, reads Claude Code sessions)
+- **Runtime:** Node.js v22.18.0 (VS Code extension host)
+- **Language:** TypeScript 5.3 (extension), Vanilla JS (webview frontend)
+- **Extension API:** VS Code 1.85+ (WebviewViewProvider)
+- **Charts:** Chart.js (bundled locally in `media/libs/`)
+- **API:** Anthropic TypeScript SDK (`@anthropic-ai/sdk`)
+- **Usage data:** `ccusage` (called via `npx`, reads Claude Code sessions)
 - **GitHub:** `gh` CLI tool (already installed and authenticated)
+- **Testing:** Jest 30 + ts-jest
 - **Data:** Local JSONL files from `~/.claude/projects/`
+- **Original backend:** Python 3.12.3 / FastAPI / `uv` (reference only)
 
 ## Project Structure
 ```
 codefluent/
 ├── CLAUDE.md                  # This file
+├── README.md                  # Project readme
 ├── PROJECT_PLAN.md            # Master plan (read for context)
 ├── TECHNICAL_SPEC.md          # Detailed implementation spec
 ├── UI_SPEC.md                 # Frontend design spec
 ├── REFERENCES.md              # Research papers and docs links
 ├── DEMO_SCRIPT.md             # 3-minute demo script
-├── extract_prompts.py         # Lightweight JSONL prompt extractor
-├── main.py                    # FastAPI backend
-├── pyproject.toml             # Project config (uv)
-├── data/                      # All data files (gitignored)
-│   ├── ccusage/               # ccusage JSON exports
-│   │   ├── daily.json
-│   │   ├── monthly.json
-│   │   ├── session.json
-│   │   └── blocks.json
-│   ├── prompts/               # Extracted user prompts
-│   │   └── sessions.json
-│   └── scores.json            # Cached AI scoring results
-└── static/                    # Frontend files served by FastAPI
-    ├── index.html
-    ├── app.js
-    └── style.css
+├── vscode-extension/          # VS Code extension (PRIMARY)
+│   ├── package.json           # Extension manifest + dependencies
+│   ├── tsconfig.json          # TypeScript config
+│   ├── jest.config.js         # Test config
+│   ├── .vscodeignore          # VSIX packaging exclusions
+│   ├── src/
+│   │   ├── extension.ts       # Activation, status bar, commands
+│   │   ├── webviewProvider.ts # WebviewViewProvider, IPC, terminal launch
+│   │   ├── parser.ts          # JSONL session parsing (~/.claude/projects/)
+│   │   ├── scoring.ts         # Fluency scoring via Anthropic API
+│   │   ├── usage.ts           # ccusage CLI bridge
+│   │   ├── quickwins.ts       # GitHub repo scoping + task suggestions
+│   │   └── cache.ts           # Persistent score caching (globalStorageUri)
+│   ├── media/
+│   │   ├── index.html         # Webview HTML template (nonce-based CSP)
+│   │   ├── app.js             # Frontend logic, charts, IPC
+│   │   ├── style.css          # VS Code theme-aware CSS
+│   │   ├── icon.svg           # Activity bar icon (amber brackets)
+│   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
+│   ├── test/
+│   │   ├── unit/scoring.test.ts
+│   │   └── integration/{extension,webviewProvider}.test.ts
+│   └── out/                   # Compiled JS (gitignored)
+├── main.py                    # Original FastAPI backend (reference)
+├── extract_prompts.py         # Original Python prompt extractor (reference)
+├── static/                    # Original web frontend (reference)
+│   ├── index.html
+│   ├── app.js
+│   └── style.css
+├── data/                      # Generated data (gitignored)
+├── images/                    # Demo screenshots
+└── pyproject.toml             # Python config (reference)
 ```
 
 ## Key Commands
 ```bash
-# Setup (one time)
-uv init
-uv add fastapi uvicorn anthropic
-mkdir -p data/ccusage data/prompts static
+# --- VS Code Extension (primary) ---
 
-# Generate usage data (run before starting web app)
+# Setup
+cd vscode-extension
+npm install
+
+# Compile
+npm run compile            # One-shot TypeScript compilation
+npm run watch              # Continuous compilation
+
+# Test
+npm test                   # Jest (unit + integration, 25+ tests)
+
+# Package and install
+npx @vscode/vsce package --allow-missing-repository
+code --install-extension codefluent-0.1.0.vsix
+
+# Debug: press F5 in VS Code with vscode-extension/ open
+
+# --- Original Backend (reference) ---
+
+# Generate usage data
 npx ccusage@latest daily --json > data/ccusage/daily.json
 npx ccusage@latest monthly --json > data/ccusage/monthly.json
 npx ccusage@latest session --json -o desc > data/ccusage/session.json
-npx ccusage@latest blocks --json > data/ccusage/blocks.json
 
-# Extract prompts for scoring
+# Extract prompts
 uv run python extract_prompts.py
 
-# Start dev server
+# Start FastAPI server
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-# Open in browser
-# http://localhost:8000
 ```
 
+## Extension Architecture
+
+### Activation
+- **Trigger:** `onView:codefluent.dashboard` (when sidebar is opened)
+- **Activity bar:** Custom view container with `media/icon.svg`
+- **View:** `codefluent.dashboard` (webview type)
+- **Command:** `codefluent.openPanel` focuses the sidebar
+- **Status bar:** Right-aligned item showing `$(pulse) <score>`, updates after scoring
+
+### Webview Communication (IPC)
+The webview (browser context) communicates with the extension host (Node context) via `postMessage`:
+- **Request pattern:** Webview sends `{ type, requestId, payload }`, extension replies `{ type, requestId, data }` or `{ type, requestId, error }`
+- **Fire-and-forget:** `copyToClipboard` and `runInTerminal` have no requestId
+
+### Message Types
+| Type | Direction | Handler |
+|------|-----------|---------|
+| `getUsage` | webview -> ext | Calls `ccusage` CLI, returns daily/monthly/session data |
+| `getSessions` | webview -> ext | Parses `~/.claude/projects/` JSONL files |
+| `runScoring` | webview -> ext | Sends prompts to Anthropic API, caches results |
+| `getCachedScores` | webview -> ext | Returns cached scores + aggregate |
+| `getQuickwins` | webview -> ext | GitHub repo context + Claude suggestions |
+| `copyToClipboard` | webview -> ext | Copies text via `vscode.env.clipboard` |
+| `runInTerminal` | webview -> ext | Opens terminal, runs `claude "<prompt>"` |
+
+### API Key Resolution Order
+1. `ANTHROPIC_API_KEY` environment variable
+2. `.env` file in workspace folder(s)
+3. VS Code SecretStorage (`codefluent.anthropicApiKey`)
+4. Interactive input box (result stored in SecretStorage)
+
+### CSP Constraints
+The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
+- **No inline `onclick` handlers** — use event delegation on `document` instead
+- All scripts must have the `nonce` attribute
+- Styles allow `'unsafe-inline'` (VS Code convention)
+
+### Quick Wins Repo Scoping
+`quickwins.ts` detects the current workspace's GitHub repo via `git remote get-url origin` and scopes both repo context and issue fetching to that repo. Falls back to listing all user repos if no workspace or git remote is found.
+
+### Terminal Launch
+"Run" buttons create terminals with `shellPath: '/bin/bash'` and `shellArgs: ['--norc', '--noprofile']` to bypass shell init scripts (venv activation, etc.), while preserving `PATH` from the extension host process.
+
 ## Code Style & Conventions
-- Python: Type hints, f-strings, pathlib for file paths
-- JavaScript: ES6+, no semicolons, fetch() for API calls, async/await
-- CSS: CSS custom properties for theming, BEM-ish class naming
+- TypeScript: Strict mode, type hints, ES2020 target, CommonJS output
+- JavaScript (webview): ES6+, no semicolons, async/await
+- CSS: CSS custom properties mapped to VS Code theme tokens (`--vscode-editor-background`, etc.)
 - Keep files small: if a file exceeds 300 lines, consider splitting
 - Use descriptive variable names over comments
-- Error handling: always wrap API calls in try/except, show user-friendly errors in UI
+- Error handling: wrap API calls in try/catch, show user-friendly errors in webview
 
 ## JSONL Data Format (VERIFIED against real data)
 
@@ -143,85 +218,59 @@ The parser MUST handle both.
 - `create` — file creation events
 
 ### Signals to Detect for Fluency Scoring
-- `planContent` field on user messages → Plan Mode usage (positive fluency signal)
-- `type: "thinking"` lines → Extended thinking usage
-- `type: "tool_use"` → Tool diversity (count unique tool names)
-- Content of user prompts → Behavioral analysis
-
-## ccusage JSON Format (VERIFIED)
-```json
-{
-  "daily": [
-    {
-      "date": "2025-12-28",
-      "inputTokens": 102,
-      "outputTokens": 36,
-      "cacheCreationTokens": 95593,
-      "cacheReadTokens": 390211,
-      "totalTokens": 485942,
-      "totalCost": 0.79397175,
-      "modelsUsed": ["claude-opus-4-5-20251101"],
-      "modelBreakdowns": [
-        {
-          "modelName": "claude-opus-4-5-20251101",
-          "inputTokens": 102,
-          "outputTokens": 36,
-          "cacheCreationTokens": 95593,
-          "cacheReadTokens": 390211,
-          "cost": 0.79397175
-        }
-      ]
-    }
-  ]
-}
-```
+- `planContent` field on user messages -> Plan Mode usage (positive fluency signal)
+- `type: "thinking"` lines -> Extended thinking usage
+- `type: "tool_use"` -> Tool diversity (count unique tool names)
+- Content of user prompts -> Behavioral analysis
 
 ## Anthropic API Usage
 - Model for scoring: `claude-sonnet-4-20250514` (fast, cheap, good for classification)
-- API key via environment variable: `ANTHROPIC_API_KEY`
-- Keep prompts concise — send only user prompt text, not full assistant responses
-- Cache scoring results to `data/scores.json` to avoid re-scoring on refresh
+- API key via: env var > `.env` > VS Code secrets > prompt
+- Keep prompts concise — send only user prompt text (up to 20 per session, max 2000 chars each)
+- Cache scoring results in `globalStorageUri/scores.json` to avoid re-scoring
 
-## Design System (Anthropic-Inspired)
-- **Primary/accent:** `#D97706` (warm amber)
-- **Background:** `#FAFAF9` (warm off-white)
-- **Card background:** `#FFFFFF` with subtle shadow
-- **Text primary:** `#1C1917`
-- **Text secondary:** `#78716C`
+## Design System
+CSS custom properties map to VS Code theme tokens for automatic light/dark support:
+- `--bg-primary` -> `--vscode-editor-background`
+- `--bg-card` -> `--vscode-editorWidget-background`
+- `--text-primary` -> `--vscode-editor-foreground`
+- `--text-secondary` -> `--vscode-descriptionForeground`
+- `--border` -> `--vscode-widget-border`
+
+Fixed brand colors (semantic meaning, don't change with theme):
+- **Accent:** `#D97706` (warm amber)
 - **Success:** `#059669` (emerald green)
 - **Warning:** `#D97706` (amber)
 - **Danger:** `#DC2626` (red)
-- **Font:** Inter (Google Fonts CDN) or system-ui fallback
+- **Font:** VS Code's font (`--vscode-font-family`) with Inter fallback
 - **Border radius:** 12px cards, 8px buttons
 - **Spacing:** 8px base unit
 
 ## Critical Constraints
-1. **NO npm for frontend** — Load libraries from CDN only
-2. **NO database** — All data is JSON files on disk
-3. **NO authentication** — Runs locally, no login
-4. **NO build step** — HTML/CSS/JS served directly by FastAPI
-5. **Use `uv` for all Python tooling** — never `pip` directly
-6. **Time is everything** — If something takes >15 minutes to debug, simplify or skip
+1. **No inline onclick in webview HTML** — CSP blocks them. Use event delegation.
+2. **No npm for webview frontend** — Chart.js is bundled locally in `media/libs/`
+3. **No database** — All data is JSON files or VS Code storage
+4. **No authentication** — Runs locally, no login
+5. **node_modules must be in VSIX** — `.vscodeignore` must NOT exclude `node_modules/` (the Anthropic SDK is a runtime dependency)
+6. **`onView:` activation event required** — Without it in `package.json`, the extension won't activate when the sidebar opens
 
 ## When Stuck
-- If ccusage output is unexpected, use `--debug` flag to see details
-- If prompt extraction misses messages, add the missing `type` to the parser
-- If Anthropic API is slow, pre-score 5 sessions and cache them
-- If a frontend component is ugly, get data flowing first, then style
-- If GitHub integration breaks, hardcode mock data and move on
+- If extension doesn't activate, check `activationEvents` in `package.json` includes `onView:codefluent.dashboard`
+- If buttons don't work in webview, check for inline `onclick` handlers (CSP blocks them)
+- If VSIX is too small (<500KB), check `.vscodeignore` isn't excluding `node_modules/`
+- If API key isn't found, check workspace folder has `.env` or set the env var
+- If ccusage output is unexpected, use `--debug` flag
+- If Quick Wins shows all repos, check that the workspace folder has a git remote
+- If terminal launch gets interrupted by shell init, terminal uses `--norc --noprofile`
 
 ## Testing
 ```bash
-# Test data pipeline
-npx ccusage@latest daily --json | python3 -m json.tool | head -20
-uv run python extract_prompts.py && cat data/prompts/sessions.json | python3 -m json.tool | head -50
+cd vscode-extension
+npm test                   # Runs all Jest tests
 
-# Test API
-curl http://localhost:8000/api/usage | python3 -m json.tool
-curl http://localhost:8000/api/sessions | python3 -m json.tool
-
-# Test scoring (once API key is set)
-curl -X POST http://localhost:8000/api/score \
-  -H "Content-Type: application/json" \
-  -d '{"session_ids": ["first-session-id"]}' | python3 -m json.tool
+# Test structure:
+# test/unit/scoring.test.ts                    — scoreSessions + computeAggregate
+# test/integration/extension.test.ts           — activation, status bar, commands
+# test/integration/webviewProvider.test.ts      — message handling, HTML generation
+# src/__mocks__/vscode.ts                      — VS Code API mock for Jest
 ```

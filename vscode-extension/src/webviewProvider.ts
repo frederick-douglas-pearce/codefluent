@@ -8,82 +8,93 @@ import { scoreSessions, computeAggregate } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 
-export class CodeFluentPanel {
-  public static currentPanel: CodeFluentPanel | undefined
-  private static readonly viewType = 'codefluent'
+export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
+  public static readonly viewType = 'codefluent.dashboard'
 
-  private readonly panel: vscode.WebviewPanel
-  private readonly context: vscode.ExtensionContext
+  private view?: vscode.WebviewView
   private readonly cache: ScoreCache
-  private disposed = false
+  private statusBar?: vscode.StatusBarItem
 
-  public static createOrShow(context: vscode.ExtensionContext) {
-    if (CodeFluentPanel.currentPanel) {
-      CodeFluentPanel.currentPanel.panel.reveal(vscode.ViewColumn.One)
-      return
-    }
-
-    const panel = vscode.window.createWebviewPanel(
-      CodeFluentPanel.viewType,
-      'CodeFluent',
-      vscode.ViewColumn.One,
-      {
-        enableScripts: true,
-        localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')],
-        retainContextWhenHidden: true,
-      }
-    )
-
-    CodeFluentPanel.currentPanel = new CodeFluentPanel(panel, context)
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    statusBar?: vscode.StatusBarItem,
+  ) {
+    this.cache = new ScoreCache(context.globalStorageUri)
+    this.statusBar = statusBar
   }
 
-  private constructor(panel: vscode.WebviewPanel, context: vscode.ExtensionContext) {
-    this.panel = panel
-    this.context = context
-    this.cache = new ScoreCache(context.globalStorageUri)
+  public setStatusBar(statusBar: vscode.StatusBarItem) {
+    this.statusBar = statusBar
+  }
 
-    this.panel.webview.html = this.getHtmlContent()
+  public resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken,
+  ) {
+    this.view = webviewView
 
-    this.panel.webview.onDidReceiveMessage(
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.context.extensionUri, 'media')],
+    }
+
+    webviewView.webview.html = this.getHtmlContent()
+
+    webviewView.webview.onDidReceiveMessage(
       (msg) => this.handleMessage(msg),
     )
 
-    this.panel.onDidDispose(() => {
-      this.disposed = true
-      CodeFluentPanel.currentPanel = undefined
+    webviewView.onDidDispose(() => {
+      this.view = undefined
     })
   }
 
+  public focus() {
+    if (this.view) {
+      this.view.show(true)
+    }
+  }
+
   private readDotEnv(): string | undefined {
-    // Walk up from extension dir to find .env in the project root
-    let dir = path.resolve(this.context.extensionUri.fsPath, '..')
-    const envPath = path.join(dir, '.env')
-    try {
-      const content = fs.readFileSync(envPath, 'utf8')
-      for (const line of content.split('\n')) {
-        const match = line.match(/^\s*ANTHROPIC_API_KEY\s*=\s*(.+)\s*$/)
-        if (match) return match[1].trim()
+    const dirs: string[] = []
+
+    // Check workspace folders first
+    const workspaceFolders = vscode.workspace.workspaceFolders
+    if (workspaceFolders) {
+      for (const folder of workspaceFolders) {
+        dirs.push(folder.uri.fsPath)
       }
-    } catch {
-      // .env not found
+    }
+
+    // Fallback: parent of extension dir (for dev/F5 launch)
+    dirs.push(path.resolve(this.context.extensionUri.fsPath, '..'))
+
+    for (const dir of dirs) {
+      const envPath = path.join(dir, '.env')
+      try {
+        const content = fs.readFileSync(envPath, 'utf8')
+        for (const line of content.split('\n')) {
+          const match = line.match(/^\s*ANTHROPIC_API_KEY\s*=\s*(.+)\s*$/)
+          if (match) return match[1].trim()
+        }
+      } catch {
+        // .env not found in this dir
+      }
     }
     return undefined
   }
 
   private async getApiKey(): Promise<string | undefined> {
-    // 1. Environment variable
     const envKey = process.env.ANTHROPIC_API_KEY
     if (envKey) return envKey
 
-    // 2. Project .env file (like python-dotenv)
     const dotenvKey = this.readDotEnv()
     if (dotenvKey) return dotenvKey
 
-    // 3. VS Code SecretStorage
     const storedKey = await this.context.secrets.get('codefluent.anthropicApiKey')
     if (storedKey) return storedKey
 
-    // 4. Prompt user
     const inputKey = await vscode.window.showInputBox({
       prompt: 'Enter your Anthropic API key for AI fluency scoring',
       password: true,
@@ -98,11 +109,24 @@ export class CodeFluentPanel {
     return undefined
   }
 
-  private async handleMessage(msg: { type: string; requestId?: string; payload?: any; text?: string }) {
+  private async handleMessage(msg: { type: string; requestId?: string; payload?: any; text?: string; prompt?: string; repo?: string }) {
     const { type, requestId, payload } = msg
 
     if (type === 'copyToClipboard' && msg.text) {
       await vscode.env.clipboard.writeText(msg.text)
+      return
+    }
+
+    if (type === 'runInTerminal' && msg.prompt) {
+      const escaped = msg.prompt.replace(/"/g, '\\"')
+      const terminal = vscode.window.createTerminal({
+        name: `Claude Code: ${msg.repo || 'Quick Win'}`,
+        shellPath: '/bin/bash',
+        shellArgs: ['--norc', '--noprofile'],
+        env: { PATH: process.env.PATH || '' },
+      })
+      terminal.show()
+      terminal.sendText(`claude "${escaped}"`)
       return
     }
 
@@ -131,9 +155,9 @@ export class CodeFluentPanel {
           return
       }
 
-      this.panel.webview.postMessage({ type, requestId, data })
+      this.view?.webview.postMessage({ type, requestId, data })
     } catch (err: any) {
-      this.panel.webview.postMessage({ type, requestId, error: err.message || 'Request failed' })
+      this.view?.webview.postMessage({ type, requestId, error: err.message || 'Request failed' })
     }
   }
 
@@ -168,6 +192,8 @@ export class CodeFluentPanel {
     const scored = Object.values(results).filter((r: any) => r.fluency_behaviors)
     const aggregate = scored.length ? computeAggregate(scored) : {}
 
+    this.updateStatusBar(aggregate)
+
     return { scores: results, aggregate }
   }
 
@@ -178,18 +204,31 @@ export class CodeFluentPanel {
     }
 
     const client = new Anthropic({ apiKey })
-    return getQuickWins(client)
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    return getQuickWins(client, workspacePath)
   }
 
   private async handleGetCachedScores() {
     const cached = this.cache.read()
     const scored = Object.values(cached).filter((r: any) => r.fluency_behaviors)
     const aggregate = scored.length ? computeAggregate(scored) : {}
+
+    this.updateStatusBar(aggregate)
+
     return { scores: cached, aggregate }
   }
 
+  private updateStatusBar(aggregate: any) {
+    if (this.statusBar && aggregate?.average_score) {
+      this.statusBar.text = `$(pulse) ${aggregate.average_score}`
+      this.statusBar.tooltip = `CodeFluent: Fluency Score ${aggregate.average_score}/100`
+    }
+  }
+
   private getHtmlContent(): string {
-    const webview = this.panel.webview
+    if (!this.view) return ''
+
+    const webview = this.view.webview
     const mediaUri = vscode.Uri.joinPath(this.context.extensionUri, 'media')
 
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(mediaUri, 'style.css'))

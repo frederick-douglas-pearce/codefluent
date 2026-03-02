@@ -55,17 +55,49 @@ function getRepoContext(owner: string, repoName: string): { recent_commits: stri
   return context
 }
 
-export async function getQuickWins(client: Anthropic): Promise<{ suggestions: any[]; error?: string }> {
+function detectWorkspaceRepo(workspacePath?: string): { owner: string; name: string } | undefined {
+  if (!workspacePath) return undefined
   try {
-    const reposOutput = execSync(
-      'gh repo list --json name,url,pushedAt,description --limit 20',
-      { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
-    )
-    const reposList = JSON.parse(reposOutput)
+    const remoteUrl = execSync('git remote get-url origin', {
+      cwd: workspacePath,
+      timeout: 5000,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim()
+    // Handle both HTTPS (https://github.com/owner/repo.git) and SSH (git@github.com:owner/repo.git)
+    const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/)
+    if (match) return { owner: match[1], name: match[2] }
+  } catch {
+    // not a git repo or no remote
+  }
+  return undefined
+}
 
-    let owner = ''
-    if (reposList.length > 0) {
-      owner = reposList[0].url.split('/').slice(-2, -1)[0]
+export async function getQuickWins(client: Anthropic, workspacePath?: string): Promise<{ suggestions: any[]; error?: string }> {
+  try {
+    const scopedRepo = detectWorkspaceRepo(workspacePath)
+
+    let reposList: any[]
+    let owner: string
+
+    if (scopedRepo) {
+      // Scoped to current workspace repo
+      owner = scopedRepo.owner
+      const repoOutput = execSync(
+        `gh repo view ${scopedRepo.owner}/${scopedRepo.name} --json name,url,pushedAt,description`,
+        { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
+      )
+      reposList = [JSON.parse(repoOutput)]
+    } else {
+      // Fallback to all repos
+      const reposOutput = execSync(
+        'gh repo list --json name,url,pushedAt,description --limit 20',
+        { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
+      )
+      reposList = JSON.parse(reposOutput)
+      owner = reposList.length > 0
+        ? reposList[0].url.split('/').slice(-2, -1)[0]
+        : ''
     }
 
     for (const repo of reposList.slice(0, 10)) {
@@ -74,10 +106,12 @@ export async function getQuickWins(client: Anthropic): Promise<{ suggestions: an
       repo.has_readme = ctx.has_readme
     }
 
+    const repoScope = scopedRepo ? `${scopedRepo.owner}/${scopedRepo.name}` : ''
     let issuesOutput = '[]'
     try {
+      const repoFlag = repoScope ? ` --repo ${repoScope}` : ''
       issuesOutput = execSync(
-        'gh issue list --json title,url,labels,repository --state open --limit 30',
+        `gh issue list --json title,url,labels,repository --state open --limit 30${repoFlag}`,
         { timeout: 10000, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] },
       )
     } catch {

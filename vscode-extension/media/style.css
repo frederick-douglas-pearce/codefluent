@@ -1,11 +1,11 @@
 :root {
-  --bg-primary: #FAFAF9;
-  --bg-card: #FFFFFF;
-  --bg-hover: #F5F5F4;
-  --text-primary: #1C1917;
-  --text-secondary: #78716C;
-  --text-muted: #A8A29E;
-  --border: #E7E5E4;
+  --bg-primary: var(--vscode-editor-background, #FAFAF9);
+  --bg-card: var(--vscode-editorWidget-background, #FFFFFF);
+  --bg-hover: var(--vscode-list-hoverBackground, #F5F5F4);
+  --text-primary: var(--vscode-editor-foreground, #1C1917);
+  --text-secondary: var(--vscode-descriptionForeground, #78716C);
+  --text-muted: var(--vscode-disabledForeground, #A8A29E);
+  --border: var(--vscode-widget-border, var(--vscode-editorWidget-border, #E7E5E4));
   --accent: #D97706;
   --accent-light: #FEF3C7;
   --accent-dark: #B45309;
@@ -26,8 +26,8 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  font-size: 15px;
+  font-family: var(--vscode-font-family, 'Inter', system-ui, -apple-system, sans-serif);
+  font-size: var(--vscode-font-size, 15px);
   line-height: 1.6;
   color: var(--text-primary);
   background: var(--bg-primary);
@@ -494,6 +494,19 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   font-family: inherit;
 }
 .copy-btn:hover { background: var(--bg-hover); }
+
+.run-btn {
+  padding: 4px 10px;
+  background: var(--success);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.run-btn:hover { opacity: 0.85; }
 
 /* Recommendations */
 .rec-section { margin-bottom: 32px; }

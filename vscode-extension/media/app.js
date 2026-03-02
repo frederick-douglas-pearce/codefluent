@@ -236,13 +236,39 @@ function showLoader(tabId) {
     '<div class="scoring-loader"><div class="spinner"></div><p>Analyzing sessions with Claude...</p></div>'
 }
 
-function copyPrompt(btn) {
-  const wrapper = btn.closest('.task-prompt') || btn.closest('.prompt-box-wrapper')
-  const text = (wrapper.querySelector('.prompt-text') || wrapper.querySelector('.prompt-box')).textContent
-  vscode.postMessage({ type: 'copyToClipboard', text })
-  btn.textContent = 'Copied!'
-  setTimeout(() => btn.textContent = 'Copy', 2000)
-}
+// --- Event Delegation (CSP blocks inline onclick handlers) ---
+document.addEventListener('click', (e) => {
+  const target = e.target
+
+  // Copy button
+  if (target.classList.contains('copy-btn')) {
+    const wrapper = target.closest('.task-prompt') || target.closest('.prompt-box-wrapper')
+    const text = (wrapper.querySelector('.prompt-text') || wrapper.querySelector('.prompt-box')).textContent
+    vscode.postMessage({ type: 'copyToClipboard', text })
+    target.textContent = 'Copied!'
+    setTimeout(() => target.textContent = 'Copy', 2000)
+    return
+  }
+
+  // Run in terminal button
+  if (target.classList.contains('run-btn')) {
+    const wrapper = target.closest('.task-prompt')
+    const text = wrapper.querySelector('.prompt-text').textContent
+    const card = target.closest('.task-card')
+    const repo = card ? (card.querySelector('.task-repo')?.textContent || '') : ''
+    vscode.postMessage({ type: 'runInTerminal', prompt: text, repo: repo })
+    target.textContent = 'Launched!'
+    setTimeout(() => target.textContent = 'Run', 2000)
+    return
+  }
+
+  // Session item expand/collapse
+  const sessionItem = target.closest('.session-item')
+  if (sessionItem) {
+    sessionItem.classList.toggle('expanded')
+    return
+  }
+})
 
 // --- Usage Dashboard ---
 function renderUsageDashboard() {
@@ -608,7 +634,7 @@ function renderFluencyScore() {
     const date = session?.started_at ? new Date(session.started_at).toLocaleDateString() : ''
     const project = session?.project || ''
     html += `
-      <div class="session-item" onclick="this.classList.toggle('expanded')">
+      <div class="session-item">
         <div class="session-header">
           <span class="session-id">${project} (${date})</span>
           <span class="session-score" style="color: ${scoreData.overall_score >= 70 ? 'var(--success)' : scoreData.overall_score >= 50 ? 'var(--warning)' : 'var(--danger)'}">
@@ -688,7 +714,8 @@ function renderQuickWins() {
       </div>
       <div class="task-prompt">
         <div class="prompt-header">
-          <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
+          <button class="run-btn">Run</button>
+          <button class="copy-btn">Copy</button>
         </div>
         <pre class="prompt-text">${s.prompt}</pre>
       </div>
@@ -780,7 +807,7 @@ function renderRecCard(rec) {
           <div class="rec-prompt-label">Try this prompt in Claude Code:</div>
           <div class="prompt-box-wrapper">
             <div class="prompt-box-header">
-              <button class="copy-btn" onclick="copyPrompt(this)">Copy</button>
+              <button class="copy-btn">Copy</button>
             </div>
             <pre class="prompt-box">${rec.prompt}</pre>
           </div>
