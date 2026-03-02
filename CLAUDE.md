@@ -29,11 +29,12 @@ Built at **PDX Hacks 2026**.
 codefluent/
 ├── CLAUDE.md                  # This file
 ├── README.md                  # Project readme
-├── PROJECT_PLAN.md            # Master plan (read for context)
-├── TECHNICAL_SPEC.md          # Detailed implementation spec
-├── UI_SPEC.md                 # Frontend design spec
-├── REFERENCES.md              # Research papers and docs links
-├── DEMO_SCRIPT.md             # 3-minute demo script
+├── docs/
+│   ├── PROJECT_PLAN.md        # Master plan (read for context)
+│   ├── TECHNICAL_SPEC.md      # Detailed implementation spec
+│   ├── UI_SPEC.md             # Frontend design spec
+│   ├── REFERENCES.md          # Research papers and docs links
+│   └── DEMO_SCRIPT.md         # 3-minute demo script
 ├── vscode-extension/          # VS Code extension (PRIMARY)
 │   ├── package.json           # Extension manifest + dependencies
 │   ├── tsconfig.json          # TypeScript config
@@ -80,7 +81,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 25+ tests)
+npm test                   # Jest (unit + integration, 64 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -116,8 +117,8 @@ The webview (browser context) communicates with the extension host (Node context
 |------|-----------|---------|
 | `getUsage` | webview -> ext | Calls `ccusage` CLI, returns daily/monthly/session data |
 | `getSessions` | webview -> ext | Parses `~/.claude/projects/` JSONL files |
-| `runScoring` | webview -> ext | Sends prompts to Anthropic API, caches results |
-| `getCachedScores` | webview -> ext | Returns cached scores + aggregate |
+| `runScoring` | webview -> ext | Scores session prompts + workspace CLAUDE.md via Anthropic API, caches results |
+| `getCachedScores` | webview -> ext | Returns cached scores + aggregate (includes config behaviors) |
 | `getQuickwins` | webview -> ext | GitHub repo context + Claude suggestions |
 | `copyToClipboard` | webview -> ext | Copies text via `vscode.env.clipboard` |
 | `runInTerminal` | webview -> ext | Opens terminal, runs `claude "<prompt>"` |
@@ -228,6 +229,27 @@ The parser MUST handle both.
 - Keep prompts concise — send only user prompt text (up to 20 per session, max 2000 chars each)
 - Cache scoring results in `globalStorageUri/scores.json` to avoid re-scoring
 
+## CLAUDE.md Config Scoring
+The extension scores the workspace's `CLAUDE.md` file separately against the same 11 fluency behaviors. This gives users credit for behaviors defined as project conventions.
+
+### How it works
+1. After session scoring, `handleRunScoring()` reads `CLAUDE.md` from the workspace root
+2. Content is truncated to 4000 chars and sent to Claude Sonnet with `CONFIG_SCORING_PROMPT`
+3. Returns `{ fluency_behaviors: Record<string, boolean>, one_line_summary: string }`
+4. Results cached in `globalStorageUri/config_scores.json` keyed by workspace path + content hash
+5. `computeAggregate()` merges via `effective_behavior = session_behavior OR config_behavior`
+6. Frontend shows an amber "CLAUDE.md" tag next to config-boosted behaviors
+
+### Cache invalidation
+- Content hash = first 100 chars + length (`ScoreCache.contentHash()`)
+- Re-scores only when CLAUDE.md content changes or `force_rescore` is set
+- Projects without CLAUDE.md work unchanged
+
+### Webapp equivalent
+- `score_claude_md()` in `webapp/main.py` — same logic
+- Decodes project path from `project_path_encoded` field in session data
+- Config cache at `data/config_scores.json`
+
 ## Design System
 CSS custom properties map to VS Code theme tokens for automatic light/dark support:
 - `--bg-primary` -> `--vscode-editor-background`
@@ -265,7 +287,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all Jest tests
+npm test                   # Runs all 64 Jest tests
 
 # Test structure:
 # test/unit/scoring.test.ts                    — scoreSessions + computeAggregate

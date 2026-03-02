@@ -45,6 +45,7 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 ## Features
 
 - **Fluency Score** — Scores your sessions against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
+- **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
 - **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). Stacked area charts show cache read/creation/input/output token breakdown.
 - **Quick Wins** — Scans your current workspace's GitHub repo (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. Includes a "Run" button that launches Claude Code in a terminal with the suggested prompt.
 - **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
@@ -56,8 +57,9 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 1. The extension parses JSONL session files from `~/.claude/projects/` to extract user prompts and metadata (plan mode usage, tool diversity, thinking count)
 2. `ccusage` reads your Claude Code session history and exports token/cost data
 3. User prompts are sent to `claude-sonnet-4-20250514` for fluency scoring against Anthropic's 4D AI Fluency Framework
-4. Results are cached locally in VS Code's extension storage to avoid re-scoring
-5. Quick Wins uses the `gh` CLI to pull repo context and open issues, scoped to the current workspace
+4. If a `CLAUDE.md` exists in the workspace, it's scored separately against the same 11 behaviors — effective behavior = session OR config
+5. Results are cached locally in VS Code's extension storage (by session ID and CLAUDE.md content hash) to avoid re-scoring
+6. Quick Wins uses the `gh` CLI to pull repo context and open issues, scoped to the current workspace
 
 Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
@@ -129,6 +131,11 @@ codefluent/
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
 │   └── static/                # Web frontend (HTML/CSS/JS)
 ├── docs/                      # Design docs and specs
+│   ├── PROJECT_PLAN.md
+│   ├── TECHNICAL_SPEC.md
+│   ├── UI_SPEC.md
+│   ├── REFERENCES.md
+│   └── DEMO_SCRIPT.md
 ├── images/                    # Demo screenshots
 └── CLAUDE.md                  # AI coding instructions
 ```
@@ -145,7 +152,7 @@ npm run watch          # Continuous TypeScript compilation
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (25 unit + integration tests)
+npm test               # Run all Jest tests (64 tests across 3 suites)
 ```
 
 ### Packaging
