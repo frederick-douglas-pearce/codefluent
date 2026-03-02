@@ -16,6 +16,23 @@ import json
 import subprocess
 from anthropic import Anthropic
 
+BEHAVIORS = [
+    "iteration_and_refinement", "clarifying_goals", "specifying_format",
+    "providing_examples", "setting_interaction_terms", "checking_facts",
+    "questioning_reasoning", "identifying_missing_context",
+    "adjusting_approach", "building_on_responses", "providing_feedback",
+]
+VALID_CODING_PATTERNS = [
+    "conceptual_inquiry", "generation_then_comprehension", "hybrid_code_explanation",
+    "ai_delegation", "progressive_ai_reliance", "iterative_ai_debugging",
+]
+HIGH_QUALITY_PATTERNS = [
+    "conceptual_inquiry", "generation_then_comprehension", "hybrid_code_explanation",
+]
+LOW_QUALITY_PATTERNS = [
+    "ai_delegation", "progressive_ai_reliance", "iterative_ai_debugging",
+]
+
 app = FastAPI(title="CodeFluent")
 _PORT = os.environ.get("PORT", "8000")
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", f"http://localhost:{_PORT}").split(",")
@@ -216,8 +233,9 @@ async def score_sessions(request: ScoreRequest):
             text = response.content[0].text.strip()
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-            score = json.loads(text)
-            score["session_id"] = sid
+            score = validate_score_result(
+                json.loads(text), sid, len(session.get("user_prompts", []))
+            )
             results[sid] = score
             cached[sid] = score
         except Exception as e:
@@ -308,6 +326,74 @@ Score true if the CLAUDE.md content establishes, encourages, or implies the beha
 }}}}"""
 
 
+def _derive_pattern_quality(pattern: str) -> str:
+    if pattern in HIGH_QUALITY_PATTERNS:
+        return "high"
+    if pattern in LOW_QUALITY_PATTERNS:
+        return "low"
+    return "unknown"
+
+
+def validate_score_result(raw, session_id: str, prompt_count: int) -> dict:
+    """Validate and sanitize a scoring API response."""
+    if not isinstance(raw, dict):
+        return {"session_id": session_id, "error": "API response is not a valid object"}
+
+    raw_behaviors = raw.get("fluency_behaviors", {})
+    if not isinstance(raw_behaviors, dict):
+        raw_behaviors = {}
+    fluency_behaviors = {
+        b: raw_behaviors.get(b, False) if isinstance(raw_behaviors.get(b), bool) else False
+        for b in BEHAVIORS
+    }
+
+    overall_score = 0
+    raw_score = raw.get("overall_score")
+    if isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool):
+        overall_score = round(min(100, max(0, raw_score)))
+
+    raw_pattern = raw.get("coding_pattern", "")
+    coding_pattern = raw_pattern if isinstance(raw_pattern, str) and raw_pattern in VALID_CODING_PATTERNS else "unknown"
+
+    coding_pattern_quality = _derive_pattern_quality(coding_pattern)
+
+    one_line_summary = ""
+    raw_summary = raw.get("one_line_summary")
+    if isinstance(raw_summary, str):
+        one_line_summary = raw_summary[:200]
+
+    return {
+        "session_id": session_id,
+        "fluency_behaviors": fluency_behaviors,
+        "overall_score": overall_score,
+        "coding_pattern": coding_pattern,
+        "coding_pattern_quality": coding_pattern_quality,
+        "one_line_summary": one_line_summary,
+        "low_confidence": prompt_count < 3,
+    }
+
+
+def validate_config_score_result(raw) -> dict:
+    """Validate and sanitize a config scoring API response."""
+    if not isinstance(raw, dict):
+        raise ValueError("Config scoring API response is not a valid object")
+
+    raw_behaviors = raw.get("fluency_behaviors", {})
+    if not isinstance(raw_behaviors, dict):
+        raw_behaviors = {}
+    fluency_behaviors = {
+        b: raw_behaviors.get(b, False) if isinstance(raw_behaviors.get(b), bool) else False
+        for b in BEHAVIORS
+    }
+
+    one_line_summary = ""
+    raw_summary = raw.get("one_line_summary")
+    if isinstance(raw_summary, str):
+        one_line_summary = raw_summary[:200]
+
+    return {"fluency_behaviors": fluency_behaviors, "one_line_summary": one_line_summary}
+
+
 def _config_content_hash(content: str) -> str:
     """Simple hash: first 100 chars + length."""
     return content[:100] + ":" + str(len(content))
@@ -325,7 +411,7 @@ def score_claude_md(content: str) -> dict:
     text = response.content[0].text.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-    return json.loads(text)
+    return validate_config_score_result(json.loads(text))
 
 
 def _load_config_cache() -> dict:
@@ -352,15 +438,9 @@ def _decode_project_path(encoded: str) -> str:
 
 def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> dict:
     """Compute aggregate fluency metrics across scored sessions."""
-    behaviors = [
-        "iteration_and_refinement", "clarifying_goals", "specifying_format",
-        "providing_examples", "setting_interaction_terms", "checking_facts",
-        "questioning_reasoning", "identifying_missing_context",
-        "adjusting_approach", "building_on_responses", "providing_feedback",
-    ]
     n = len(scored_sessions)
     prevalence = {}
-    for b in behaviors:
+    for b in BEHAVIORS:
         count = sum(
             1 for s in scored_sessions
             if s.get("fluency_behaviors", {}).get(b, False) or (config_behaviors or {}).get(b, False)

@@ -1,4 +1,4 @@
-import { scoreSessions, computeAggregate, ScoreResult } from '../../src/scoring'
+import { scoreSessions, computeAggregate, ScoreResult, validateScoreResult, validateConfigScoreResult } from '../../src/scoring'
 import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
@@ -455,5 +455,275 @@ describe('computeAggregate', () => {
     const result = computeAggregate([session])
 
     expect(result.average_score).toBe(0)
+  })
+})
+
+// --- validateScoreResult ---
+
+describe('validateScoreResult', () => {
+  const validRaw = {
+    fluency_behaviors: {
+      iteration_and_refinement: true,
+      clarifying_goals: true,
+      specifying_format: false,
+      providing_examples: false,
+      setting_interaction_terms: false,
+      checking_facts: false,
+      questioning_reasoning: false,
+      identifying_missing_context: false,
+      adjusting_approach: true,
+      building_on_responses: true,
+      providing_feedback: false,
+    },
+    coding_pattern: 'hybrid_code_explanation',
+    coding_pattern_quality: 'high',
+    overall_score: 72,
+    one_line_summary: 'Good iterative engagement.',
+  }
+
+  it('passes through a valid complete response', () => {
+    const result = validateScoreResult(validRaw, 'sess-1', 5)
+    expect(result.session_id).toBe('sess-1')
+    expect(result.overall_score).toBe(72)
+    expect(result.coding_pattern).toBe('hybrid_code_explanation')
+    expect(result.coding_pattern_quality).toBe('high')
+    expect(result.fluency_behaviors!.iteration_and_refinement).toBe(true)
+    expect(result.fluency_behaviors!.specifying_format).toBe(false)
+    expect(result.one_line_summary).toBe('Good iterative engagement.')
+    expect(result.low_confidence).toBe(false)
+    expect(result.error).toBeUndefined()
+  })
+
+  // Non-object inputs
+  it('returns error for string input', () => {
+    const result = validateScoreResult('not an object', 'sess-1', 5)
+    expect(result.error).toBeDefined()
+    expect(result.session_id).toBe('sess-1')
+  })
+
+  it('returns error for null input', () => {
+    const result = validateScoreResult(null, 'sess-1', 5)
+    expect(result.error).toBeDefined()
+  })
+
+  it('returns error for array input', () => {
+    const result = validateScoreResult([1, 2, 3], 'sess-1', 5)
+    expect(result.error).toBeDefined()
+  })
+
+  // fluency_behaviors
+  it('defaults missing behaviors to false', () => {
+    const raw = { ...validRaw, fluency_behaviors: { iteration_and_refinement: true } }
+    const result = validateScoreResult(raw, 'sess-1', 5)
+    expect(result.fluency_behaviors!.iteration_and_refinement).toBe(true)
+    expect(result.fluency_behaviors!.clarifying_goals).toBe(false)
+    expect(result.fluency_behaviors!.providing_feedback).toBe(false)
+  })
+
+  it('defaults all behaviors when fluency_behaviors is missing', () => {
+    const raw = { overall_score: 50 }
+    const result = validateScoreResult(raw, 'sess-1', 5)
+    expect(Object.values(result.fluency_behaviors!).every(v => v === false)).toBe(true)
+    expect(Object.keys(result.fluency_behaviors!)).toHaveLength(11)
+  })
+
+  it('strips unknown behavior keys', () => {
+    const raw = { ...validRaw, fluency_behaviors: { ...validRaw.fluency_behaviors, invented_behavior: true } }
+    const result = validateScoreResult(raw, 'sess-1', 5)
+    expect(result.fluency_behaviors!).not.toHaveProperty('invented_behavior')
+    expect(Object.keys(result.fluency_behaviors!)).toHaveLength(11)
+  })
+
+  it('defaults non-boolean behavior values to false', () => {
+    const raw = {
+      ...validRaw,
+      fluency_behaviors: { ...validRaw.fluency_behaviors, iteration_and_refinement: 'yes', clarifying_goals: 1 },
+    }
+    const result = validateScoreResult(raw, 'sess-1', 5)
+    expect(result.fluency_behaviors!.iteration_and_refinement).toBe(false)
+    expect(result.fluency_behaviors!.clarifying_goals).toBe(false)
+  })
+
+  // overall_score
+  it('defaults missing overall_score to 0', () => {
+    const raw = { ...validRaw }
+    delete (raw as any).overall_score
+    const result = validateScoreResult(raw, 'sess-1', 5)
+    expect(result.overall_score).toBe(0)
+  })
+
+  it('clamps negative overall_score to 0', () => {
+    const result = validateScoreResult({ ...validRaw, overall_score: -10 }, 'sess-1', 5)
+    expect(result.overall_score).toBe(0)
+  })
+
+  it('clamps overall_score above 100 to 100', () => {
+    const result = validateScoreResult({ ...validRaw, overall_score: 999 }, 'sess-1', 5)
+    expect(result.overall_score).toBe(100)
+  })
+
+  it('rounds float overall_score to integer', () => {
+    const result = validateScoreResult({ ...validRaw, overall_score: 72.7 }, 'sess-1', 5)
+    expect(result.overall_score).toBe(73)
+  })
+
+  it('defaults string overall_score to 0', () => {
+    const result = validateScoreResult({ ...validRaw, overall_score: 'high' }, 'sess-1', 5)
+    expect(result.overall_score).toBe(0)
+  })
+
+  // coding_pattern
+  it('keeps valid coding_pattern', () => {
+    const result = validateScoreResult({ ...validRaw, coding_pattern: 'ai_delegation' }, 'sess-1', 5)
+    expect(result.coding_pattern).toBe('ai_delegation')
+  })
+
+  it('defaults invalid coding_pattern to unknown', () => {
+    const result = validateScoreResult({ ...validRaw, coding_pattern: 'invented_pattern' }, 'sess-1', 5)
+    expect(result.coding_pattern).toBe('unknown')
+  })
+
+  it('defaults missing coding_pattern to unknown', () => {
+    const raw = { ...validRaw }
+    delete (raw as any).coding_pattern
+    const result = validateScoreResult(raw, 'sess-1', 5)
+    expect(result.coding_pattern).toBe('unknown')
+  })
+
+  // coding_pattern_quality derived
+  it('derives high quality from high-quality pattern', () => {
+    const result = validateScoreResult({ ...validRaw, coding_pattern: 'conceptual_inquiry' }, 'sess-1', 5)
+    expect(result.coding_pattern_quality).toBe('high')
+  })
+
+  it('derives low quality from low-quality pattern', () => {
+    const result = validateScoreResult({ ...validRaw, coding_pattern: 'ai_delegation' }, 'sess-1', 5)
+    expect(result.coding_pattern_quality).toBe('low')
+  })
+
+  it('derives unknown quality from unknown pattern', () => {
+    const result = validateScoreResult({ ...validRaw, coding_pattern: 'invented' }, 'sess-1', 5)
+    expect(result.coding_pattern_quality).toBe('unknown')
+  })
+
+  it('overrides LLM-provided coding_pattern_quality with derived value', () => {
+    const result = validateScoreResult(
+      { ...validRaw, coding_pattern: 'ai_delegation', coding_pattern_quality: 'high' },
+      'sess-1', 5
+    )
+    expect(result.coding_pattern_quality).toBe('low')
+  })
+
+  // one_line_summary
+  it('defaults missing one_line_summary to empty string', () => {
+    const raw = { ...validRaw }
+    delete (raw as any).one_line_summary
+    const result = validateScoreResult(raw, 'sess-1', 5)
+    expect(result.one_line_summary).toBe('')
+  })
+
+  it('defaults non-string one_line_summary to empty string', () => {
+    const result = validateScoreResult({ ...validRaw, one_line_summary: 42 }, 'sess-1', 5)
+    expect(result.one_line_summary).toBe('')
+  })
+
+  it('truncates one_line_summary to 200 chars', () => {
+    const longSummary = 'x'.repeat(300)
+    const result = validateScoreResult({ ...validRaw, one_line_summary: longSummary }, 'sess-1', 5)
+    expect(result.one_line_summary).toHaveLength(200)
+  })
+
+  // low_confidence
+  it('sets low_confidence true for fewer than 3 prompts', () => {
+    const result = validateScoreResult(validRaw, 'sess-1', 2)
+    expect(result.low_confidence).toBe(true)
+  })
+
+  it('sets low_confidence false for 3 or more prompts', () => {
+    const result = validateScoreResult(validRaw, 'sess-1', 3)
+    expect(result.low_confidence).toBe(false)
+  })
+
+  // session_id
+  it('uses sessionId parameter, not raw value', () => {
+    const result = validateScoreResult({ ...validRaw, session_id: 'wrong-id' }, 'correct-id', 5)
+    expect(result.session_id).toBe('correct-id')
+  })
+})
+
+// --- validateConfigScoreResult ---
+
+describe('validateConfigScoreResult', () => {
+  const validConfig = {
+    fluency_behaviors: {
+      iteration_and_refinement: true,
+      clarifying_goals: true,
+      specifying_format: true,
+      providing_examples: true,
+      setting_interaction_terms: true,
+      checking_facts: false,
+      questioning_reasoning: true,
+      identifying_missing_context: true,
+      adjusting_approach: false,
+      building_on_responses: false,
+      providing_feedback: true,
+    },
+    one_line_summary: 'Strong interaction conventions.',
+  }
+
+  it('passes through a valid config response', () => {
+    const result = validateConfigScoreResult(validConfig)
+    expect(result.fluency_behaviors.iteration_and_refinement).toBe(true)
+    expect(result.fluency_behaviors.checking_facts).toBe(false)
+    expect(result.one_line_summary).toBe('Strong interaction conventions.')
+  })
+
+  it('throws for non-object input', () => {
+    expect(() => validateConfigScoreResult('not an object')).toThrow()
+    expect(() => validateConfigScoreResult(null)).toThrow()
+    expect(() => validateConfigScoreResult([1, 2])).toThrow()
+  })
+
+  it('defaults missing behaviors to false', () => {
+    const raw = { fluency_behaviors: { iteration_and_refinement: true } }
+    const result = validateConfigScoreResult(raw)
+    expect(result.fluency_behaviors.iteration_and_refinement).toBe(true)
+    expect(result.fluency_behaviors.providing_feedback).toBe(false)
+    expect(Object.keys(result.fluency_behaviors)).toHaveLength(11)
+  })
+
+  it('defaults missing one_line_summary to empty string', () => {
+    const result = validateConfigScoreResult({ fluency_behaviors: {} })
+    expect(result.one_line_summary).toBe('')
+  })
+
+  it('strips extra keys, returning only fluency_behaviors and one_line_summary', () => {
+    const raw = { ...validConfig, extra_key: 'should be stripped', another: 123 }
+    const result = validateConfigScoreResult(raw)
+    expect(Object.keys(result)).toEqual(['fluency_behaviors', 'one_line_summary'])
+  })
+})
+
+// --- Integration: scoreSessions with validation ---
+
+describe('scoreSessions with validation', () => {
+  it('clamps out-of-range score from API response', async () => {
+    const apiResponse = {
+      content: [{ type: 'text', text: JSON.stringify({
+        fluency_behaviors: {},
+        coding_pattern: 'conceptual_inquiry',
+        overall_score: 150,
+        one_line_summary: 'Over-scored.',
+      })}],
+    }
+    const client = { messages: { create: jest.fn().mockResolvedValue(apiResponse) } } as any
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+
+    expect(results['sess-1'].overall_score).toBe(100)
+    expect(results['sess-1'].coding_pattern).toBe('conceptual_inquiry')
+    expect(results['sess-1'].coding_pattern_quality).toBe('high')
+    expect(results['sess-1'].low_confidence).toBe(true) // 2 prompts in makeSession < 3
   })
 })

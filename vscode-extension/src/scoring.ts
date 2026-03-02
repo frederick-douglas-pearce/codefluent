@@ -9,6 +9,7 @@ export interface ScoreResult {
   one_line_summary?: string
   session_id: string
   error?: string
+  low_confidence?: boolean
 }
 
 export interface AggregateResult {
@@ -90,6 +91,90 @@ const BEHAVIORS = [
   'adjusting_approach', 'building_on_responses', 'providing_feedback',
 ]
 
+const VALID_CODING_PATTERNS = [
+  'conceptual_inquiry', 'generation_then_comprehension', 'hybrid_code_explanation',
+  'ai_delegation', 'progressive_ai_reliance', 'iterative_ai_debugging',
+]
+const HIGH_QUALITY_PATTERNS = [
+  'conceptual_inquiry', 'generation_then_comprehension', 'hybrid_code_explanation',
+]
+const LOW_QUALITY_PATTERNS = [
+  'ai_delegation', 'progressive_ai_reliance', 'iterative_ai_debugging',
+]
+
+function derivePatternQuality(pattern: string): string {
+  if (HIGH_QUALITY_PATTERNS.includes(pattern)) return 'high'
+  if (LOW_QUALITY_PATTERNS.includes(pattern)) return 'low'
+  return 'unknown'
+}
+
+export function validateScoreResult(raw: unknown, sessionId: string, promptCount: number): ScoreResult {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    return { session_id: sessionId, error: 'API response is not a valid object' }
+  }
+
+  const obj = raw as Record<string, any>
+
+  // fluency_behaviors: ensure all 11 keys, missing default to false, strip unknown, non-booleans default to false
+  const rawBehaviors = typeof obj.fluency_behaviors === 'object' && obj.fluency_behaviors !== null && !Array.isArray(obj.fluency_behaviors)
+    ? obj.fluency_behaviors : {}
+  const fluency_behaviors: Record<string, boolean> = {}
+  for (const b of BEHAVIORS) {
+    fluency_behaviors[b] = typeof rawBehaviors[b] === 'boolean' ? rawBehaviors[b] : false
+  }
+
+  // overall_score: default 0, clamp 0-100, round to integer
+  let overall_score = 0
+  if (typeof obj.overall_score === 'number' && !isNaN(obj.overall_score)) {
+    overall_score = Math.round(Math.min(100, Math.max(0, obj.overall_score)))
+  }
+
+  // coding_pattern: must be in VALID_CODING_PATTERNS
+  const coding_pattern = typeof obj.coding_pattern === 'string' && VALID_CODING_PATTERNS.includes(obj.coding_pattern)
+    ? obj.coding_pattern : 'unknown'
+
+  // coding_pattern_quality: derived from pattern, not trusted from LLM
+  const coding_pattern_quality = derivePatternQuality(coding_pattern)
+
+  // one_line_summary: default "", truncate to 200
+  let one_line_summary = ''
+  if (typeof obj.one_line_summary === 'string') {
+    one_line_summary = obj.one_line_summary.slice(0, 200)
+  }
+
+  return {
+    session_id: sessionId,
+    fluency_behaviors,
+    overall_score,
+    coding_pattern,
+    coding_pattern_quality,
+    one_line_summary,
+    low_confidence: promptCount < 3,
+  }
+}
+
+export function validateConfigScoreResult(raw: unknown): ConfigScoreResult {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('Config scoring API response is not a valid object')
+  }
+
+  const obj = raw as Record<string, any>
+
+  const rawBehaviors = typeof obj.fluency_behaviors === 'object' && obj.fluency_behaviors !== null && !Array.isArray(obj.fluency_behaviors)
+    ? obj.fluency_behaviors : {}
+  const fluency_behaviors: Record<string, boolean> = {}
+  for (const b of BEHAVIORS) {
+    fluency_behaviors[b] = typeof rawBehaviors[b] === 'boolean' ? rawBehaviors[b] : false
+  }
+
+  let one_line_summary = ''
+  if (typeof obj.one_line_summary === 'string') {
+    one_line_summary = obj.one_line_summary.slice(0, 200)
+  }
+
+  return { fluency_behaviors, one_line_summary }
+}
+
 const CONFIG_SCORING_PROMPT = `You are an AI Fluency Analyst. Analyze this CLAUDE.md project configuration file and determine which AI fluency behaviors it establishes as project conventions.
 
 A CLAUDE.md file sets persistent instructions for Claude Code sessions. When a user defines behaviors here (e.g., "always explain trade-offs", "push back if wrong"), those behaviors apply to every session in the project — even if the user doesn't repeat them in individual prompts.
@@ -150,7 +235,7 @@ export async function scoreClaudeMd(
   if (text.startsWith('```')) {
     text = text.split('\n').slice(1).join('\n').replace(/```\s*$/, '').trim()
   }
-  return JSON.parse(text)
+  return validateConfigScoreResult(JSON.parse(text))
 }
 
 export async function scoreSessions(
@@ -191,8 +276,7 @@ export async function scoreSessions(
       if (text.startsWith('```')) {
         text = text.split('\n').slice(1).join('\n').replace(/```\s*$/, '').trim()
       }
-      const score = JSON.parse(text)
-      score.session_id = sid
+      const score = validateScoreResult(JSON.parse(text), sid, session.user_prompts.length)
       results[sid] = score
       cached[sid] = score
     } catch (e: any) {
