@@ -8,9 +8,9 @@
 ## Project Overview
 CodeFluent is a VS Code extension that provides AI fluency analytics for Claude Code users. It parses local JSONL session files, uses `ccusage` for token/cost data, scores prompting behaviors via the Anthropic API, and provides personalized coaching — all from a sidebar panel in VS Code.
 
-The project also contains the original FastAPI web app (`main.py`, `extract_prompts.py`, `static/`) for reference, but the VS Code extension under `vscode-extension/` is the primary product.
+The project also contains the original FastAPI web app (`webapp/`) from the initial prototype but the VS Code extension under `vscode-extension/` is the primary product.
 
-Built at **PDX Hacks 2026**.
+Originally built at PDX Hacks 2026. Now in **production deployment** phase — emphasis on reliability, test coverage, security, and publishing to the VS Code Marketplace.
 
 ## Tech Stack
 - **Runtime:** Node.js v22.18.0 (VS Code extension host)
@@ -22,7 +22,7 @@ Built at **PDX Hacks 2026**.
 - **GitHub:** `gh` CLI tool (already installed and authenticated)
 - **Testing:** Jest 30 + ts-jest
 - **Data:** Local JSONL files from `~/.claude/projects/`
-- **Original backend:** Python 3.12.3 / FastAPI / `uv` (reference only)
+- **Original backend:** Python 3.12.3 / FastAPI / `uv` (prototype, not actively maintained)
 
 ## Project Structure
 ```
@@ -58,7 +58,7 @@ codefluent/
 │   │   ├── unit/scoring.test.ts
 │   │   └── integration/{extension,webviewProvider}.test.ts
 │   └── out/                   # Compiled JS (gitignored)
-├── webapp/                    # Original FastAPI web app (reference)
+├── webapp/                    # Original FastAPI web app (prototype, not actively maintained)
 │   ├── main.py                # FastAPI backend
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
 │   ├── static/                # Web frontend (HTML/CSS/JS)
@@ -81,7 +81,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 64 tests)
+npm test                   # Jest (unit + integration, 113 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -148,6 +148,12 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 - Keep files small: if a file exceeds 300 lines, consider splitting
 - Use descriptive variable names over comments
 - Error handling: wrap API calls in try/catch, show user-friendly errors in webview
+
+## Production Standards
+- **All new features must have tests.** No merging without test coverage for the change.
+- **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. XSS and injection tests exist and must stay green.
+- **No regressions:** `npm test` must pass (currently 113 tests) before any commit to main.
+- **Webapp is frozen.** The `webapp/` directory is the original hackathon prototype. Don't invest effort there — all new work goes into the VS Code extension.
 
 ## JSONL Data Format (VERIFIED against real data)
 
@@ -287,11 +293,13 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 64 Jest tests
+npm test                   # Runs all 113 Jest tests
 
 # Test structure:
 # test/unit/scoring.test.ts                    — scoreSessions + computeAggregate
+# test/unit/quickwins.test.ts                  — GitHub name validation, repo detection, arg safety
+# test/unit/xss.test.ts                        — escapeHtml payloads + source-level XSS vector coverage
 # test/integration/extension.test.ts           — activation, status bar, commands
-# test/integration/webviewProvider.test.ts      — message handling, HTML generation
+# test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests
 # src/__mocks__/vscode.ts                      — VS Code API mock for Jest
 ```

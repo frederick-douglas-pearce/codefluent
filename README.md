@@ -6,7 +6,7 @@ Millions of developers use AI coding assistants daily, but nobody knows if they'
 
 CodeFluent is a VS Code extension that reads your local Claude Code session data, scores your prompting behaviors against [Anthropic's AI Fluency Research](https://www.anthropic.com/research/AI-fluency-index), and gives you actionable recommendations to become a more effective AI collaborator.
 
-Built at **PDX Hacks 2026**.
+Originally built at PDX Hacks 2026, now in active development for production release.
 
 ### How It Compares
 
@@ -126,7 +126,7 @@ codefluent/
 │   │   └── integration/       # Integration tests (extension, webview)
 │   ├── package.json
 │   └── tsconfig.json
-├── webapp/                    # Original FastAPI web app (reference)
+├── webapp/                    # Original FastAPI web app (prototype)
 │   ├── main.py                # FastAPI backend
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
 │   └── static/                # Web frontend (HTML/CSS/JS)
@@ -152,7 +152,7 @@ npm run watch          # Continuous TypeScript compilation
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (64 tests across 3 suites)
+npm test               # Run all Jest tests (113 tests across 5 suites)
 ```
 
 ### Packaging
