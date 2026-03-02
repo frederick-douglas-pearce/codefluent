@@ -98,8 +98,15 @@ export class CodeFluentPanel {
     return undefined
   }
 
-  private async handleMessage(msg: { type: string; requestId: string; payload?: any }) {
+  private async handleMessage(msg: { type: string; requestId?: string; payload?: any; text?: string }) {
     const { type, requestId, payload } = msg
+
+    if (type === 'copyToClipboard' && msg.text) {
+      await vscode.env.clipboard.writeText(msg.text)
+      return
+    }
+
+    if (!requestId) return
 
     try {
       let data: any

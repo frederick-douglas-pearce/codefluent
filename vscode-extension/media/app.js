@@ -239,7 +239,7 @@ function showLoader(tabId) {
 function copyPrompt(btn) {
   const wrapper = btn.closest('.task-prompt') || btn.closest('.prompt-box-wrapper')
   const text = (wrapper.querySelector('.prompt-text') || wrapper.querySelector('.prompt-box')).textContent
-  navigator.clipboard.writeText(text)
+  vscode.postMessage({ type: 'copyToClipboard', text })
   btn.textContent = 'Copied!'
   setTimeout(() => btn.textContent = 'Copy', 2000)
 }
@@ -477,7 +477,11 @@ document.getElementById('run-scoring-btn').addEventListener('click', () => {
 })
 
 async function runScoring(count) {
-  if (!state.sessions?.sessions?.length) return
+  if (!state.sessions?.sessions?.length) {
+    document.getElementById('fluency-results').innerHTML =
+      '<p class="empty-state">Sessions still loading — please wait a moment and try again.</p>'
+    return
+  }
 
   const btn = document.getElementById('run-scoring-btn')
   btn.disabled = true
