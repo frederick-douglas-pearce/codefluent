@@ -54,20 +54,41 @@ export class CodeFluentPanel {
     })
   }
 
+  private readDotEnv(): string | undefined {
+    // Walk up from extension dir to find .env in the project root
+    let dir = path.resolve(this.context.extensionUri.fsPath, '..')
+    const envPath = path.join(dir, '.env')
+    try {
+      const content = fs.readFileSync(envPath, 'utf8')
+      for (const line of content.split('\n')) {
+        const match = line.match(/^\s*ANTHROPIC_API_KEY\s*=\s*(.+)\s*$/)
+        if (match) return match[1].trim()
+      }
+    } catch {
+      // .env not found
+    }
+    return undefined
+  }
+
   private async getApiKey(): Promise<string | undefined> {
     // 1. Environment variable
     const envKey = process.env.ANTHROPIC_API_KEY
     if (envKey) return envKey
 
-    // 2. VS Code SecretStorage
+    // 2. Project .env file (like python-dotenv)
+    const dotenvKey = this.readDotEnv()
+    if (dotenvKey) return dotenvKey
+
+    // 3. VS Code SecretStorage
     const storedKey = await this.context.secrets.get('codefluent.anthropicApiKey')
     if (storedKey) return storedKey
 
-    // 3. Prompt user
+    // 4. Prompt user
     const inputKey = await vscode.window.showInputBox({
       prompt: 'Enter your Anthropic API key for AI fluency scoring',
       password: true,
       placeHolder: 'sk-ant-...',
+      ignoreFocusOut: true,
     })
     if (inputKey) {
       await this.context.secrets.store('codefluent.anthropicApiKey', inputKey)
