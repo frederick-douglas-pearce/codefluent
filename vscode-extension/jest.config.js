@@ -2,12 +2,12 @@
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/src'],
+  roots: ['<rootDir>/test'],
   moduleFileExtensions: ['ts', 'js', 'json'],
   transform: {
     '^.+\\.ts$': ['ts-jest', { tsconfig: 'tsconfig.json' }],
   },
   moduleNameMapper: {
-    '^vscode$': '<rootDir>/src/__mocks__/vscode.ts',
+    '^vscode$': '<rootDir>/test/__mocks__/vscode.ts',
   },
 }

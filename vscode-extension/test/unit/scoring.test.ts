@@ -1,5 +1,5 @@
-import { scoreSessions, computeAggregate, ScoreResult, AggregateResult } from './scoring'
-import { ParsedSession } from './parser'
+import { scoreSessions, computeAggregate, ScoreResult, AggregateResult } from '../../src/scoring'
+import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
 
