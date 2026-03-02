@@ -1,5 +1,10 @@
 # CLAUDE.md — CodeFluent
 
+## Interaction Preferences
+- Always explain trade-offs between approaches
+- Push back if my approach seems suboptimal
+- Flag assumptions you're making
+
 ## Project Overview
 CodeFluent is a VS Code extension that provides AI fluency analytics for Claude Code users. It parses local JSONL session files, uses `ccusage` for token/cost data, scores prompting behaviors via the Anthropic API, and provides personalized coaching — all from a sidebar panel in VS Code.
 
