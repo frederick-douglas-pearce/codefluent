@@ -1,4 +1,4 @@
-import { scoreSessions, computeAggregate, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions } from '../../src/scoring'
+import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions } from '../../src/scoring'
 import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
@@ -1207,5 +1207,159 @@ describe('scoreClaudeMd error handling', () => {
 
     const result = await scoreClaudeMd('content', client, noDelay)
     expect(result.one_line_summary).toBe('Good config.')
+  })
+})
+
+// --- computeScoreHistory ---
+
+describe('computeScoreHistory', () => {
+  it('groups sessions by ISO week', () => {
+    const scores: Record<string, ScoreResult> = {
+      's1': makeScoreResult({ session_id: 's1' }),
+      's2': makeScoreResult({ session_id: 's2' }),
+      's3': makeScoreResult({ session_id: 's3' }),
+    }
+    const sessions = [
+      makeSession({ id: 's1', started_at: '2026-01-05T10:00:00Z' }), // Week 2
+      makeSession({ id: 's2', started_at: '2026-01-06T10:00:00Z' }), // Week 2
+      makeSession({ id: 's3', started_at: '2026-01-12T10:00:00Z' }), // Week 3
+    ]
+
+    const history = computeScoreHistory(scores, sessions)
+
+    expect(history).toHaveLength(2)
+    expect(history[0].sessions_scored).toBe(2)
+    expect(history[1].sessions_scored).toBe(1)
+  })
+
+  it('returns empty array when no sessions have timestamps', () => {
+    const scores: Record<string, ScoreResult> = {
+      's1': makeScoreResult({ session_id: 's1' }),
+    }
+    const sessions = [
+      makeSession({ id: 's1', started_at: null as any }),
+    ]
+
+    const history = computeScoreHistory(scores, sessions)
+
+    expect(history).toHaveLength(0)
+  })
+
+  it('sorts chronologically regardless of insertion order', () => {
+    const scores: Record<string, ScoreResult> = {
+      's1': makeScoreResult({ session_id: 's1' }),
+      's2': makeScoreResult({ session_id: 's2' }),
+    }
+    // Insert week 3 before week 2
+    const sessions = [
+      makeSession({ id: 's2', started_at: '2026-01-12T10:00:00Z' }), // Week 3
+      makeSession({ id: 's1', started_at: '2026-01-05T10:00:00Z' }), // Week 2
+    ]
+
+    const history = computeScoreHistory(scores, sessions)
+
+    expect(history).toHaveLength(2)
+    expect(history[0].period < history[1].period).toBe(true)
+  })
+
+  it('config behaviors boost score', () => {
+    const scores: Record<string, ScoreResult> = {
+      's1': makeScoreResult({
+        session_id: 's1',
+        fluency_behaviors: {
+          iteration_and_refinement: true,
+          clarifying_goals: false,
+          specifying_format: false,
+          providing_examples: false,
+          setting_interaction_terms: false,
+          checking_facts: false,
+          questioning_reasoning: false,
+          identifying_missing_context: false,
+          adjusting_approach: false,
+          building_on_responses: false,
+          providing_feedback: false,
+        },
+      }),
+    }
+    const sessions = [makeSession({ id: 's1', started_at: '2026-01-05T10:00:00Z' })]
+
+    const withoutConfig = computeScoreHistory(scores, sessions)
+    const withConfig = computeScoreHistory(scores, sessions, {
+      clarifying_goals: true,
+      specifying_format: true,
+    } as any)
+
+    expect(withConfig[0].score).toBeGreaterThan(withoutConfig[0].score)
+  })
+
+  it('skips error sessions without fluency_behaviors', () => {
+    const scores: Record<string, ScoreResult> = {
+      's1': { session_id: 's1', error: 'API failed' },
+      's2': makeScoreResult({ session_id: 's2' }),
+    }
+    const sessions = [
+      makeSession({ id: 's1', started_at: '2026-01-05T10:00:00Z' }),
+      makeSession({ id: 's2', started_at: '2026-01-05T10:00:00Z' }),
+    ]
+
+    const history = computeScoreHistory(scores, sessions)
+
+    expect(history).toHaveLength(1)
+    expect(history[0].sessions_scored).toBe(1)
+  })
+
+  it('returns single-element array for sessions in one week', () => {
+    const scores: Record<string, ScoreResult> = {
+      's1': makeScoreResult({ session_id: 's1' }),
+      's2': makeScoreResult({ session_id: 's2' }),
+    }
+    const sessions = [
+      makeSession({ id: 's1', started_at: '2026-01-05T10:00:00Z' }),
+      makeSession({ id: 's2', started_at: '2026-01-06T10:00:00Z' }),
+    ]
+
+    const history = computeScoreHistory(scores, sessions)
+
+    expect(history).toHaveLength(1)
+    expect(history[0].sessions_scored).toBe(2)
+  })
+})
+
+// --- getISOWeekKey ---
+
+describe('getISOWeekKey', () => {
+  it('returns correct ISO week number and Monday date', () => {
+    // 2026-01-05 is a Monday, ISO week 2
+    const result = getISOWeekKey('2026-01-05T10:00:00Z')
+    expect(result).not.toBeNull()
+    expect(result!.key).toBe('2026-W02')
+    expect(result!.monday).toBe('2026-01-05')
+  })
+
+  it('returns Monday of the week for mid-week dates', () => {
+    // 2026-01-07 is a Wednesday, week starts Monday 2026-01-05
+    const result = getISOWeekKey('2026-01-07T10:00:00Z')
+    expect(result).not.toBeNull()
+    expect(result!.monday).toBe('2026-01-05')
+  })
+
+  it('handles Sunday correctly as end of ISO week', () => {
+    // 2026-01-11 is a Sunday, still week 2, Monday = 2026-01-05
+    const result = getISOWeekKey('2026-01-11T23:59:59Z')
+    expect(result).not.toBeNull()
+    expect(result!.key).toBe('2026-W02')
+    expect(result!.monday).toBe('2026-01-05')
+  })
+
+  it('returns null for invalid date string', () => {
+    expect(getISOWeekKey('not-a-date')).toBeNull()
+  })
+
+  it('handles year boundaries correctly', () => {
+    // 2025-12-29 is a Monday, ISO week 1 of 2026
+    const result = getISOWeekKey('2025-12-29T10:00:00Z')
+    expect(result).not.toBeNull()
+    expect(result!.key).toBe('2026-W01')
+    expect(result!.monday).toBe('2025-12-29')
   })
 })

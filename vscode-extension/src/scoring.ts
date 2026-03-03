@@ -29,6 +29,14 @@ export interface AggregateResult {
   behavior_prevalence: Record<string, number>
   pattern_distribution: Record<string, number>
   config_behaviors?: Record<string, boolean>
+  score_history?: ScoreHistoryEntry[]
+}
+
+export interface ScoreHistoryEntry {
+  period: string          // "2026-W04" (YYYY-Www) — ISO week
+  period_start: string    // "2026-01-20" — Monday of that week (for display)
+  score: number           // average effective score for that week (0-100)
+  sessions_scored: number
 }
 
 export interface ConfigScoreResult {
@@ -430,4 +438,84 @@ export function computeAggregate(
   }
 
   return result
+}
+
+export function getISOWeekKey(dateStr: string): { key: string; monday: string } | null {
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return null
+
+  // ISO week: week starts on Monday, week 1 contains Jan 4
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const dayOfWeek = date.getUTCDay() || 7 // Monday=1, Sunday=7
+  // Set to nearest Thursday (ISO week date algorithm)
+  date.setUTCDate(date.getUTCDate() + 4 - dayOfWeek)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+
+  const year = date.getUTCFullYear()
+  const key = `${year}-W${String(weekNum).padStart(2, '0')}`
+
+  // Compute Monday of this ISO week
+  const original = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const origDay = original.getUTCDay() || 7
+  original.setUTCDate(original.getUTCDate() - (origDay - 1))
+  const monday = original.toISOString().slice(0, 10)
+
+  return { key, monday }
+}
+
+export function computeScoreHistory(
+  scores: Record<string, ScoreResult>,
+  sessions: ParsedSession[],
+  configBehaviors?: Record<string, boolean>,
+): ScoreHistoryEntry[] {
+  const sessionTimestamps = new Map<string, string>()
+  for (const s of sessions) {
+    if (s.started_at) {
+      sessionTimestamps.set(s.id, s.started_at)
+    }
+  }
+
+  // Group scored sessions by ISO week
+  const weekGroups = new Map<string, { monday: string; sessions: ScoreResult[] }>()
+
+  for (const [sid, score] of Object.entries(scores)) {
+    if (!score.fluency_behaviors) continue
+    const timestamp = sessionTimestamps.get(sid)
+    if (!timestamp) continue
+
+    const weekInfo = getISOWeekKey(timestamp)
+    if (!weekInfo) continue
+
+    const group = weekGroups.get(weekInfo.key)
+    if (group) {
+      group.sessions.push(score)
+    } else {
+      weekGroups.set(weekInfo.key, { monday: weekInfo.monday, sessions: [score] })
+    }
+  }
+
+  const totalBehaviors = BEHAVIORS.length
+  const cfg = configBehaviors || {}
+
+  const history: ScoreHistoryEntry[] = []
+  for (const [period, { monday, sessions: weekSessions }] of weekGroups) {
+    let scoreSum = 0
+    for (const s of weekSessions) {
+      let effectiveCount = 0
+      for (const b of BEHAVIORS) {
+        if (s.fluency_behaviors?.[b] || cfg[b]) effectiveCount++
+      }
+      scoreSum += (effectiveCount / totalBehaviors) * 100
+    }
+    history.push({
+      period,
+      period_start: monday,
+      score: Math.round(scoreSum / weekSessions.length),
+      sessions_scored: weekSessions.length,
+    })
+  }
+
+  history.sort((a, b) => a.period.localeCompare(b.period))
+  return history
 }

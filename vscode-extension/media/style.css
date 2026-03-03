@@ -252,6 +252,13 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   text-align: center;
 }
 
+/* Score Trend */
+.trend-section { margin: 16px 0; }
+.chart-container-small { height: 180px; }
+.trend-up { color: var(--success); font-weight: 500; }
+.trend-down { color: var(--danger); font-weight: 500; }
+.trend-flat { color: var(--text-secondary); font-weight: 500; }
+
 /* Behavior Bars */
 .behaviors-section { margin: 24px 0; }
 .behaviors-section h3 { margin-bottom: 16px; }

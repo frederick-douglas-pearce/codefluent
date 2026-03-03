@@ -200,6 +200,15 @@ async def get_scores():
     if isinstance(last_ids, list) and last_ids:
         aggregate["sessions_requested"] = len(last_ids)
         aggregate["sessions_skipped"] = len(last_ids) - len(scored)
+
+    # Attach score history from all cached scores + sessions
+    sessions_path = Path("data/prompts/sessions.json")
+    sessions_list = []
+    if sessions_path.exists():
+        with open(sessions_path) as f:
+            sessions_list = json.load(f).get("sessions", [])
+    aggregate["score_history"] = compute_score_history(cached, sessions_list, config_behaviors)
+
     return {"scores": scoped, "aggregate": aggregate}
 
 
@@ -366,6 +375,9 @@ async def score_sessions(request: ScoreRequest):
     aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
     aggregate["sessions_requested"] = len(session_ids)
     aggregate["sessions_skipped"] = len(session_ids) - len(scored)
+    aggregate["score_history"] = compute_score_history(
+        cached, list(all_sessions.values()), config_behaviors
+    )
 
     return {"scores": results, "aggregate": aggregate}
 
@@ -576,6 +588,69 @@ def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> d
         result["config_behaviors"] = config_behaviors
 
     return result
+
+
+def _get_iso_week_key(date_str: str) -> tuple[str, str] | None:
+    """Return (week_key, monday_date) for a timestamp string, or None if invalid."""
+    from datetime import datetime, timedelta
+    try:
+        dt = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+    iso_year, iso_week, _ = dt.isocalendar()
+    key = f"{iso_year}-W{iso_week:02d}"
+    # Monday of this ISO week
+    monday = dt.date() - timedelta(days=dt.weekday())
+    return key, monday.isoformat()
+
+
+def compute_score_history(
+    scores: dict,
+    sessions_list: list,
+    config_behaviors: dict | None = None,
+) -> list[dict]:
+    """Compute weekly score history from scored sessions."""
+    session_timestamps = {}
+    for s in sessions_list:
+        if s.get("started_at"):
+            session_timestamps[s["id"]] = s["started_at"]
+
+    week_groups: dict[str, dict] = {}
+    for sid, score in scores.items():
+        if "fluency_behaviors" not in score:
+            continue
+        timestamp = session_timestamps.get(sid)
+        if not timestamp:
+            continue
+        week_info = _get_iso_week_key(timestamp)
+        if not week_info:
+            continue
+        week_key, monday = week_info
+        if week_key not in week_groups:
+            week_groups[week_key] = {"monday": monday, "sessions": []}
+        week_groups[week_key]["sessions"].append(score)
+
+    total_behaviors = len(BEHAVIORS)
+    cfg = config_behaviors or {}
+
+    history = []
+    for period, group in week_groups.items():
+        score_sum = 0
+        for s in group["sessions"]:
+            effective_count = sum(
+                1 for b in BEHAVIORS
+                if s.get("fluency_behaviors", {}).get(b, False) or cfg.get(b, False)
+            )
+            score_sum += (effective_count / total_behaviors) * 100
+        history.append({
+            "period": period,
+            "period_start": group["monday"],
+            "score": round(score_sum / len(group["sessions"])),
+            "sessions_scored": len(group["sessions"]),
+        })
+
+    history.sort(key=lambda h: h["period"])
+    return history
 
 
 QUICKWINS_PROMPT = """The user has a Claude Code Max plan and is underutilizing their token allocation.

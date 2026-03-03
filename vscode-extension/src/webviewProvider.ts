@@ -4,7 +4,7 @@ import * as path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
 import { getAllSessions } from './parser'
 import { getUsageData } from './usage'
-import { scoreSessions, computeAggregate, scoreClaudeMd } from './scoring'
+import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
@@ -201,6 +201,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
     aggregate.sessions_requested = sessionIds.length
     aggregate.sessions_skipped = sessionIds.length - scored.length
+    aggregate.score_history = computeScoreHistory(cached, sessions, configBehaviors)
 
     this.updateStatusBar(aggregate)
 
@@ -252,6 +253,8 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       aggregate.sessions_requested = lastScoredIds.length
       aggregate.sessions_skipped = lastScoredIds.length - scored.length
     }
+    const { sessions: allParsedSessions } = getAllSessions()
+    aggregate.score_history = computeScoreHistory(cached, allParsedSessions, configBehaviors)
 
     this.updateStatusBar(aggregate)
 

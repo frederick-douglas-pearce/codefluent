@@ -493,6 +493,19 @@ async function runScoring(count) {
   }
 }
 
+function renderTrajectoryText(history) {
+  if (!history || history.length < 2) return ''
+  const current = history[history.length - 1]
+  const previous = history[history.length - 2]
+  const diff = current.score - previous.score
+  if (diff > 0) {
+    return `<span class="trend-up">&#9650; Up from ${previous.score} last week</span>`
+  } else if (diff < 0) {
+    return `<span class="trend-down">&#9660; Down from ${previous.score} last week</span>`
+  }
+  return `<span class="trend-flat">&#8213; Same as last week</span>`
+}
+
 function renderFluencyScore() {
   const { aggregate, scores } = state.scores
   if (!aggregate?.average_score) {
@@ -522,7 +535,20 @@ function renderFluencyScore() {
         </div>
       </div>
       <p class="score-summary">${aggregate.sessions_scored} sessions analyzed${aggregate.sessions_skipped ? ` (${aggregate.sessions_skipped} skipped — no prompts)` : ''}</p>
+      ${renderTrajectoryText(aggregate.score_history)}
     </div>`
+
+  // Score trend chart
+  const history = aggregate.score_history || []
+  if (history.length >= 2) {
+    html += `
+    <div class="trend-section">
+      <h3>Score Trend</h3>
+      <div class="chart-container chart-container-small">
+        <canvas id="trend-chart"></canvas>
+      </div>
+    </div>`
+  }
 
   // Behavior bars
   html += '<div class="behaviors-section"><h3>Fluency Behaviors vs. Anthropic Benchmarks</h3>'
@@ -635,6 +661,48 @@ function renderFluencyScore() {
       options: {
         responsive: true,
         plugins: { legend: { display: false } }
+      }
+    })
+  }
+
+  // Render trend line chart
+  if (history.length >= 2) {
+    destroyChart('trend')
+    const trendLabels = history.map(h => {
+      const d = new Date(h.period_start + 'T00:00:00')
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    })
+    charts.trend = new Chart(document.getElementById('trend-chart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: trendLabels,
+        datasets: [{
+          label: 'Fluency Score',
+          data: history.map(h => h.score),
+          borderColor: '#D97706',
+          backgroundColor: 'rgba(217, 119, 6, 0.15)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => `Score: ${ctx.raw} (${history[ctx.dataIndex].sessions_scored} sessions)`
+            }
+          }
+        },
+        scales: {
+          y: { min: 0, max: 100, ticks: { stepSize: 25 } },
+          x: { ticks: { maxTicksLimit: 10 } }
+        }
       }
     })
   }
