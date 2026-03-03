@@ -3,7 +3,27 @@
   "displayName": "CodeFluent",
   "description": "Claude Code analytics dashboard — AI fluency scoring, usage tracking, and recommendations",
   "version": "0.1.0",
-  "publisher": "codefluent",
+  "publisher": "frederick-douglas-pearce",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/frederick-douglas-pearce/codefluent"
+  },
+  "homepage": "https://github.com/frederick-douglas-pearce/codefluent#readme",
+  "bugs": {
+    "url": "https://github.com/frederick-douglas-pearce/codefluent/issues"
+  },
+  "keywords": [
+    "claude",
+    "ai",
+    "fluency",
+    "analytics",
+    "anthropic"
+  ],
+  "galleryBanner": {
+    "color": "#1A1A1A",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -42,6 +62,7 @@
     ]
   },
   "scripts": {
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./ && mkdir -p shared && cp ../shared/benchmarks.json shared/",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
