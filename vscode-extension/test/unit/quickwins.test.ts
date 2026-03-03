@@ -108,6 +108,99 @@ describe('detectWorkspaceRepo', () => {
   })
 })
 
+describe('getQuickWins CLAUDE.md passthrough', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('includes CLAUDE.md content in API call when provided', async () => {
+    // git remote
+    mockExecFileSync.mockReturnValueOnce('https://github.com/testowner/testrepo.git\n')
+    // gh repo view
+    mockExecFileSync.mockReturnValueOnce(JSON.stringify({ name: 'testrepo', url: 'https://github.com/testowner/testrepo' }))
+    // gh api commits
+    mockExecFileSync.mockReturnValueOnce('commit msg\n')
+    // gh api readme
+    mockExecFileSync.mockReturnValueOnce('README.md\n')
+    // gh issue list
+    mockExecFileSync.mockReturnValueOnce('[]')
+
+    const { getQuickWins } = require('../../src/quickwins')
+    const mockClient = {
+      messages: {
+        create: jest.fn().mockResolvedValue({
+          content: [{ text: '[]' }],
+        }),
+      },
+    }
+
+    await getQuickWins(mockClient, '/workspace', '# My Project\n\nAlways explain trade-offs.')
+
+    const apiCall = mockClient.messages.create.mock.calls[0][0]
+    expect(apiCall.messages[0].content).toContain('<claude_md>')
+    expect(apiCall.messages[0].content).toContain('Always explain trade-offs.')
+    expect(apiCall.messages[0].content).toContain('</claude_md>')
+  })
+
+  it('works without CLAUDE.md content', async () => {
+    // git remote
+    mockExecFileSync.mockReturnValueOnce('https://github.com/testowner/testrepo.git\n')
+    // gh repo view
+    mockExecFileSync.mockReturnValueOnce(JSON.stringify({ name: 'testrepo', url: 'https://github.com/testowner/testrepo' }))
+    // gh api commits
+    mockExecFileSync.mockReturnValueOnce('commit msg\n')
+    // gh api readme
+    mockExecFileSync.mockReturnValueOnce('README.md\n')
+    // gh issue list
+    mockExecFileSync.mockReturnValueOnce('[]')
+
+    const { getQuickWins } = require('../../src/quickwins')
+    const mockClient = {
+      messages: {
+        create: jest.fn().mockResolvedValue({
+          content: [{ text: '[]' }],
+        }),
+      },
+    }
+
+    await getQuickWins(mockClient, '/workspace')
+
+    const apiCall = mockClient.messages.create.mock.calls[0][0]
+    expect(apiCall.messages[0].content).not.toContain('<claude_md>')
+  })
+
+  it('truncates CLAUDE.md content at 2000 chars', async () => {
+    // git remote
+    mockExecFileSync.mockReturnValueOnce('https://github.com/testowner/testrepo.git\n')
+    // gh repo view
+    mockExecFileSync.mockReturnValueOnce(JSON.stringify({ name: 'testrepo', url: 'https://github.com/testowner/testrepo' }))
+    // gh api commits
+    mockExecFileSync.mockReturnValueOnce('commit msg\n')
+    // gh api readme
+    mockExecFileSync.mockReturnValueOnce('README.md\n')
+    // gh issue list
+    mockExecFileSync.mockReturnValueOnce('[]')
+
+    const { getQuickWins } = require('../../src/quickwins')
+    const mockClient = {
+      messages: {
+        create: jest.fn().mockResolvedValue({
+          content: [{ text: '[]' }],
+        }),
+      },
+    }
+
+    const longContent = 'A'.repeat(3000)
+    await getQuickWins(mockClient, '/workspace', longContent)
+
+    const apiCall = mockClient.messages.create.mock.calls[0][0]
+    // The content between <claude_md> tags should be truncated to 2000 chars
+    const match = apiCall.messages[0].content.match(/<claude_md>\n([\s\S]*?)\n<\/claude_md>/)
+    expect(match).toBeTruthy()
+    expect(match[1].length).toBe(2000)
+  })
+})
+
 describe('getQuickWins arg arrays', () => {
   beforeEach(() => {
     jest.clearAllMocks()

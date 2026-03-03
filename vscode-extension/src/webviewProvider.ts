@@ -152,6 +152,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getCachedScores':
           data = await this.handleGetCachedScores()
           break
+        case 'getBenchmarks':
+          data = this.handleGetBenchmarks()
+          break
         default:
           return
       }
@@ -212,7 +215,24 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     const client = new Anthropic({ apiKey })
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-    return getQuickWins(client, workspacePath)
+
+    let claudeMdContent: string | undefined
+    if (workspacePath) {
+      const claudeMdPath = path.join(workspacePath, 'CLAUDE.md')
+      try {
+        claudeMdContent = fs.readFileSync(claudeMdPath, 'utf8')
+      } catch {
+        // No CLAUDE.md found — that's fine
+      }
+    }
+
+    return getQuickWins(client, workspacePath, claudeMdContent)
+  }
+
+  private handleGetBenchmarks() {
+    const benchmarksPath = path.resolve(__dirname, '..', '..', 'shared', 'benchmarks.json')
+    const data = JSON.parse(fs.readFileSync(benchmarksPath, 'utf8'))
+    return data.benchmarks
   }
 
   private async handleGetCachedScores() {

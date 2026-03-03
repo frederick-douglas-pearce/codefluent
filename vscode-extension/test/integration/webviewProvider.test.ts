@@ -464,7 +464,7 @@ describe('CodeFluentViewProvider', () => {
 
       await sendMessage({ type: 'getQuickwins', requestId: 'req-9' })
 
-      expect(getQuickWins).toHaveBeenCalledWith(expect.any(Object), undefined)
+      expect(getQuickWins).toHaveBeenCalledWith(expect.any(Object), undefined, undefined)
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getQuickwins',
         requestId: 'req-9',
@@ -483,6 +483,7 @@ describe('CodeFluentViewProvider', () => {
       expect(getQuickWins).toHaveBeenCalledWith(
         expect.any(Object),
         '/home/user/my-project',
+        undefined, // no CLAUDE.md found at fake path
       )
 
       ;(vscode.workspace as any).workspaceFolders = undefined

@@ -1,0 +1,17 @@
+{
+  "version": "2026-02",
+  "source": "Anthropic AI Fluency Index (Feb 2026)",
+  "benchmarks": {
+    "iteration_and_refinement": 0.857,
+    "building_on_responses": 0.75,
+    "clarifying_goals": 0.70,
+    "adjusting_approach": 0.60,
+    "questioning_reasoning": 0.40,
+    "providing_feedback": 0.35,
+    "specifying_format": 0.30,
+    "setting_interaction_terms": 0.30,
+    "checking_facts": 0.25,
+    "providing_examples": 0.25,
+    "identifying_missing_context": 0.20
+  }
+}

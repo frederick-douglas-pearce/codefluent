@@ -478,6 +478,21 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .category-refactor { background: #FEF3C7; color: #92400E; }
 .category-bugfix { background: #FEE2E2; color: #991B1B; }
 .category-feature { background: #EDE9FE; color: #5B21B6; }
+.task-fluency {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.fluency-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--success);
+  background: var(--success-light);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
 .task-prompt {
   background: var(--bg-primary);
   border: 1px solid var(--border);

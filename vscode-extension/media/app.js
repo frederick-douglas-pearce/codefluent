@@ -40,20 +40,8 @@ let state = {
 // --- Chart instances (destroy before re-creating) ---
 let charts = {}
 
-// --- Anthropic Benchmarks ---
-const BENCHMARKS = {
-  iteration_and_refinement: 0.857,
-  building_on_responses: 0.75,
-  clarifying_goals: 0.70,
-  adjusting_approach: 0.60,
-  questioning_reasoning: 0.40,
-  providing_feedback: 0.35,
-  specifying_format: 0.30,
-  setting_interaction_terms: 0.30,
-  checking_facts: 0.25,
-  providing_examples: 0.25,
-  identifying_missing_context: 0.20,
-}
+// --- Anthropic Benchmarks (loaded from shared/benchmarks.json via IPC) ---
+let BENCHMARKS = {}
 
 const BEHAVIOR_LABELS = {
   iteration_and_refinement: 'Iteration & Refinement',
@@ -108,7 +96,6 @@ const PATTERN_COLORS = ['#D97706', '#059669', '#2563EB', '#DC2626', '#7C3AED', '
 // --- Recommendations Data ---
 const RECOMMENDATIONS = {
   setting_interaction_terms: {
-    threshold: 0.30,
     impact: 'high',
     title: 'Set Interaction Terms More Often',
     advice: "Tell Claude how to interact: 'Push back if my approach seems wrong', 'Explain your uncertainty'. Only ~30% of users do this.",
@@ -117,7 +104,6 @@ const RECOMMENDATIONS = {
     prompt: "Before we start, here are my interaction preferences: always explain trade-offs between approaches, push back if my approach seems suboptimal, and flag any assumptions you're making. Let's begin.",
   },
   checking_facts: {
-    threshold: 0.35,
     impact: 'high',
     title: 'Verify Claims After Code Generation',
     advice: "When Claude produces code or technical claims, ask: 'Are you sure this API exists in v4?' Fact-checking drops 3.7pp when generating artifacts.",
@@ -126,7 +112,6 @@ const RECOMMENDATIONS = {
     prompt: "Before I accept this code, can you verify: are all the APIs and methods you used actually available in the current version? List any that you're uncertain about.",
   },
   questioning_reasoning: {
-    threshold: 0.40,
     impact: 'medium',
     title: "Ask 'Why This Approach?'",
     advice: "'Why did you choose this approach over X?' — especially for architecture decisions.",
@@ -135,7 +120,6 @@ const RECOMMENDATIONS = {
     prompt: "Why did you choose this approach? What are 2-3 alternative approaches you considered, and what are the trade-offs of each?",
   },
   identifying_missing_context: {
-    threshold: 0.25,
     impact: 'medium',
     title: 'Check for Missing Context',
     advice: "Ask: 'What assumptions are you making here?' or 'What context would help you do this better?'",
@@ -144,7 +128,6 @@ const RECOMMENDATIONS = {
     prompt: "Before you start, what assumptions are you making about this codebase? What additional context or files would help you do a better job?",
   },
   providing_examples: {
-    threshold: 0.30,
     impact: 'medium',
     title: 'Show Examples of What You Want',
     advice: "Paste a code snippet and say 'follow this pattern'. Examples dramatically improve output quality.",
@@ -729,7 +712,11 @@ function renderQuickWins() {
 
   const categoryIcons = { testing: 'testing', docs: 'docs', refactor: 'refactor', bugfix: 'bugfix', feature: 'feature' }
 
-  const html = suggestions.map(s => `
+  const html = suggestions.map(s => {
+    const fluencyTags = (s.fluency_behaviors_modeled || [])
+      .map(b => `<span class="fluency-tag">${escapeHtml(BEHAVIOR_LABELS[b] || b)}</span>`)
+      .join('')
+    return `
     <div class="task-card">
       <div class="task-header">
         <span class="task-title">${escapeHtml(s.task)}</span>
@@ -738,7 +725,8 @@ function renderQuickWins() {
         <span class="task-repo">${escapeHtml(s.repo)}</span>
         <span class="task-time">~${escapeHtml(s.estimated_minutes)} min</span>
         <span class="task-category category-${escapeHtml(categoryIcons[s.category] || 'feature')}">${escapeHtml(s.category)}</span>
-      </div>
+      </div>${fluencyTags ? `
+      <div class="task-fluency">${fluencyTags}</div>` : ''}
       <div class="task-prompt">
         <div class="prompt-header">
           <button class="run-btn">Run</button>
@@ -746,8 +734,8 @@ function renderQuickWins() {
         </div>
         <pre class="prompt-text">${escapeHtml(s.prompt)}</pre>
       </div>
-    </div>
-  `).join('')
+    </div>`
+  }).join('')
 
   document.getElementById('quickwins-results').innerHTML = html
 }
@@ -768,7 +756,7 @@ function renderRecommendations() {
   // Check behavior recommendations
   for (const [behavior, rec] of Object.entries(RECOMMENDATIONS)) {
     const userVal = behavior_prevalence[behavior] || 0
-    if (userVal < rec.threshold) {
+    if (userVal < BENCHMARKS[behavior]) {
       if (rec.impact === 'high') highImpact.push(rec)
       else mediumImpact.push(rec)
     } else {
@@ -856,8 +844,17 @@ async function loadCachedScores() {
   }
 }
 
+// --- Load Benchmarks ---
+async function loadBenchmarks() {
+  try {
+    BENCHMARKS = await postMessageRequest('getBenchmarks')
+  } catch (e) {
+    console.error('Failed to load benchmarks:', e)
+  }
+}
+
 // --- Init ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   // Show onboarding card on first run
   const savedState = vscode.getState() || {}
   if (!savedState.hasSeenOnboarding) {
@@ -865,6 +862,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (card) card.style.display = 'block'
   }
 
+  await loadBenchmarks()
   loadData()
   loadCachedScores()
 })
