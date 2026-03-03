@@ -39,9 +39,6 @@ h1 { font-size: 28px; font-weight: 700; }
 h2 { font-size: 20px; font-weight: 600; }
 h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 
-.label { font-size: 13px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-.stat-number { font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; }
-
 .app {
   max-width: 1200px;
   margin: 0 auto;
@@ -97,25 +94,6 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .content { padding: 24px; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
-
-/* Stat Cards */
-.stat-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.stat-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 20px;
-  box-shadow: var(--shadow-sm);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.stat-detail { font-size: 13px; color: var(--text-muted); }
 
 /* Charts */
 .chart-container {
@@ -600,26 +578,6 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 }
 .research-sources a:hover { text-decoration: underline; }
 
-/* Model Breakdown */
-.model-bar-item { margin-bottom: 12px; }
-.model-bar-label {
-  display: flex;
-  justify-content: space-between;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-.model-bar-track {
-  height: 10px;
-  background: var(--bg-hover);
-  border-radius: 5px;
-  overflow: hidden;
-}
-.model-bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 5px;
-}
-
 /* Spinner */
 .spinner {
   width: 32px;
@@ -716,7 +674,6 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .stat-cards { grid-template-columns: repeat(2, 1fr); }
   .pattern-layout { flex-direction: column; }
   .tabs { overflow-x: auto; }
 }

@@ -281,20 +281,6 @@ function renderUsageDashboard() {
   const daily = state.usage?.daily?.daily || []
   if (!daily.length) return
 
-  const totalTokens = daily.reduce((sum, d) => sum + d.totalTokens, 0)
-  const totalCost = daily.reduce((sum, d) => sum + d.totalCost, 0)
-  const daysActive = daily.length
-  const allModels = new Set(daily.flatMap(d => d.modelsUsed || []))
-
-  document.getElementById('stat-total-tokens').textContent = formatTokens(totalTokens)
-  document.getElementById('stat-tokens-detail').textContent = `across ${daysActive} days`
-  document.getElementById('stat-total-cost').textContent = formatCost(totalCost)
-  document.getElementById('stat-cost-detail').textContent = `avg ${formatCost(totalCost / daysActive)}/day`
-  document.getElementById('stat-days-active').textContent = daysActive
-  document.getElementById('stat-days-detail').textContent = `${daily[0]?.date} to ${daily[daily.length - 1]?.date}`
-  document.getElementById('stat-models-used').textContent = allModels.size
-  document.getElementById('stat-models-detail').textContent = [...allModels].map(m => m.split('-').slice(0, 4).join('-')).join(', ')
-
   // Token usage stacked area chart (cache read, cache creation, input, output)
   destroyChart('usage')
   charts.usage = new Chart(document.getElementById('usage-chart').getContext('2d'), {
@@ -373,68 +359,8 @@ function renderUsageDashboard() {
     }
   })
 
-  // Cost bar chart
-  destroyChart('cost')
-  charts.cost = new Chart(document.getElementById('cost-chart').getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: daily.map(d => d.date),
-      datasets: [{
-        label: 'Cost (USD)',
-        data: daily.map(d => d.totalCost),
-        backgroundColor: 'rgba(5, 150, 105, 0.8)',
-        hoverBackgroundColor: '#059669',
-        borderRadius: 4,
-        barPercentage: 0.85,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'top' },
-        tooltip: { callbacks: { label: ctx => formatCost(ctx.raw) } }
-      },
-      scales: {
-        y: { beginAtZero: true, ticks: { callback: v => '$' + v.toFixed(2) } },
-        x: { ticks: { maxTicksLimit: 15 } }
-      }
-    }
-  })
-
-  // Model breakdown
-  renderModelBreakdown(daily)
-
   // Usage pace
   renderUsagePace(daily)
-}
-
-function renderModelBreakdown(daily) {
-  const modelTotals = {}
-  for (const day of daily) {
-    for (const mb of (day.modelBreakdowns || [])) {
-      const name = mb.modelName
-      modelTotals[name] = (modelTotals[name] || 0) + mb.cost
-    }
-  }
-  const totalCost = Object.values(modelTotals).reduce((a, b) => a + b, 0)
-  const sorted = Object.entries(modelTotals).sort((a, b) => b[1] - a[1])
-
-  const container = document.getElementById('model-breakdown')
-  container.innerHTML = sorted.map(([name, cost]) => {
-    const pct = totalCost > 0 ? (cost / totalCost * 100).toFixed(1) : 0
-    const shortName = name.split('-').slice(0, 4).join('-')
-    return `
-      <div class="model-bar-item">
-        <div class="model-bar-label">
-          <span>${escapeHtml(shortName)}</span>
-          <span>${formatCost(cost)} (${pct}%)</span>
-        </div>
-        <div class="model-bar-track">
-          <div class="model-bar-fill" style="width: ${pct}%"></div>
-        </div>
-      </div>`
-  }).join('')
 }
 
 // --- Usage Pace ---

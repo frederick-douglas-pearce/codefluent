@@ -25,9 +25,9 @@
 
     <nav class="tabs">
       <button class="tab active" data-tab="fluency">Fluency Score</button>
-      <button class="tab" data-tab="usage">Usage</button>
-      <button class="tab" data-tab="quickwins">Quick Wins</button>
       <button class="tab" data-tab="recommendations">Recommendations</button>
+      <button class="tab" data-tab="quickwins">Quick Wins</button>
+      <button class="tab" data-tab="usage">Usage</button>
     </nav>
 
     <main class="content">
@@ -37,49 +37,6 @@
         <h2>Welcome to CodeFluent</h2>
         <p>CodeFluent measures your <strong>AI fluency</strong> — how effectively you interact with Claude Code. Based on <a href="https://www.anthropic.com/research/AI-fluency-index">Anthropic's AI Fluency Index</a> research, we analyze 11 prompting behaviors across your sessions and provide personalized coaching to help you get more from AI.</p>
         <p>Head to the <strong>Fluency Score</strong> tab and click <strong>Run Analysis</strong> to get started.</p>
-      </div>
-
-      <!-- Usage Tab -->
-      <div id="tab-usage" class="tab-panel">
-        <div class="stat-cards">
-          <div class="stat-card">
-            <span class="label">Total Tokens</span>
-            <span class="stat-number" id="stat-total-tokens">&mdash;</span>
-            <span class="stat-detail" id="stat-tokens-detail"></span>
-          </div>
-          <div class="stat-card">
-            <span class="label">Total Cost</span>
-            <span class="stat-number" id="stat-total-cost">&mdash;</span>
-            <span class="stat-detail" id="stat-cost-detail"></span>
-          </div>
-          <div class="stat-card">
-            <span class="label">Days Active</span>
-            <span class="stat-number" id="stat-days-active">&mdash;</span>
-            <span class="stat-detail" id="stat-days-detail"></span>
-          </div>
-          <div class="stat-card">
-            <span class="label">Models Used</span>
-            <span class="stat-number" id="stat-models-used">&mdash;</span>
-            <span class="stat-detail" id="stat-models-detail"></span>
-          </div>
-        </div>
-
-        <div id="usage-pace" class="pace-section"></div>
-
-        <div class="chart-container">
-          <h3>Daily Token Usage <span class="info-icon" tabindex="0" aria-describedby="tooltip-token-usage">i<span class="info-tooltip" id="tooltip-token-usage" role="tooltip"><strong>Output</strong> — Tokens Claude generates in responses.<br><strong>Input</strong> — Fresh tokens sent with each prompt (new text, not cached).<br><strong>Cache Creation</strong> — Tokens cached for the first time (e.g. CLAUDE.md, large files). Costs more upfront but saves on future reads.<br><strong>Cache Read</strong> — Previously cached tokens reused at ~90% discount. This is usually the largest category.</span></span></h3>
-          <canvas id="usage-chart"></canvas>
-        </div>
-
-        <div class="chart-container">
-          <h3>Daily Cost</h3>
-          <canvas id="cost-chart"></canvas>
-        </div>
-
-        <div class="chart-container">
-          <h3>Model Usage Breakdown</h3>
-          <div id="model-breakdown"></div>
-        </div>
       </div>
 
       <!-- Fluency Tab -->
@@ -110,6 +67,20 @@
         </div>
       </div>
 
+      <!-- Recommendations Tab -->
+      <div id="tab-recommendations" class="tab-panel">
+        <div class="section-header">
+          <h2>Personalized Recommendations</h2>
+          <p>Tailored advice on which prompting behaviors to improve, based on Anthropic's AI Fluency Index research.</p>
+        </div>
+        <div id="recommendations-content">
+          <div class="empty-state-box">
+            <div class="empty-state-icon">💡</div>
+            <p class="empty-state">Run a fluency analysis first to get personalized recommendations.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Quick Wins Tab -->
       <div id="tab-quickwins" class="tab-panel">
         <div class="section-header">
@@ -127,17 +98,12 @@
         </div>
       </div>
 
-      <!-- Recommendations Tab -->
-      <div id="tab-recommendations" class="tab-panel">
-        <div class="section-header">
-          <h2>Personalized Recommendations</h2>
-          <p>Tailored advice on which prompting behaviors to improve, based on Anthropic's AI Fluency Index research.</p>
-        </div>
-        <div id="recommendations-content">
-          <div class="empty-state-box">
-            <div class="empty-state-icon">💡</div>
-            <p class="empty-state">Run a fluency analysis first to get personalized recommendations.</p>
-          </div>
+      <!-- Usage Tab -->
+      <div id="tab-usage" class="tab-panel">
+        <div id="usage-pace" class="pace-section"></div>
+        <div class="chart-container">
+          <h3>Daily Token Usage <span class="info-icon" tabindex="0" aria-describedby="tooltip-token-usage">i<span class="info-tooltip" id="tooltip-token-usage" role="tooltip"><strong>Output</strong> — Tokens Claude generates in responses.<br><strong>Input</strong> — Fresh tokens sent with each prompt (new text, not cached).<br><strong>Cache Creation</strong> — Tokens cached for the first time (e.g. CLAUDE.md, large files). Costs more upfront but saves on future reads.<br><strong>Cache Read</strong> — Previously cached tokens reused at ~90% discount. This is usually the largest category.</span></span></h3>
+          <canvas id="usage-chart"></canvas>
         </div>
       </div>
     </main>

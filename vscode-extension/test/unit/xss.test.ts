@@ -101,10 +101,6 @@ describe('escapeHtml()', () => {
 describe('XSS vector coverage in media/app.js (VS Code extension)', () => {
   const src = fs.readFileSync(VSCODE_APP_PATH, 'utf-8')
 
-  test('renderModelBreakdown escapes shortName', () => {
-    expect(src).toContain('escapeHtml(shortName)')
-  })
-
   test('renderFluencyScore escapes project name', () => {
     expect(src).toContain('escapeHtml(project)')
   })
@@ -240,10 +236,6 @@ describe('Force rescore checkbox', () => {
 
 describe('XSS vector coverage in webapp/static/app.js', () => {
   const src = fs.readFileSync(WEBAPP_APP_PATH, 'utf-8')
-
-  test('renderModelBreakdown escapes shortName', () => {
-    expect(src).toContain('escapeHtml(shortName)')
-  })
 
   test('renderFluencyScore escapes project name', () => {
     expect(src).toContain('escapeHtml(project)')
