@@ -104,6 +104,10 @@
 
       <!-- Usage Tab -->
       <div id="tab-usage" class="tab-panel">
+        <div class="usage-controls">
+          <button class="btn btn-secondary btn-small" id="refresh-data-btn">&#x21BB; Refresh</button>
+          <span id="cache-status" class="cache-status"></span>
+        </div>
         <div id="usage-pace" class="pace-section"></div>
         <div class="chart-container">
           <h3>Daily Token Usage <span class="info-icon" tabindex="0" aria-describedby="tooltip-token-usage">i<span class="info-tooltip" id="tooltip-token-usage" role="tooltip"><strong>Output</strong> — Tokens Claude generates in responses.<br><strong>Input</strong> — Fresh tokens sent with each prompt (new text, not cached).<br><strong>Cache Creation</strong> — Tokens cached for the first time (e.g. CLAUDE.md, large files). Costs more upfront but saves on future reads.<br><strong>Cache Read</strong> — Previously cached tokens reused at ~90% discount. This is usually the largest category.</span></span></h3>

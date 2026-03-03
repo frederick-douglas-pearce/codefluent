@@ -7,6 +7,7 @@ import { getUsageData } from './usage'
 import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
+import { DataCache } from './dataCache'
 import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
@@ -14,6 +15,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
   private view?: vscode.WebviewView
   private readonly cache: ScoreCache
+  private readonly dataCache: DataCache
   private statusBar?: vscode.StatusBarItem
 
   constructor(
@@ -21,6 +23,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     statusBar?: vscode.StatusBarItem,
   ) {
     this.cache = new ScoreCache(context.globalStorageUri)
+    this.dataCache = new DataCache(context.globalStorageUri)
     this.statusBar = statusBar
   }
 
@@ -131,6 +134,12 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       return
     }
 
+    if (type === 'refreshData') {
+      this.dataCache.invalidate()
+      this.refreshInBackground()
+      return
+    }
+
     if (!requestId) return
 
     try {
@@ -166,13 +175,49 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleGetUsage() {
-    return getUsageData()
+    const { data, isStale } = this.dataCache.getUsage()
+    if (data && !isStale) return data
+    if (data && isStale) {
+      this.refreshUsageInBackground()
+      return data
+    }
+    const fresh = getUsageData()
+    this.dataCache.setUsage(fresh)
+    return fresh
   }
 
   private async handleGetSessions(payload?: { limit?: number; project?: string }) {
     const limit = payload?.limit ?? 50
     const project = payload?.project
-    return getAllSessions(limit, project)
+    const { data, isStale } = this.dataCache.getSessions()
+    if (data && !isStale) return this.filterSessions(data, limit, project)
+    if (data && isStale) {
+      this.refreshSessionsInBackground()
+      return this.filterSessions(data, limit, project)
+    }
+    const fresh = getAllSessions()
+    this.dataCache.setSessions(fresh)
+    return this.filterSessions(fresh, limit, project)
+  }
+
+  private filterSessions(result: any, limit?: number, project?: string): any {
+    let sessions = result.sessions || []
+    if (project) {
+      sessions = sessions.filter((s: any) => s.project === project)
+    }
+    const total = sessions.length
+    if (limit) {
+      sessions = sessions.slice(0, limit)
+    }
+    return {
+      sessions,
+      metadata: {
+        ...result.metadata,
+        total_sessions: total,
+        total_projects: new Set(sessions.map((s: any) => s.project)).size,
+        total_prompts: sessions.reduce((sum: number, s: any) => sum + (s.user_prompts?.length || 0), 0),
+      },
+    }
   }
 
   private async handleRunScoring(payload?: { session_ids?: string[]; force_rescore?: boolean }) {
@@ -186,8 +231,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     const client = new Anthropic({ apiKey })
     const cached = this.cache.read()
-    const { sessions } = getAllSessions()
-    const allSessions = Object.fromEntries(sessions.map(s => [s.id, s]))
+    const sessionData = this.dataCache.getSessions().data || getAllSessions()
+    const { sessions } = sessionData as { sessions: any[] }
+    const allSessions = Object.fromEntries(sessions.map((s: any) => [s.id, s]))
 
     const results = await scoreSessions(sessionIds, allSessions, cached, client, force)
 
@@ -253,8 +299,8 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       aggregate.sessions_requested = lastScoredIds.length
       aggregate.sessions_skipped = lastScoredIds.length - scored.length
     }
-    const { sessions: allParsedSessions } = getAllSessions()
-    aggregate.score_history = computeScoreHistory(cached, allParsedSessions, configBehaviors)
+    const cachedSessionData = this.dataCache.getSessions().data || getAllSessions()
+    aggregate.score_history = computeScoreHistory(cached, cachedSessionData.sessions, configBehaviors)
 
     this.updateStatusBar(aggregate)
 
@@ -316,6 +362,35 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       this.statusBar.text = `$(pulse) ${aggregate.average_score}`
       this.statusBar.tooltip = `CodeFluent: Fluency Score ${aggregate.average_score}/100`
     }
+  }
+
+  private refreshUsageInBackground(): void {
+    setImmediate(() => {
+      try {
+        const fresh = getUsageData()
+        this.dataCache.setUsage(fresh)
+        this.view?.webview.postMessage({ type: 'usageUpdated', data: fresh })
+      } catch (err: any) {
+        console.error('[CodeFluent] Background usage refresh failed:', err?.message || err)
+      }
+    })
+  }
+
+  private refreshSessionsInBackground(): void {
+    setImmediate(() => {
+      try {
+        const fresh = getAllSessions()
+        this.dataCache.setSessions(fresh)
+        this.view?.webview.postMessage({ type: 'sessionsUpdated', data: fresh })
+      } catch (err: any) {
+        console.error('[CodeFluent] Background sessions refresh failed:', err?.message || err)
+      }
+    })
+  }
+
+  private refreshInBackground(): void {
+    this.refreshUsageInBackground()
+    this.refreshSessionsInBackground()
   }
 
   private getHtmlContent(): string {

@@ -91,11 +91,14 @@ describe('CodeFluentViewProvider', () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
+    // Clean up data cache files from previous runs
+    const actualFs = jest.requireActual('fs') as typeof import('fs')
+    try { actualFs.unlinkSync('/tmp/codefluent-test-storage/usage_cache.json') } catch {}
+    try { actualFs.unlinkSync('/tmp/codefluent-test-storage/sessions_cache.json') } catch {}
     context = makeContext()
     statusBar = makeStatusBar()
     provider = new CodeFluentViewProvider(context, statusBar)
     webviewView = makeWebviewView()
-
   })
 
   async function sendMessage(msg: Record<string, any>): Promise<void> {
@@ -306,21 +309,33 @@ describe('CodeFluentViewProvider', () => {
 
   describe('message handling: getSessions', () => {
     it('fetches sessions with default limit', async () => {
-      const mockSessions = { sessions: [], metadata: { total_sessions: 0 } }
+      const mockSessions = {
+        sessions: [{ id: 's1', project: 'proj', user_prompts: ['hi'] }],
+        metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
+      }
       ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
 
       await sendMessage({ type: 'getSessions', requestId: 'req-3' })
 
-      expect(getAllSessions).toHaveBeenCalledWith(50, undefined)
+      expect(getAllSessions).toHaveBeenCalledWith()
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getSessions',
         requestId: 'req-3',
-        data: mockSessions,
+        data: expect.objectContaining({
+          sessions: expect.any(Array),
+          metadata: expect.objectContaining({ total_sessions: 1 }),
+        }),
       })
     })
 
-    it('passes custom limit and project from payload', async () => {
-      const mockSessions = { sessions: [], metadata: { total_sessions: 0 } }
+    it('filters by project from payload', async () => {
+      const mockSessions = {
+        sessions: [
+          { id: 's1', project: 'my-project', user_prompts: ['hi'] },
+          { id: 's2', project: 'other-project', user_prompts: ['bye'] },
+        ],
+        metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
+      }
       ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
 
       await sendMessage({
@@ -329,7 +344,17 @@ describe('CodeFluentViewProvider', () => {
         payload: { limit: 10, project: 'my-project' },
       })
 
-      expect(getAllSessions).toHaveBeenCalledWith(10, 'my-project')
+      // getAllSessions is called without args (full result cached)
+      expect(getAllSessions).toHaveBeenCalledWith()
+      // But the response is filtered
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getSessions',
+        requestId: 'req-4',
+        data: expect.objectContaining({
+          sessions: [expect.objectContaining({ id: 's1', project: 'my-project' })],
+          metadata: expect.objectContaining({ total_sessions: 1 }),
+        }),
+      })
     })
   })
 
@@ -741,6 +766,93 @@ describe('CodeFluentViewProvider', () => {
 
       fsMock.readFileSync.mockImplementation(origImpl)
       ;(vscode.workspace as any).workspaceFolders = undefined
+    })
+  })
+
+  describe('data caching', () => {
+    it('second getUsage call returns cached data without re-fetching', async () => {
+      const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
+      ;(getUsageData as jest.Mock).mockReturnValue(mockUsage)
+
+      await sendMessage({ type: 'getUsage', requestId: 'req-cache-1' })
+      expect(getUsageData).toHaveBeenCalledTimes(1)
+
+      ;(getUsageData as jest.Mock).mockClear()
+      await sendMessage({ type: 'getUsage', requestId: 'req-cache-2' })
+      expect(getUsageData).not.toHaveBeenCalled()
+
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getUsage',
+        requestId: 'req-cache-2',
+        data: mockUsage,
+      })
+    })
+
+    it('second getSessions call returns cached data without re-parsing', async () => {
+      const mockSessions = {
+        sessions: [{ id: 's1', project: 'proj', user_prompts: ['hi'] }],
+        metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
+      }
+      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+
+      await sendMessage({ type: 'getSessions', requestId: 'req-cache-3' })
+      expect(getAllSessions).toHaveBeenCalledTimes(1)
+
+      ;(getAllSessions as jest.Mock).mockClear()
+      await sendMessage({ type: 'getSessions', requestId: 'req-cache-4' })
+      expect(getAllSessions).not.toHaveBeenCalled()
+    })
+
+    it('refreshData message invalidates cache and triggers background refresh', async () => {
+      const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
+      ;(getUsageData as jest.Mock).mockReturnValue(mockUsage)
+      const mockSessions = {
+        sessions: [],
+        metadata: { total_sessions: 0, total_projects: 0, total_prompts: 0, extracted_at: '' },
+      }
+      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+
+      // Prime the cache
+      await sendMessage({ type: 'getUsage', requestId: 'req-cache-5' })
+      ;(getUsageData as jest.Mock).mockClear()
+      ;(getAllSessions as jest.Mock).mockClear()
+
+      // Send refreshData (fire-and-forget, no requestId)
+      await sendMessage({ type: 'refreshData' })
+
+      // Allow setImmediate callbacks to run
+      await new Promise(resolve => setImmediate(resolve))
+
+      // Background refresh should have called getUsageData and getAllSessions
+      expect(getUsageData).toHaveBeenCalledTimes(1)
+      expect(getAllSessions).toHaveBeenCalledTimes(1)
+    })
+
+    it('runScoring uses session cache instead of re-parsing', async () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key'
+      const mockSessions = {
+        sessions: [{ id: 's1', user_prompts: ['hi'], used_plan_mode: false, thinking_count: 0, tools_used: [] }],
+        metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
+      }
+      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(scoreSessions as jest.Mock).mockResolvedValue({})
+      ;(computeAggregate as jest.Mock).mockReturnValue({})
+
+      // Prime session cache
+      await sendMessage({ type: 'getSessions', requestId: 'req-cache-6' })
+      ;(getAllSessions as jest.Mock).mockClear()
+
+      // Now run scoring — should use cached sessions
+      await sendMessage({
+        type: 'runScoring',
+        requestId: 'req-cache-7',
+        payload: { session_ids: ['s1'] },
+      })
+
+      // getAllSessions should NOT have been called again
+      expect(getAllSessions).not.toHaveBeenCalled()
+
+      delete process.env.ANTHROPIC_API_KEY
     })
   })
 

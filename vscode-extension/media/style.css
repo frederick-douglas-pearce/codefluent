@@ -109,6 +109,22 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   height: 300px !important;
 }
 
+/* Usage Controls */
+.usage-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.btn-small {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.cache-status {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
 /* Usage Pace */
 .pace-section { margin-bottom: 24px; }
 .pace-section h3 { margin-bottom: 12px; }

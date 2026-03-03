@@ -17,6 +17,16 @@ function postMessageRequest(type, payload) {
 
 window.addEventListener('message', event => {
   const msg = event.data
+  if (msg.type === 'usageUpdated') {
+    state.usage = msg.data
+    renderUsageDashboard()
+    updateCacheStatus('Usage data refreshed')
+    return
+  }
+  if (msg.type === 'sessionsUpdated') {
+    state.sessions = msg.data
+    return
+  }
   if (!msg.requestId) return
   const pending = pendingRequests.get(msg.requestId)
   if (!pending) return
@@ -200,6 +210,15 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#039;')
 }
 
+let cacheStatusTimer = null
+function updateCacheStatus(text) {
+  const el = document.getElementById('cache-status')
+  if (!el) return
+  el.textContent = text
+  if (cacheStatusTimer) clearTimeout(cacheStatusTimer)
+  cacheStatusTimer = setTimeout(() => { el.textContent = '' }, 3000)
+}
+
 function formatTokens(n) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
   if (n >= 1_000) return (n / 1_000).toFixed(0) + 'K'
@@ -243,6 +262,13 @@ document.addEventListener('click', (e) => {
     const s = vscode.getState() || {}
     s.hasSeenOnboarding = true
     vscode.setState(s)
+    return
+  }
+
+  // Refresh data button
+  if (target.id === 'refresh-data-btn') {
+    vscode.postMessage({ type: 'refreshData' })
+    updateCacheStatus('Refreshing...')
     return
   }
 
