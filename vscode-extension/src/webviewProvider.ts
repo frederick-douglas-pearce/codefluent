@@ -230,13 +230,17 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     forceRescore: boolean,
   ): Promise<Record<string, boolean> | undefined> {
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-    if (!workspacePath) return undefined
+    if (!workspacePath) {
+      console.warn('[CodeFluent] No workspace folder — skipping CLAUDE.md scoring')
+      return undefined
+    }
 
     const claudeMdPath = path.join(workspacePath, 'CLAUDE.md')
     let content: string
     try {
       content = fs.readFileSync(claudeMdPath, 'utf8')
     } catch {
+      console.warn('[CodeFluent] No CLAUDE.md found at', claudeMdPath)
       return undefined
     }
 
@@ -257,7 +261,8 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       }
       this.cache.writeConfig(configCache)
       return result.fluency_behaviors
-    } catch {
+    } catch (err: any) {
+      console.error('[CodeFluent] CLAUDE.md scoring failed:', err?.message || err)
       return undefined
     }
   }

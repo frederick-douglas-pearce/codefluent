@@ -304,6 +304,19 @@ export function computeAggregate(
 ): AggregateResult {
   const n = scoredSessions.length
   const prevalence: Record<string, number> = {}
+  const totalBehaviors = BEHAVIORS.length
+
+  // Compute per-session effective scores based on behavior counts (session OR config)
+  let scoreSum = 0
+  for (const s of scoredSessions) {
+    let effectiveCount = 0
+    for (const b of BEHAVIORS) {
+      const sessionHas = s.fluency_behaviors?.[b]
+      const configHas = configBehaviors?.[b]
+      if (sessionHas || configHas) effectiveCount++
+    }
+    scoreSum += (effectiveCount / totalBehaviors) * 100
+  }
 
   for (const b of BEHAVIORS) {
     const count = scoredSessions.filter(s => {
@@ -320,9 +333,7 @@ export function computeAggregate(
     patterns[p] = (patterns[p] || 0) + 1
   }
 
-  const avgScore = n
-    ? Math.round(scoredSessions.reduce((sum, s) => sum + (s.overall_score || 0), 0) / n)
-    : 0
+  const avgScore = n ? Math.round(scoreSum / n) : 0
 
   const result: AggregateResult = {
     sessions_scored: n,

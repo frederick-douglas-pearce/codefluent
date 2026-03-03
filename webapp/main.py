@@ -449,11 +449,23 @@ def _decode_project_path(encoded: str) -> str:
 def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> dict:
     """Compute aggregate fluency metrics across scored sessions."""
     n = len(scored_sessions)
+    total_behaviors = len(BEHAVIORS)
     prevalence = {}
+    cfg = config_behaviors or {}
+
+    # Compute per-session effective scores based on behavior counts (session OR config)
+    score_sum = 0
+    for s in scored_sessions:
+        effective_count = sum(
+            1 for b in BEHAVIORS
+            if s.get("fluency_behaviors", {}).get(b, False) or cfg.get(b, False)
+        )
+        score_sum += (effective_count / total_behaviors) * 100
+
     for b in BEHAVIORS:
         count = sum(
             1 for s in scored_sessions
-            if s.get("fluency_behaviors", {}).get(b, False) or (config_behaviors or {}).get(b, False)
+            if s.get("fluency_behaviors", {}).get(b, False) or cfg.get(b, False)
         )
         prevalence[b] = round(count / n, 2) if n else 0
 
@@ -462,7 +474,7 @@ def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> d
         p = s.get("coding_pattern", "unknown")
         patterns[p] = patterns.get(p, 0) + 1
 
-    avg_score = round(sum(s.get("overall_score", 0) for s in scored_sessions) / n) if n else 0
+    avg_score = round(score_sum / n) if n else 0
 
     result = {
         "sessions_scored": n,

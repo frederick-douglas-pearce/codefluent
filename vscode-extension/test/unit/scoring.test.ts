@@ -333,7 +333,8 @@ describe('computeAggregate', () => {
     const result = computeAggregate([session])
 
     expect(result.sessions_scored).toBe(1)
-    expect(result.average_score).toBe(72)
+    // 4 true behaviors out of 11 → (4/11)*100 = 36.36 → 36
+    expect(result.average_score).toBe(36)
     expect(result.pattern_distribution).toEqual({ hybrid_code_explanation: 1 })
 
     // 4 true behaviors out of 11 → each true = 1.0, each false = 0.0
@@ -343,26 +344,40 @@ describe('computeAggregate', () => {
 
   it('computes correct average across multiple sessions', () => {
     const sessions = [
-      makeScoreResult({ overall_score: 60, session_id: 'a' }),
-      makeScoreResult({ overall_score: 80, session_id: 'b' }),
-      makeScoreResult({ overall_score: 70, session_id: 'c' }),
+      makeScoreResult({ session_id: 'a' }),
+      makeScoreResult({ session_id: 'b' }),
+      makeScoreResult({ session_id: 'c' }),
     ]
     const result = computeAggregate(sessions)
 
     expect(result.sessions_scored).toBe(3)
-    expect(result.average_score).toBe(70)
+    // All three have 4/11 true → (4/11)*100 = 36.36 → 36
+    expect(result.average_score).toBe(36)
   })
 
   it('rounds average score to nearest integer', () => {
+    // 4/11 = 36.36, 5/11 = 45.45 → avg = (36.36 + 45.45 + 36.36) / 3 = 39.39 → 39
+    const fiveBehaviors = {
+      iteration_and_refinement: true,
+      clarifying_goals: true,
+      specifying_format: false,
+      providing_examples: false,
+      setting_interaction_terms: true,
+      checking_facts: false,
+      questioning_reasoning: false,
+      identifying_missing_context: false,
+      adjusting_approach: true,
+      building_on_responses: true,
+      providing_feedback: false,
+    }
     const sessions = [
-      makeScoreResult({ overall_score: 33, session_id: 'a' }),
-      makeScoreResult({ overall_score: 33, session_id: 'b' }),
-      makeScoreResult({ overall_score: 34, session_id: 'c' }),
+      makeScoreResult({ session_id: 'a' }),
+      makeScoreResult({ session_id: 'b', fluency_behaviors: fiveBehaviors }),
+      makeScoreResult({ session_id: 'c' }),
     ]
     const result = computeAggregate(sessions)
 
-    // (33+33+34)/3 = 33.33... → rounds to 33
-    expect(result.average_score).toBe(33)
+    expect(result.average_score).toBe(39)
   })
 
   it('calculates behavior prevalence as proportions', () => {
@@ -435,11 +450,12 @@ describe('computeAggregate', () => {
   })
 
   it('treats missing fluency_behaviors as all false', () => {
-    const session = { session_id: 'a', overall_score: 50 } as any
+    const session = { session_id: 'a' } as any
     const result = computeAggregate([session])
 
     expect(result.sessions_scored).toBe(1)
-    expect(result.average_score).toBe(50)
+    // 0/11 behaviors → score 0
+    expect(result.average_score).toBe(0)
     expect(Object.values(result.behavior_prevalence).every(v => v === 0)).toBe(true)
   })
 
@@ -450,11 +466,36 @@ describe('computeAggregate', () => {
     expect(result.pattern_distribution).toEqual({ unknown: 1 })
   })
 
-  it('treats missing overall_score as 0', () => {
-    const session = { session_id: 'a' } as any
+  it('scores 0 when session has no behaviors', () => {
+    const session = { session_id: 'a', fluency_behaviors: {} } as any
     const result = computeAggregate([session])
 
     expect(result.average_score).toBe(0)
+  })
+
+  it('config behaviors boost the overall score', () => {
+    // Session has 4/11 true → base score 36
+    const session = makeScoreResult()
+    const configBehaviors: Record<string, boolean> = {
+      iteration_and_refinement: false,
+      clarifying_goals: false,
+      specifying_format: true,
+      providing_examples: true,
+      setting_interaction_terms: true,
+      checking_facts: true,
+      questioning_reasoning: true,
+      identifying_missing_context: false,
+      adjusting_approach: false,
+      building_on_responses: false,
+      providing_feedback: true,
+    }
+    const result = computeAggregate([session], configBehaviors)
+
+    // Session has: iteration, clarifying, adjusting, building (4)
+    // Config adds: specifying, providing_examples, setting_terms, checking, questioning, feedback (6)
+    // Effective: 10/11 → (10/11)*100 = 90.9 → 91
+    expect(result.average_score).toBe(91)
+    expect(result.config_behaviors).toEqual(configBehaviors)
   })
 })
 
