@@ -63,7 +63,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && mkdir -p shared && cp ../shared/benchmarks.json shared/",
+    "compile": "tsc -p ./ && mkdir -p shared && cp ../shared/benchmarks.json shared/ && cp -r ../shared/prompts shared/",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "jest --verbose"

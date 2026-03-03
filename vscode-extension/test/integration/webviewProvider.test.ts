@@ -23,7 +23,16 @@ jest.mock('fs', () => {
 
 jest.mock('../../src/parser')
 jest.mock('../../src/usage')
-jest.mock('../../src/scoring')
+jest.mock('../../src/scoring', () => {
+  const actual = jest.requireActual('../../src/scoring')
+  return {
+    ...actual,
+    scoreSessions: jest.fn(),
+    computeAggregate: jest.fn(),
+    scoreClaudeMd: jest.fn(),
+    computeScoreHistory: jest.fn().mockReturnValue([]),
+  }
+})
 jest.mock('../../src/quickwins')
 jest.mock('@anthropic-ai/sdk')
 
@@ -31,7 +40,7 @@ import { getDefaultShell, getShellArgs, getClaudeCommand, escapePromptForShell }
 
 import { getAllSessions } from '../../src/parser'
 import { getUsageData } from '../../src/usage'
-import { scoreSessions, computeAggregate } from '../../src/scoring'
+import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION } from '../../src/scoring'
 import { getQuickWins } from '../../src/quickwins'
 
 function makeContext(overrides: Partial<Record<string, any>> = {}): any {
@@ -410,7 +419,7 @@ describe('CodeFluentViewProvider', () => {
         requestId: 'req-5',
         data: {
           scores: scoreResult,
-          aggregate: { average_score: 75, sessions_scored: 1, sessions_requested: 1, sessions_skipped: 0 },
+          aggregate: { average_score: 75, sessions_scored: 1, sessions_requested: 1, sessions_skipped: 0, score_history: [] },
         },
       })
     })
@@ -887,6 +896,126 @@ describe('CodeFluentViewProvider', () => {
       expect(statusBar.text).toBe('')
 
       delete process.env.ANTHROPIC_API_KEY
+    })
+  })
+
+  describe('config cache prompt versioning', () => {
+    beforeEach(() => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key'
+      ;(vscode.workspace as any).workspaceFolders = [
+        { uri: vscode.Uri.file('/home/user/my-project') },
+      ]
+    })
+
+    afterEach(() => {
+      delete process.env.ANTHROPIC_API_KEY
+      ;(vscode.workspace as any).workspaceFolders = undefined
+    })
+
+    it('config cache hit requires matching prompt_version', async () => {
+      // Set up config cache with matching version
+      const fsMock = require('fs')
+      const origImpl = fsMock.readFileSync.getMockImplementation()
+      fsMock.readFileSync.mockImplementation((...args: any[]) => {
+        if (String(args[0]).endsWith('config_scores.json')) {
+          return JSON.stringify({
+            '/home/user/my-project': {
+              hash: '# My Project\nAlways use TypeScript.' .slice(0, 100) + ':' + '# My Project\nAlways use TypeScript.'.length,
+              prompt_version: CONFIG_SCORING_PROMPT_VERSION,
+              fluency_behaviors: { clarifying_goals: true },
+              one_line_summary: 'Good config.',
+            },
+          })
+        }
+        return origImpl(...args)
+      })
+
+      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [{ id: 's1', user_prompts: ['hi'] }] })
+      ;(scoreSessions as jest.Mock).mockResolvedValue({})
+      ;(computeAggregate as jest.Mock).mockReturnValue({})
+
+      await sendMessage({
+        type: 'runScoring',
+        requestId: 'req-cv-1',
+        payload: { session_ids: ['s1'] },
+      })
+
+      // scoreClaudeMd should NOT be called — config cache hit
+      expect(scoreClaudeMd).not.toHaveBeenCalled()
+
+      fsMock.readFileSync.mockImplementation(origImpl)
+    })
+
+    it('mismatched prompt_version triggers config re-scoring', async () => {
+      const fsMock = require('fs')
+      const origImpl = fsMock.readFileSync.getMockImplementation()
+      fsMock.readFileSync.mockImplementation((...args: any[]) => {
+        if (String(args[0]).endsWith('config_scores.json')) {
+          return JSON.stringify({
+            '/home/user/my-project': {
+              hash: '# My Project\nAlways use TypeScript.'.slice(0, 100) + ':' + '# My Project\nAlways use TypeScript.'.length,
+              prompt_version: 'config-v0.9',
+              fluency_behaviors: { clarifying_goals: true },
+              one_line_summary: 'Old config.',
+            },
+          })
+        }
+        return origImpl(...args)
+      })
+
+      ;(scoreClaudeMd as jest.Mock).mockResolvedValue({
+        fluency_behaviors: { clarifying_goals: true, specifying_format: true },
+        one_line_summary: 'Updated config.',
+      })
+      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [{ id: 's1', user_prompts: ['hi'] }] })
+      ;(scoreSessions as jest.Mock).mockResolvedValue({})
+      ;(computeAggregate as jest.Mock).mockReturnValue({})
+
+      await sendMessage({
+        type: 'runScoring',
+        requestId: 'req-cv-2',
+        payload: { session_ids: ['s1'] },
+      })
+
+      // scoreClaudeMd SHOULD be called — version mismatch
+      expect(scoreClaudeMd).toHaveBeenCalled()
+
+      fsMock.readFileSync.mockImplementation(origImpl)
+    })
+
+    it('missing prompt_version triggers config re-scoring', async () => {
+      const fsMock = require('fs')
+      const origImpl = fsMock.readFileSync.getMockImplementation()
+      fsMock.readFileSync.mockImplementation((...args: any[]) => {
+        if (String(args[0]).endsWith('config_scores.json')) {
+          return JSON.stringify({
+            '/home/user/my-project': {
+              hash: '# My Project\nAlways use TypeScript.'.slice(0, 100) + ':' + '# My Project\nAlways use TypeScript.'.length,
+              fluency_behaviors: { clarifying_goals: true },
+              one_line_summary: 'No version.',
+            },
+          })
+        }
+        return origImpl(...args)
+      })
+
+      ;(scoreClaudeMd as jest.Mock).mockResolvedValue({
+        fluency_behaviors: { clarifying_goals: true },
+        one_line_summary: 'Re-scored.',
+      })
+      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [{ id: 's1', user_prompts: ['hi'] }] })
+      ;(scoreSessions as jest.Mock).mockResolvedValue({})
+      ;(computeAggregate as jest.Mock).mockReturnValue({})
+
+      await sendMessage({
+        type: 'runScoring',
+        requestId: 'req-cv-3',
+        payload: { session_ids: ['s1'] },
+      })
+
+      expect(scoreClaudeMd).toHaveBeenCalled()
+
+      fsMock.readFileSync.mockImplementation(origImpl)
     })
   })
 })

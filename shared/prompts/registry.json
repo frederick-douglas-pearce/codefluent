@@ -1,0 +1,4 @@
+{
+  "scoring": { "version": "scoring-v1.0", "file": "scoring/v1.0.md" },
+  "config": { "version": "config-v1.0", "file": "config/v1.0.md" }
+}

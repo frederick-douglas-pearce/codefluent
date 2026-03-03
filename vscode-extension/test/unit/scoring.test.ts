@@ -1,4 +1,4 @@
-import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions } from '../../src/scoring'
+import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions, SCORING_PROMPT_VERSION, CONFIG_SCORING_PROMPT_VERSION } from '../../src/scoring'
 import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
@@ -44,6 +44,7 @@ function makeScoreResult(overrides: Partial<ScoreResult> = {}): ScoreResult {
     coding_pattern_quality: 'high',
     overall_score: 72,
     one_line_summary: 'Good iterative engagement with clear goals.',
+    prompt_version: SCORING_PROMPT_VERSION,
     ...overrides,
   }
 }
@@ -1361,5 +1362,73 @@ describe('getISOWeekKey', () => {
     expect(result).not.toBeNull()
     expect(result!.key).toBe('2026-W01')
     expect(result!.monday).toBe('2025-12-29')
+  })
+})
+
+// --- Prompt Versioning ---
+
+describe('prompt versioning', () => {
+  it('SCORING_PROMPT_VERSION is a non-empty string', () => {
+    expect(SCORING_PROMPT_VERSION).toBeTruthy()
+    expect(typeof SCORING_PROMPT_VERSION).toBe('string')
+  })
+
+  it('CONFIG_SCORING_PROMPT_VERSION is a non-empty string', () => {
+    expect(CONFIG_SCORING_PROMPT_VERSION).toBeTruthy()
+    expect(typeof CONFIG_SCORING_PROMPT_VERSION).toBe('string')
+  })
+
+  it('scoreSessions includes prompt_version in returned results', async () => {
+    const scoreJson = {
+      fluency_behaviors: { iteration_and_refinement: true },
+      coding_pattern: 'conceptual_inquiry',
+      overall_score: 65,
+      one_line_summary: 'Test.',
+    }
+    const client = makeMockClient(makeApiResponse(scoreJson))
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+
+    expect(results['sess-1'].prompt_version).toBe(SCORING_PROMPT_VERSION)
+  })
+
+  it('cache hit when prompt_version matches', async () => {
+    const cachedScore = makeScoreResult({ prompt_version: SCORING_PROMPT_VERSION })
+    const client = makeMockClient(makeApiResponse({ overall_score: 99 }))
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(
+      ['sess-1'], sessions, { 'sess-1': cachedScore }, client
+    )
+
+    expect(client.messages.create).not.toHaveBeenCalled()
+    expect(results['sess-1']).toEqual(cachedScore)
+  })
+
+  it('re-scores when prompt_version is missing from cache entry', async () => {
+    const cachedScore = makeScoreResult({ prompt_version: undefined })
+    const client = makeMockClient(makeApiResponse({ overall_score: 80 }))
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(
+      ['sess-1'], sessions, { 'sess-1': cachedScore }, client
+    )
+
+    expect(client.messages.create).toHaveBeenCalledTimes(1)
+    expect(results['sess-1'].prompt_version).toBe(SCORING_PROMPT_VERSION)
+  })
+
+  it('re-scores when prompt_version differs from current', async () => {
+    const cachedScore = makeScoreResult({ prompt_version: 'scoring-v0.9' })
+    const client = makeMockClient(makeApiResponse({ overall_score: 75 }))
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(
+      ['sess-1'], sessions, { 'sess-1': cachedScore }, client
+    )
+
+    expect(client.messages.create).toHaveBeenCalledTimes(1)
+    expect(results['sess-1'].prompt_version).toBe(SCORING_PROMPT_VERSION)
   })
 })

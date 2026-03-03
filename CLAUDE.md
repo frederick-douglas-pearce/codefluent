@@ -51,6 +51,7 @@ codefluent/
 │   │   ├── scoring.ts         # Fluency scoring via Anthropic API
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub repo scoping + task suggestions
+│   │   ├── prompts.ts         # Prompt loader + template filler (shared/prompts/)
 │   │   ├── cache.ts           # Persistent score caching (globalStorageUri)
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
 │   ├── media/
@@ -69,6 +70,12 @@ codefluent/
 │   ├── static/                # Web frontend (HTML/CSS/JS)
 │   ├── pyproject.toml         # Python dependencies
 │   └── uv.lock
+├── shared/
+│   ├── benchmarks.json        # Benchmark data
+│   └── prompts/               # Versioned prompt templates
+│       ├── registry.json      # Active version pointers
+│       ├── scoring/v1.0.md    # Session scoring prompt
+│       └── config/v1.0.md     # CLAUDE.md scoring prompt
 ├── data/                      # Generated data (gitignored)
 └── images/                    # Demo screenshots
 ```
@@ -86,7 +93,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 113 tests)
+npm test                   # Jest (unit + integration, 356 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -157,7 +164,7 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 113 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 356 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 
 ## JSONL Data Format (VERIFIED against real data)
@@ -261,6 +268,43 @@ The extension scores the workspace's `CLAUDE.md` file separately against the sam
 - Decodes project path from `project_path_encoded` field in session data
 - Config cache at `data/config_scores.json`
 
+## Prompt Versioning
+
+Scoring prompts are extracted into standalone files under `shared/prompts/` with a version registry. Both the VS Code extension and webapp load prompts from these shared files.
+
+### File structure
+```
+shared/prompts/
+├── registry.json          # Points to active prompt file for each type
+├── scoring/v1.0.md        # Session scoring prompt template
+└── config/v1.0.md         # CLAUDE.md scoring prompt template
+```
+
+### Registry format (`registry.json`)
+```json
+{
+  "scoring": { "version": "scoring-v1.0", "file": "scoring/v1.0.md" },
+  "config": { "version": "config-v1.0", "file": "config/v1.0.md" }
+}
+```
+
+### How to bump a version
+1. Create a new file (e.g., `scoring/v1.1.md`) with the updated prompt
+2. Update `registry.json` to point to the new file and version string
+3. Keep the old file — it serves as history and allows rollback
+
+### Template syntax
+Prompts use `{{PLACEHOLDER}}` for template variables (simple string replacement, not `.format()`). This avoids conflicts with literal JSON braces in the prompt text.
+
+- **Scoring prompt placeholders:** `{{USED_PLAN_MODE}}`, `{{THINKING_COUNT}}`, `{{TOOLS_USED}}`, `{{PROMPTS}}`
+- **Config prompt placeholder:** `{{CONTENT}}`
+
+### Cache invalidation
+Cached scores are stamped with `prompt_version`. On cache read, entries whose `prompt_version` doesn't match the current registry version are treated as stale and re-scored. This applies to both session scores (`scores.json`) and config scores (`config_scores.json`).
+
+### Build integration
+The compile script copies `shared/prompts/` into `vscode-extension/shared/prompts/` so the extension can load them at runtime via `prompts.ts`.
+
 ## Design System
 CSS custom properties map to VS Code theme tokens for automatic light/dark support:
 - `--bg-primary` -> `--vscode-editor-background`
@@ -298,10 +342,11 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 171 Jest tests
+npm test                   # Runs all 356 Jest tests
 
 # Test structure:
-# test/unit/scoring.test.ts                    — scoreSessions + computeAggregate
+# test/unit/prompts.test.ts                    — prompt loader + template filler
+# test/unit/scoring.test.ts                    — scoreSessions + computeAggregate + prompt versioning
 # test/unit/quickwins.test.ts                  — GitHub name validation, repo detection, arg safety
 # test/unit/xss.test.ts                        — escapeHtml payloads + source-level XSS vector coverage
 # test/unit/platform.test.ts                   — cross-platform shell, escaping, npx helpers

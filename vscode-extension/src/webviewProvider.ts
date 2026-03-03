@@ -4,7 +4,7 @@ import * as path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
 import { getAllSessions } from './parser'
 import { getUsageData } from './usage'
-import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory } from './scoring'
+import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 import { DataCache } from './dataCache'
@@ -330,7 +330,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const configCache = this.cache.readConfig()
     const projectKey = workspacePath
 
-    if (!forceRescore && configCache[projectKey]?.hash === hash) {
+    if (!forceRescore && configCache[projectKey]?.hash === hash && configCache[projectKey]?.prompt_version === CONFIG_SCORING_PROMPT_VERSION) {
       return configCache[projectKey].fluency_behaviors
     }
 
@@ -338,6 +338,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       const result = await scoreClaudeMd(content, client)
       configCache[projectKey] = {
         hash,
+        prompt_version: CONFIG_SCORING_PROMPT_VERSION,
         fluency_behaviors: result.fluency_behaviors,
         one_line_summary: result.one_line_summary,
       }
