@@ -10,6 +10,12 @@ jest.mock('fs', () => {
       if (filepath.endsWith('index.html')) {
         return '<html>{{styleUri}}{{scriptUri}}{{chartUri}}{{nonce}}{{cspSource}}</html>'
       }
+      if (filepath.endsWith('benchmarks.json')) {
+        return JSON.stringify({ benchmarks: { expert: { min_score: 85 } } })
+      }
+      if (filepath.endsWith('CLAUDE.md') && filepath.includes('my-project')) {
+        return '# My Project\nAlways use TypeScript.'
+      }
       return actual.readFileSync(...args)
     }),
   }
@@ -474,7 +480,7 @@ describe('CodeFluentViewProvider', () => {
 
     it('passes workspace path when available', async () => {
       ;(vscode.workspace as any).workspaceFolders = [
-        { uri: vscode.Uri.file('/home/user/my-project') },
+        { uri: vscode.Uri.file('/home/user/other-workspace') },
       ]
       ;(getQuickWins as jest.Mock).mockResolvedValue({ suggestions: [] })
 
@@ -482,8 +488,8 @@ describe('CodeFluentViewProvider', () => {
 
       expect(getQuickWins).toHaveBeenCalledWith(
         expect.any(Object),
-        '/home/user/my-project',
-        undefined, // no CLAUDE.md found at fake path
+        '/home/user/other-workspace',
+        undefined, // no CLAUDE.md found at this path
       )
 
       ;(vscode.workspace as any).workspaceFolders = undefined
@@ -647,6 +653,94 @@ describe('CodeFluentViewProvider', () => {
 
       // focus should no-op after dispose
       expect(() => provider.focus()).not.toThrow()
+    })
+  })
+
+  describe('message handling: getBenchmarks', () => {
+    it('returns benchmark data from shared/benchmarks.json', async () => {
+      await sendMessage({ type: 'getBenchmarks', requestId: 'req-bench-1' })
+
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getBenchmarks',
+        requestId: 'req-bench-1',
+        data: { expert: { min_score: 85 } },
+      })
+    })
+
+    it('returns error when benchmarks file is unreadable', async () => {
+      const fsMock = require('fs')
+      const origImpl = fsMock.readFileSync.getMockImplementation()
+      fsMock.readFileSync.mockImplementation((...args: any[]) => {
+        if (String(args[0]).endsWith('benchmarks.json')) {
+          throw new Error('ENOENT: no such file')
+        }
+        return origImpl(...args)
+      })
+
+      await sendMessage({ type: 'getBenchmarks', requestId: 'req-bench-2' })
+
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getBenchmarks',
+        requestId: 'req-bench-2',
+        error: expect.stringContaining('ENOENT'),
+      })
+
+      fsMock.readFileSync.mockImplementation(origImpl)
+    })
+  })
+
+  describe('message handling: getQuickwins CLAUDE.md passthrough', () => {
+    beforeEach(() => {
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key'
+    })
+
+    afterEach(() => {
+      delete process.env.ANTHROPIC_API_KEY
+    })
+
+    it('passes CLAUDE.md content to getQuickWins when file exists at workspace root', async () => {
+      ;(vscode.workspace as any).workspaceFolders = [
+        { uri: vscode.Uri.file('/home/user/my-project') },
+      ]
+      ;(getQuickWins as jest.Mock).mockResolvedValue({ suggestions: [] })
+
+      await sendMessage({ type: 'getQuickwins', requestId: 'req-claude-1' })
+
+      expect(getQuickWins).toHaveBeenCalledWith(
+        expect.any(Object),
+        '/home/user/my-project',
+        '# My Project\nAlways use TypeScript.',
+      )
+
+      ;(vscode.workspace as any).workspaceFolders = undefined
+    })
+
+    it('passes undefined when CLAUDE.md read fails', async () => {
+      ;(vscode.workspace as any).workspaceFolders = [
+        { uri: vscode.Uri.file('/home/user/no-claude-md') },
+      ]
+
+      const fsMock = require('fs')
+      const origImpl = fsMock.readFileSync.getMockImplementation()
+      fsMock.readFileSync.mockImplementation((...args: any[]) => {
+        if (String(args[0]).endsWith('CLAUDE.md') && String(args[0]).includes('no-claude-md')) {
+          throw new Error('ENOENT')
+        }
+        return origImpl(...args)
+      })
+
+      ;(getQuickWins as jest.Mock).mockResolvedValue({ suggestions: [] })
+
+      await sendMessage({ type: 'getQuickwins', requestId: 'req-claude-2' })
+
+      expect(getQuickWins).toHaveBeenCalledWith(
+        expect.any(Object),
+        '/home/user/no-claude-md',
+        undefined,
+      )
+
+      fsMock.readFileSync.mockImplementation(origImpl)
+      ;(vscode.workspace as any).workspaceFolders = undefined
     })
   })
 
