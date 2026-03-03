@@ -147,6 +147,85 @@ describe('XSS vector coverage in media/app.js (VS Code extension)', () => {
   })
 })
 
+// --- 3. Accessibility and Onboarding verification ---
+
+describe('WCAG AA contrast fix', () => {
+  test('VS Code extension uses #635C57 for --text-secondary fallback', () => {
+    const css = fs.readFileSync(path.resolve(__dirname, '../../media/style.css'), 'utf-8')
+    expect(css).toContain('#635C57')
+    expect(css).not.toContain('#78716C')
+  })
+
+  test('webapp uses #635C57 for --text-secondary', () => {
+    const css = fs.readFileSync(path.resolve(__dirname, '../../../webapp/static/style.css'), 'utf-8')
+    expect(css).toContain('#635C57')
+    expect(css).not.toContain('#78716C')
+  })
+})
+
+describe('Focus-visible outlines', () => {
+  test('VS Code extension CSS includes :focus-visible rule', () => {
+    const css = fs.readFileSync(path.resolve(__dirname, '../../media/style.css'), 'utf-8')
+    expect(css).toContain(':focus-visible')
+  })
+
+  test('webapp CSS includes :focus-visible rule', () => {
+    const css = fs.readFileSync(path.resolve(__dirname, '../../../webapp/static/style.css'), 'utf-8')
+    expect(css).toContain(':focus-visible')
+  })
+})
+
+describe('Tooltip ARIA attributes', () => {
+  test('VS Code extension app.js includes role="tooltip" via renderTooltip', () => {
+    const src = fs.readFileSync(VSCODE_APP_PATH, 'utf-8')
+    expect(src).toContain('role="tooltip"')
+    expect(src).toContain('aria-describedby')
+  })
+
+  test('webapp app.js includes role="tooltip" via renderTooltip', () => {
+    const src = fs.readFileSync(WEBAPP_APP_PATH, 'utf-8')
+    expect(src).toContain('role="tooltip"')
+    expect(src).toContain('aria-describedby')
+  })
+
+  test('VS Code extension index.html has ARIA on static tooltip', () => {
+    const html = fs.readFileSync(path.resolve(__dirname, '../../media/index.html'), 'utf-8')
+    expect(html).toContain('role="tooltip"')
+    expect(html).toContain('aria-describedby')
+  })
+
+  test('webapp index.html has ARIA on static tooltip', () => {
+    const html = fs.readFileSync(path.resolve(__dirname, '../../../webapp/static/index.html'), 'utf-8')
+    expect(html).toContain('role="tooltip"')
+    expect(html).toContain('aria-describedby')
+  })
+})
+
+describe('Onboarding card', () => {
+  test('VS Code extension uses vscode.getState/setState for onboarding persistence', () => {
+    const src = fs.readFileSync(VSCODE_APP_PATH, 'utf-8')
+    expect(src).toContain('hasSeenOnboarding')
+    expect(src).toContain('vscode.getState()')
+    expect(src).toContain('vscode.setState(')
+  })
+
+  test('webapp uses localStorage for onboarding persistence', () => {
+    const src = fs.readFileSync(WEBAPP_APP_PATH, 'utf-8')
+    expect(src).toContain('hasSeenOnboarding')
+    expect(src).toContain('localStorage')
+  })
+
+  test('VS Code extension index.html has dismiss button with aria-label', () => {
+    const html = fs.readFileSync(path.resolve(__dirname, '../../media/index.html'), 'utf-8')
+    expect(html).toContain('aria-label="Dismiss onboarding"')
+  })
+
+  test('webapp index.html has dismiss button with aria-label', () => {
+    const html = fs.readFileSync(path.resolve(__dirname, '../../../webapp/static/index.html'), 'utf-8')
+    expect(html).toContain('aria-label="Dismiss onboarding"')
+  })
+})
+
 describe('XSS vector coverage in webapp/static/app.js', () => {
   const src = fs.readFileSync(WEBAPP_APP_PATH, 'utf-8')
 

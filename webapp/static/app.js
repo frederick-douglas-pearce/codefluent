@@ -199,6 +199,13 @@ function formatCost(n) {
   return '$' + n.toFixed(2)
 }
 
+// --- Tooltip Helper (ARIA-accessible) ---
+let tooltipCounter = 0
+function renderTooltip(text) {
+  const id = `tooltip-${++tooltipCounter}`
+  return `<span class="info-icon" tabindex="0" aria-describedby="${id}">i<span class="info-tooltip" id="${id}" role="tooltip">${text}</span></span>`
+}
+
 // Disable Chart.js animations for reliable rendering
 Chart.defaults.animation = false
 
@@ -217,6 +224,14 @@ function showLoader(tabId) {
 // --- Event Delegation (replaces inline onclick handlers) ---
 document.addEventListener('click', (e) => {
   const target = e.target
+
+  // Onboarding dismiss
+  if (target.classList.contains('onboarding-dismiss')) {
+    const card = document.getElementById('onboarding-card')
+    if (card) card.style.display = 'none'
+    localStorage.setItem('hasSeenOnboarding', 'true')
+    return
+  }
 
   // Copy button
   if (target.classList.contains('copy-btn')) {
@@ -541,7 +556,7 @@ function renderFluencyScore() {
     html += `
       <div class="behavior-bar">
         <div class="behavior-label">
-          <span class="behavior-name">${BEHAVIOR_LABELS[key]}${configTag} <span class="info-icon" tabindex="0">i<span class="info-tooltip">${BEHAVIOR_DESCRIPTIONS[key]}</span></span></span>
+          <span class="behavior-name">${BEHAVIOR_LABELS[key]}${configTag} ${renderTooltip(BEHAVIOR_DESCRIPTIONS[key])}</span>
           <span class="behavior-pct">${Math.round(userPct)}%</span>
         </div>
         <div class="bar-track">
@@ -582,7 +597,7 @@ function renderFluencyScore() {
       : '<span class="pattern-quality-tag quality-low">Low</span>'
     html += `
       <div class="pattern-legend-item">
-        <span>${PATTERN_LABELS[p] || escapeHtml(p)} ${qualityTag} <span class="info-icon" tabindex="0">i<span class="info-tooltip">${PATTERN_DESCRIPTIONS[p] || ''}</span></span></span>
+        <span>${PATTERN_LABELS[p] || escapeHtml(p)} ${qualityTag} ${renderTooltip(PATTERN_DESCRIPTIONS[p] || '')}</span>
         <span>${count} (${pct}%)</span>
       </div>`
   })
@@ -802,6 +817,12 @@ async function loadCachedScores() {
 
 // --- Init ---
 document.addEventListener('DOMContentLoaded', () => {
+  // Show onboarding card on first run
+  if (!localStorage.getItem('hasSeenOnboarding')) {
+    const card = document.getElementById('onboarding-card')
+    if (card) card.style.display = 'block'
+  }
+
   loadData()
   loadCachedScores()
 })
