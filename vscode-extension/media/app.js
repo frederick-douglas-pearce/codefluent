@@ -106,6 +106,20 @@ const HIGH_QUALITY_PATTERNS = ['conceptual_inquiry', 'generation_then_comprehens
 
 const PATTERN_COLORS = ['#D97706', '#059669', '#2563EB', '#DC2626', '#7C3AED', '#EC4899']
 
+const TOTAL_BEHAVIORS = 11
+
+function computeEffectiveScore(fluencyBehaviors, configBehaviors) {
+  const allKeys = new Set([
+    ...Object.keys(fluencyBehaviors || {}),
+    ...Object.keys(configBehaviors || {}),
+  ])
+  let count = 0
+  for (const key of allKeys) {
+    if (fluencyBehaviors?.[key] || configBehaviors?.[key]) count++
+  }
+  return Math.round(count / TOTAL_BEHAVIORS * 100)
+}
+
 // --- Recommendations Data ---
 const RECOMMENDATIONS = {
   setting_interaction_terms: {
@@ -633,18 +647,20 @@ function renderFluencyScore() {
     </div>`
 
   // Session breakdown
+  const configBehaviors = aggregate.config_behaviors || {}
   html += '<div class="session-list"><h3>Session Breakdown</h3>'
   for (const [sid, scoreData] of Object.entries(scores)) {
     if (scoreData.error) continue
     const session = state.sessions.sessions.find(s => s.id === sid)
     const date = session?.started_at ? new Date(session.started_at).toLocaleDateString() : ''
     const project = session?.project || ''
+    const effectiveScore = computeEffectiveScore(scoreData.fluency_behaviors, configBehaviors)
     html += `
       <div class="session-item">
         <div class="session-header">
           <span class="session-id">${escapeHtml(project)} (${date})</span>
-          <span class="session-score" style="color: ${scoreData.overall_score >= 70 ? 'var(--success)' : scoreData.overall_score >= 50 ? 'var(--warning)' : 'var(--danger)'}">
-            ${scoreData.overall_score}/100
+          <span class="session-score" style="color: ${effectiveScore >= 70 ? 'var(--success)' : effectiveScore >= 50 ? 'var(--warning)' : 'var(--danger)'}">
+            ${effectiveScore}/100
           </span>
         </div>
         <div class="session-detail">
