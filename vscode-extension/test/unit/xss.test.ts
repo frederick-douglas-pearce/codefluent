@@ -226,6 +226,18 @@ describe('Onboarding card', () => {
   })
 })
 
+describe('Force rescore checkbox', () => {
+  test('VS Code extension app.js reads force-rescore checkbox state', () => {
+    const src = fs.readFileSync(VSCODE_APP_PATH, 'utf-8')
+    expect(src).toContain("getElementById('force-rescore').checked")
+  })
+
+  test('webapp app.js reads force-rescore checkbox state', () => {
+    const src = fs.readFileSync(WEBAPP_APP_PATH, 'utf-8')
+    expect(src).toContain("getElementById('force-rescore').checked")
+  })
+})
+
 describe('XSS vector coverage in webapp/static/app.js', () => {
   const src = fs.readFileSync(WEBAPP_APP_PATH, 'utf-8')
 

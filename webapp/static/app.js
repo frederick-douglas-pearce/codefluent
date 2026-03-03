@@ -493,10 +493,11 @@ async function runScoring(count) {
 
   try {
     const ids = state.sessions.sessions.slice(0, count).map(s => s.id)
+    const forceRescore = document.getElementById('force-rescore').checked
     const res = await fetch('/api/score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_ids: ids })
+      body: JSON.stringify({ session_ids: ids, force_rescore: forceRescore })
     })
     state.scores = await res.json()
     renderFluencyScore()

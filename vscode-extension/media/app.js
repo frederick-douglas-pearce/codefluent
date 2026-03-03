@@ -539,7 +539,8 @@ async function runScoring(count) {
 
   try {
     const ids = state.sessions.sessions.slice(0, count).map(s => s.id)
-    state.scores = await postMessageRequest('runScoring', { session_ids: ids })
+    const forceRescore = document.getElementById('force-rescore').checked
+    state.scores = await postMessageRequest('runScoring', { session_ids: ids, force_rescore: forceRescore })
     renderFluencyScore()
   } catch (e) {
     document.getElementById('fluency-results').innerHTML =
