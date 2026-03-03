@@ -1432,3 +1432,95 @@ describe('prompt versioning', () => {
     expect(results['sess-1'].prompt_version).toBe(SCORING_PROMPT_VERSION)
   })
 })
+
+// --- computeEffectiveScore (frontend helper, extracted from app.js) ---
+
+import * as fs from 'fs'
+import * as path from 'path'
+
+function extractComputeEffectiveScore(filePath: string): (fb: Record<string, boolean> | null, cb: Record<string, boolean> | null) => number {
+  const src = fs.readFileSync(filePath, 'utf-8')
+  // Find function start and extract with balanced braces
+  const startIdx = src.indexOf('function computeEffectiveScore(')
+  if (startIdx === -1) throw new Error(`computeEffectiveScore not found in ${filePath}`)
+  const braceIdx = src.indexOf('{', startIdx)
+  let depth = 0, endIdx = braceIdx
+  for (let i = braceIdx; i < src.length; i++) {
+    if (src[i] === '{') depth++
+    if (src[i] === '}') depth--
+    if (depth === 0) { endIdx = i; break }
+  }
+  let fnSrc = src.substring(startIdx, endIdx + 1)
+  // Inline the TOTAL_BEHAVIORS constant so the function is self-contained
+  fnSrc = fnSrc.replace('TOTAL_BEHAVIORS', '11')
+  const fn = new Function(`return (${fnSrc.replace('function computeEffectiveScore', 'function')})`)()
+  return fn
+}
+
+const VSCODE_APP_PATH = path.resolve(__dirname, '../../media/app.js')
+const WEBAPP_APP_PATH = path.resolve(__dirname, '../../../webapp/static/app.js')
+
+const computeEffectiveScoreVscode = extractComputeEffectiveScore(VSCODE_APP_PATH)
+const computeEffectiveScoreWebapp = extractComputeEffectiveScore(WEBAPP_APP_PATH)
+
+describe.each([
+  ['vscode', computeEffectiveScoreVscode],
+  ['webapp', computeEffectiveScoreWebapp],
+])('computeEffectiveScore (%s)', (_label, computeEffectiveScore) => {
+  it('returns 0 when no behaviors are true', () => {
+    const fb = { iteration_and_refinement: false, clarifying_goals: false }
+    expect(computeEffectiveScore(fb, {})).toBe(0)
+  })
+
+  it('counts only true session behaviors when no config', () => {
+    const fb = {
+      iteration_and_refinement: true,
+      clarifying_goals: true,
+      specifying_format: false,
+    }
+    expect(computeEffectiveScore(fb, {})).toBe(Math.round(2 / 11 * 100))
+  })
+
+  it('unions session and config behaviors (OR logic)', () => {
+    const fb = {
+      iteration_and_refinement: true,
+      clarifying_goals: false,
+    }
+    const cb = {
+      clarifying_goals: true,
+      checking_facts: true,
+    }
+    // iteration_and_refinement (session), clarifying_goals (config), checking_facts (config) = 3
+    expect(computeEffectiveScore(fb, cb)).toBe(Math.round(3 / 11 * 100))
+  })
+
+  it('does not double-count behaviors true in both session and config', () => {
+    const fb = { iteration_and_refinement: true }
+    const cb = { iteration_and_refinement: true }
+    expect(computeEffectiveScore(fb, cb)).toBe(Math.round(1 / 11 * 100))
+  })
+
+  it('returns 100 when all 11 behaviors are true', () => {
+    const allTrue: Record<string, boolean> = {}
+    const behaviors = [
+      'iteration_and_refinement', 'building_on_responses', 'clarifying_goals',
+      'adjusting_approach', 'questioning_reasoning', 'providing_feedback',
+      'specifying_format', 'setting_interaction_terms', 'checking_facts',
+      'providing_examples', 'identifying_missing_context',
+    ]
+    behaviors.forEach(b => allTrue[b] = true)
+    expect(computeEffectiveScore(allTrue, {})).toBe(100)
+  })
+
+  it('handles null/undefined inputs gracefully', () => {
+    expect(computeEffectiveScore(null, null)).toBe(0)
+    expect(computeEffectiveScore(null, { checking_facts: true })).toBe(Math.round(1 / 11 * 100))
+  })
+
+  it('config behaviors boost a low session score', () => {
+    // Session has 2/11, config adds 3 more = 5/11
+    const fb = { iteration_and_refinement: true, clarifying_goals: true }
+    const cb = { checking_facts: true, providing_examples: true, specifying_format: true }
+    expect(computeEffectiveScore(fb, cb)).toBe(Math.round(5 / 11 * 100))
+  })
+})
