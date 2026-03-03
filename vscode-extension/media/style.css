@@ -247,8 +247,14 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 }
 
 /* Score Trend */
-.trend-section { margin: 16px 0; }
-.chart-container-small { height: 180px; }
+.trend-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.sparkline { vertical-align: middle; }
 .trend-up { color: var(--success); font-weight: 500; }
 .trend-down { color: var(--danger); font-weight: 500; }
 .trend-flat { color: var(--text-secondary); font-weight: 500; }

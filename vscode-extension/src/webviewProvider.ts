@@ -277,7 +277,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   }
 
   private handleGetBenchmarks() {
-    const benchmarksPath = path.resolve(__dirname, '..', '..', 'shared', 'benchmarks.json')
+    const benchmarksPath = path.join(this.context.extensionUri.fsPath, 'shared', 'benchmarks.json')
     const data = JSON.parse(fs.readFileSync(benchmarksPath, 'utf8'))
     return data.benchmarks
   }

@@ -42,7 +42,7 @@
     ]
   },
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && mkdir -p shared && cp ../shared/benchmarks.json shared/",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "jest --verbose"
