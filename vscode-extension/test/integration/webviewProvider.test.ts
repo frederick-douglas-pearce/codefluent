@@ -379,7 +379,7 @@ describe('CodeFluentViewProvider', () => {
         requestId: 'req-5',
         data: {
           scores: scoreResult,
-          aggregate: { average_score: 75, sessions_scored: 1 },
+          aggregate: { average_score: 75, sessions_scored: 1, sessions_requested: 1, sessions_skipped: 0 },
         },
       })
     })

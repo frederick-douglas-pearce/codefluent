@@ -195,7 +195,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const configBehaviors = await this.scoreWorkspaceClaudeMd(client, force)
 
     const scored = Object.values(results).filter((r: any) => r.fluency_behaviors)
-    const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {}
+    const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
+    aggregate.sessions_requested = sessionIds.length
+    aggregate.sessions_skipped = sessionIds.length - scored.length
 
     this.updateStatusBar(aggregate)
 
@@ -225,7 +227,11 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     // Load cached config score
     const configBehaviors = this.getCachedConfigBehaviors()
-    const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {}
+    const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
+    if (lastScoredIds.length) {
+      aggregate.sessions_requested = lastScoredIds.length
+      aggregate.sessions_skipped = lastScoredIds.length - scored.length
+    }
 
     this.updateStatusBar(aggregate)
 

@@ -167,6 +167,7 @@ async def get_scores():
     # Scope to last-scored session IDs if available
     last_scored_path = Path("data/last_scored_ids.json")
     scoped = cached
+    last_ids = None
     if last_scored_path.exists():
         try:
             with open(last_scored_path) as f:
@@ -187,6 +188,9 @@ async def get_scores():
             break
 
     aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
+    if isinstance(last_ids, list) and last_ids:
+        aggregate["sessions_requested"] = len(last_ids)
+        aggregate["sessions_skipped"] = len(last_ids) - len(scored)
     return {"scores": scoped, "aggregate": aggregate}
 
 
@@ -351,6 +355,8 @@ async def score_sessions(request: ScoreRequest):
 
     scored = [r for r in results.values() if "fluency_behaviors" in r]
     aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
+    aggregate["sessions_requested"] = len(session_ids)
+    aggregate["sessions_skipped"] = len(session_ids) - len(scored)
 
     return {"scores": results, "aggregate": aggregate}
 

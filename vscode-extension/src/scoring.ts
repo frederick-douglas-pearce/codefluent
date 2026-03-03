@@ -23,6 +23,8 @@ export interface ScoreResult {
 
 export interface AggregateResult {
   sessions_scored: number
+  sessions_requested?: number
+  sessions_skipped?: number
   average_score: number
   behavior_prevalence: Record<string, number>
   pattern_distribution: Record<string, number>

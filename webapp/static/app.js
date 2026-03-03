@@ -538,7 +538,7 @@ function renderFluencyScore() {
           <span class="score-label">/ 100</span>
         </div>
       </div>
-      <p class="score-summary">${aggregate.sessions_scored} sessions analyzed</p>
+      <p class="score-summary">${aggregate.sessions_scored} sessions analyzed${aggregate.sessions_skipped ? ` (${aggregate.sessions_skipped} skipped — no prompts)` : ''}</p>
     </div>`
 
   // Behavior bars
