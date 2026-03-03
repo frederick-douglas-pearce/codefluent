@@ -44,6 +44,8 @@ Terminal launch, shell escaping, subprocess invocation, and session path resolut
 
 ## Screenshots
 
+### Web App
+
 | Usage | Fluency Score |
 |-------|---------------|
 | ![Usage tab](images/demo-usage.png) | ![Fluency tab](images/demo-fluency.png) |
@@ -51,6 +53,16 @@ Terminal launch, shell escaping, subprocess invocation, and session path resolut
 | Quick Wins | Recommendations |
 |------------|-----------------|
 | ![Quick Wins tab](images/demo-quickwins.png) | ![Recommendations tab](images/demo-recommendations.png) |
+
+### VS Code Extension
+
+| Fluency Score | Usage |
+|---------------|-------|
+| ![VS Code sidebar showing Fluency Score tab with score ring, behavior bars, and benchmark comparison](images/vscode-fluency.png) | ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) |
+
+| Quick Wins | Recommendations |
+|------------|-----------------|
+| ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) | ![VS Code sidebar showing Recommendations tab](images/vscode-recommendations.png) |
 
 ## Features
 
@@ -109,6 +121,7 @@ Then reload VS Code. The CodeFluent icon appears in the activity bar.
 git clone https://github.com/frederick-douglas-pearce/codefluent.git
 cd codefluent/webapp
 uv sync
+mkdir -p ../data/ccusage ../data/prompts
 npx ccusage@latest daily --json > ../data/ccusage/daily.json
 uv run python extract_prompts.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -120,16 +133,17 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 git clone https://github.com/frederick-douglas-pearce/codefluent.git
 cd codefluent\webapp
 uv sync
+New-Item -ItemType Directory -Force -Path ..\data\ccusage, ..\data\prompts
 npx ccusage@latest daily --json > ..\data\ccusage\daily.json
 uv run python extract_prompts.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Then open `http://localhost:8000` in your browser.
+Then open `http://localhost:8000` in your browser. See [`webapp/README.md`](webapp/README.md) for detailed setup instructions.
 
 ### Prerequisites
 
-- **All platforms:** Node.js 22+ (for `npx ccusage`), an [Anthropic API key](https://console.anthropic.com/), `gh` CLI authenticated (for Quick Wins), Git
+- **All platforms:** Node.js 22+ (for `npx ccusage`), an [Anthropic API key](https://console.anthropic.com/settings/keys) (sign up at [console.anthropic.com](https://console.anthropic.com/) if you don't have one), [`gh` CLI](https://cli.github.com/) authenticated (`gh auth login` must be run before Quick Wins works), Git
 - **VS Code extension:** VS Code 1.85+
 - **Web app:** Python 3.12+ / `uv`
 - **Windows:** No additional dependencies. The extension automatically uses `cmd.exe` and `npx.cmd` where needed.
@@ -156,6 +170,23 @@ The extension looks for your API key in this order:
 4. Interactive prompt (stored in VS Code secrets for next time)
 
 The web app reads `ANTHROPIC_API_KEY` from the environment or a `.env` file in the `webapp/` directory.
+
+**`.env` file format:**
+
+```
+ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| **No sessions found** | Check that `~/.claude/projects/` contains `.jsonl` session files. Claude Code creates these automatically during use. |
+| **API key not found** | The extension checks: env var → workspace `.env` → VS Code secrets → interactive prompt. Make sure `ANTHROPIC_API_KEY` is set in at least one location. |
+| **Quick Wins shows no results** | Run `gh auth login` to authenticate the GitHub CLI. Quick Wins requires `gh` to fetch repo context and issues. |
+| **ccusage returns no data** | Run `npx ccusage@latest daily --json` manually to verify output. Ensure you've used Claude Code at least once so session data exists. |
+| **Extension doesn't activate** | Look for the CodeFluent icon in the VS Code activity bar (left sidebar). If missing, try reloading the window (`Ctrl+Shift+P` → "Reload Window"). |
+| **VSIX is too small (~100KB)** | The `.vscodeignore` file must not exclude `node_modules/`. The Anthropic SDK is a runtime dependency and must be bundled. Expected VSIX size is ~1.2MB. |
 
 ## Tech Stack
 
@@ -217,7 +248,7 @@ npm run watch          # Continuous TypeScript compilation
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (171 tests across 6 suites)
+npm test               # Run all Jest tests (313 tests across 10 suites)
 ```
 
 ### Packaging
