@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import random
+import time as _time_mod
 from time import time
 
 from fastapi import FastAPI, HTTPException, Query
@@ -74,6 +76,53 @@ def _check_rate_limit():
     _score_timestamps.append(now)
 
 
+def classify_error(e: Exception) -> dict:
+    """Classify an API error for retry decisions."""
+    msg = str(e)
+    status_code = getattr(e, "status_code", None)
+
+    if status_code == 429:
+        return {"type": "rate_limit", "message": msg, "retryable": True}
+    if status_code in (401, 403):
+        return {"type": "auth", "message": msg, "retryable": False}
+    if status_code == 400:
+        return {"type": "invalid_request", "message": msg, "retryable": False}
+    if isinstance(status_code, int) and status_code >= 500:
+        return {"type": "server", "message": msg, "retryable": True}
+    import re
+    if re.search(r"ECONNRESET|ETIMEDOUT|ENOTFOUND|fetch failed|network timeout|socket hang up", msg, re.IGNORECASE):
+        return {"type": "network", "message": msg, "retryable": True}
+    return {"type": "unknown", "message": msg, "retryable": False}
+
+
+def with_retry(fn, context: str, max_attempts: int = 3, base_delay_ms: int = 1000):
+    """Call fn() with exponential backoff + jitter on retryable errors."""
+    last_error = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return fn()
+        except Exception as e:
+            last_error = e
+            classified = classify_error(e)
+            if not classified["retryable"] or attempt == max_attempts:
+                print(f"[CodeFluent] {context} failed ({classified['type']}, attempt {attempt}/{max_attempts}): {classified['message']}")
+                raise
+            delay = (base_delay_ms * (2 ** (attempt - 1)) + random.random() * 200) / 1000
+            print(f"[CodeFluent] {context} retrying ({classified['type']}, attempt {attempt}/{max_attempts}) in {round(delay * 1000)}ms: {classified['message']}")
+            _time_mod.sleep(delay)
+    raise last_error
+
+
+def extract_text_from_response(response) -> str:
+    """Safely extract text from an Anthropic API response."""
+    if not response.content:
+        raise ValueError("API returned empty response content")
+    first = response.content[0]
+    if first.type != "text":
+        raise ValueError(f"API returned unexpected content type: {first.type}")
+    return first.text.strip()
+
+
 @app.get("/")
 async def root():
     return FileResponse("static/index.html")
@@ -108,13 +157,26 @@ async def get_sessions(limit: int = Query(default=50, ge=1, le=500), project: st
 
 @app.get("/api/scores")
 async def get_scores():
-    """Return cached fluency scores if they exist."""
+    """Return cached fluency scores scoped to last-scored sessions."""
     scores_path = Path("data/scores.json")
     if not scores_path.exists():
         return {"scores": {}, "aggregate": {}}
     with open(scores_path) as f:
         cached = json.load(f)
-    scored = [r for r in cached.values() if "fluency_behaviors" in r]
+
+    # Scope to last-scored session IDs if available
+    last_scored_path = Path("data/last_scored_ids.json")
+    scoped = cached
+    if last_scored_path.exists():
+        try:
+            with open(last_scored_path) as f:
+                last_ids = json.load(f)
+            if isinstance(last_ids, list) and last_ids:
+                scoped = {sid: cached[sid] for sid in last_ids if sid in cached}
+        except Exception:
+            pass
+
+    scored = [r for r in scoped.values() if "fluency_behaviors" in r]
 
     # Load cached config behaviors
     config_cache = _load_config_cache()
@@ -125,7 +187,7 @@ async def get_scores():
             break
 
     aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
-    return {"scores": cached, "aggregate": aggregate}
+    return {"scores": scoped, "aggregate": aggregate}
 
 
 SCORING_PROMPT = """You are an AI Fluency Analyst. Analyze this Claude Code session's user prompts and score against Anthropic's 4D AI Fluency Framework and their 6 coding interaction patterns.
@@ -227,12 +289,15 @@ async def score_sessions(request: ScoreRequest):
         )
 
         try:
-            response = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
+            response = with_retry(
+                lambda: client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=1024,
+                    messages=[{"role": "user", "content": prompt}],
+                ),
+                context=f"scoring session {sid}",
             )
-            text = response.content[0].text.strip()
+            text = extract_text_from_response(response)
             if text.startswith("```"):
                 text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
             score = validate_score_result(
@@ -245,6 +310,12 @@ async def score_sessions(request: ScoreRequest):
 
     with open(scores_path, "w") as f:
         json.dump(cached, f, indent=2)
+
+    # Persist last-scored session IDs for scoped cache retrieval
+    last_scored_path = Path("data/last_scored_ids.json")
+    last_scored_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(last_scored_path, "w") as f:
+        json.dump(session_ids, f)
 
     # Score CLAUDE.md files from scored sessions' projects
     config_behaviors = None
@@ -413,12 +484,15 @@ def score_claude_md(content: str) -> dict:
     """Score a CLAUDE.md file for fluency behaviors."""
     truncated = content[:4000]
     prompt = CONFIG_SCORING_PROMPT.replace("{{content}}", truncated)
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
+    response = with_retry(
+        lambda: client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        ),
+        context="scoring CLAUDE.md config",
     )
-    text = response.content[0].text.strip()
+    text = extract_text_from_response(response)
     if text.startswith("```"):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
     return validate_config_score_result(json.loads(text))
@@ -569,12 +643,15 @@ async def get_quickwins():
         issues = issues_result.stdout if issues_result.returncode == 0 else "[]"
 
         prompt = QUICKWINS_PROMPT.format(repos=json.dumps(repos_list, indent=2), issues=issues)
-        response = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1024,
-            messages=[{"role": "user", "content": prompt}],
+        response = with_retry(
+            lambda: client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            context="generating quick wins",
         )
-        text = response.content[0].text.strip()
+        text = extract_text_from_response(response)
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
         return {"suggestions": json.loads(text)}

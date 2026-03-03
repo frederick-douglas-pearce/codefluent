@@ -45,6 +45,28 @@ export class ScoreCache {
     fs.writeFileSync(this.configFilePath, JSON.stringify(data, null, 2))
   }
 
+  private get lastScoredPath(): string {
+    return path.join(path.dirname(this.filePath), 'last_scored_ids.json')
+  }
+
+  readLastScoredIds(): string[] {
+    try {
+      const data = fs.readFileSync(this.lastScoredPath, 'utf8')
+      const parsed = JSON.parse(data)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+
+  writeLastScoredIds(ids: string[]): void {
+    const dir = path.dirname(this.lastScoredPath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+    fs.writeFileSync(this.lastScoredPath, JSON.stringify(ids))
+  }
+
   static contentHash(content: string): string {
     return content.slice(0, 100) + ':' + content.length
   }

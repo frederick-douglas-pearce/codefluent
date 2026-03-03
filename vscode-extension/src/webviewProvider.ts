@@ -189,6 +189,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const results = await scoreSessions(sessionIds, allSessions, cached, client, force)
 
     this.cache.write(cached)
+    this.cache.writeLastScoredIds(sessionIds)
 
     // Score CLAUDE.md if present in workspace
     const configBehaviors = await this.scoreWorkspaceClaudeMd(client, force)
@@ -214,7 +215,13 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
   private async handleGetCachedScores() {
     const cached = this.cache.read()
-    const scored = Object.values(cached).filter((r: any) => r.fluency_behaviors)
+    const lastScoredIds = this.cache.readLastScoredIds()
+
+    // Scope to last-scored session IDs if available, otherwise fall back to all
+    const scopedScores: Record<string, any> = lastScoredIds.length
+      ? Object.fromEntries(lastScoredIds.filter(id => id in cached).map(id => [id, cached[id]]))
+      : cached
+    const scored = Object.values(scopedScores).filter((r: any) => r.fluency_behaviors)
 
     // Load cached config score
     const configBehaviors = this.getCachedConfigBehaviors()
@@ -222,7 +229,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     this.updateStatusBar(aggregate)
 
-    return { scores: cached, aggregate }
+    return { scores: scopedScores, aggregate }
   }
 
   private async scoreWorkspaceClaudeMd(
