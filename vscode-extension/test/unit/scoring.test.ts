@@ -1,4 +1,4 @@
-import { scoreSessions, computeAggregate, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd } from '../../src/scoring'
+import { scoreSessions, computeAggregate, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions } from '../../src/scoring'
 import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
@@ -850,5 +850,362 @@ describe('scoreSessions with validation', () => {
     expect(results['sess-1'].coding_pattern).toBe('conceptual_inquiry')
     expect(results['sess-1'].coding_pattern_quality).toBe('high')
     expect(results['sess-1'].low_confidence).toBe(true) // 2 prompts in makeSession < 3
+  })
+})
+
+// --- classifyError ---
+
+describe('classifyError', () => {
+  it('classifies status 429 as rate_limit retryable', () => {
+    const err = Object.assign(new Error('Too Many Requests'), { status: 429 })
+    const result = classifyError(err)
+    expect(result.type).toBe('rate_limit')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('classifies status 401 as auth non-retryable', () => {
+    const err = Object.assign(new Error('Unauthorized'), { status: 401 })
+    const result = classifyError(err)
+    expect(result.type).toBe('auth')
+    expect(result.retryable).toBe(false)
+  })
+
+  it('classifies status 403 as auth non-retryable', () => {
+    const err = Object.assign(new Error('Forbidden'), { status: 403 })
+    const result = classifyError(err)
+    expect(result.type).toBe('auth')
+    expect(result.retryable).toBe(false)
+  })
+
+  it('classifies status 400 as invalid_request non-retryable', () => {
+    const err = Object.assign(new Error('Bad Request'), { status: 400 })
+    const result = classifyError(err)
+    expect(result.type).toBe('invalid_request')
+    expect(result.retryable).toBe(false)
+  })
+
+  it('classifies status 500 as server retryable', () => {
+    const err = Object.assign(new Error('Internal Server Error'), { status: 500 })
+    const result = classifyError(err)
+    expect(result.type).toBe('server')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('classifies status 503 as server retryable', () => {
+    const err = Object.assign(new Error('Service Unavailable'), { status: 503 })
+    const result = classifyError(err)
+    expect(result.type).toBe('server')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('classifies ECONNRESET message as network retryable', () => {
+    const result = classifyError(new Error('ECONNRESET: connection was forcibly closed'))
+    expect(result.type).toBe('network')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('classifies ETIMEDOUT message as network retryable', () => {
+    const result = classifyError(new Error('ETIMEDOUT: operation timed out'))
+    expect(result.type).toBe('network')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('classifies ENOTFOUND message as network retryable', () => {
+    const result = classifyError(new Error('ENOTFOUND api.anthropic.com'))
+    expect(result.type).toBe('network')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('classifies fetch failed message as network retryable', () => {
+    const result = classifyError(new Error('fetch failed'))
+    expect(result.type).toBe('network')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('classifies unknown errors as non-retryable', () => {
+    const result = classifyError(new Error('Something unexpected happened'))
+    expect(result.type).toBe('unknown')
+    expect(result.retryable).toBe(false)
+  })
+
+  it('handles non-Error throwables gracefully', () => {
+    const result = classifyError('plain string error')
+    expect(result.message).toBe('plain string error')
+    expect(result.retryable).toBe(false)
+  })
+
+  it('prefers status code over message pattern for classification', () => {
+    // A 400 error with a network-sounding message should still be non-retryable
+    const err = Object.assign(new Error('fetch failed due to bad request'), { status: 400 })
+    const result = classifyError(err)
+    expect(result.type).toBe('invalid_request')
+    expect(result.retryable).toBe(false)
+  })
+
+  it('uses statusCode property as fallback when status is absent', () => {
+    const err = Object.assign(new Error('Rate limit'), { statusCode: 429 })
+    const result = classifyError(err)
+    expect(result.type).toBe('rate_limit')
+    expect(result.retryable).toBe(true)
+  })
+})
+
+// --- withRetry ---
+
+const noDelay: RetryOptions = { delayFn: () => Promise.resolve() }
+
+describe('withRetry', () => {
+  it('returns result immediately on first success', async () => {
+    const fn = jest.fn().mockResolvedValue('ok')
+    const result = await withRetry(fn, 'test', noDelay)
+    expect(result).toBe('ok')
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries on retryable error and returns result on second attempt', async () => {
+    const rateLimitErr = Object.assign(new Error('Rate limit'), { status: 429 })
+    const fn = jest.fn()
+      .mockRejectedValueOnce(rateLimitErr)
+      .mockResolvedValueOnce('recovered')
+
+    const result = await withRetry(fn, 'test', { ...noDelay, maxAttempts: 3 })
+    expect(result).toBe('recovered')
+    expect(fn).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws immediately on non-retryable error without retry', async () => {
+    const authErr = Object.assign(new Error('Unauthorized'), { status: 401 })
+    const fn = jest.fn().mockRejectedValue(authErr)
+
+    await expect(withRetry(fn, 'test', { ...noDelay, maxAttempts: 3 })).rejects.toThrow('Unauthorized')
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws after exhausting all retry attempts', async () => {
+    const serverErr = Object.assign(new Error('Internal Server Error'), { status: 500 })
+    const fn = jest.fn().mockRejectedValue(serverErr)
+
+    await expect(withRetry(fn, 'test', { ...noDelay, maxAttempts: 3 })).rejects.toThrow('Internal Server Error')
+    expect(fn).toHaveBeenCalledTimes(3)
+  })
+
+  it('calls delayFn between retry attempts', async () => {
+    const rateLimitErr = Object.assign(new Error('Rate limit'), { status: 429 })
+    const fn = jest.fn()
+      .mockRejectedValueOnce(rateLimitErr)
+      .mockRejectedValueOnce(rateLimitErr)
+      .mockResolvedValueOnce('ok')
+
+    const delayFn = jest.fn(() => Promise.resolve())
+
+    await withRetry(fn, 'test', { maxAttempts: 3, baseDelayMs: 100, delayFn })
+    expect(delayFn).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses exponential backoff: second delay is larger than first', async () => {
+    const serverErr = Object.assign(new Error('Server error'), { status: 500 })
+    const fn = jest.fn().mockRejectedValue(serverErr)
+    const delays: number[] = []
+    // baseDelayMs=1000 ensures jitter (max 200ms) cannot make delays[1] < delays[0]
+    // delays[0] = 1000 + jitter, delays[1] = 2000 + jitter
+    const delayFn = (ms: number) => { delays.push(ms); return Promise.resolve() }
+
+    await expect(withRetry(fn, 'test', { maxAttempts: 3, baseDelayMs: 1000, delayFn })).rejects.toThrow()
+    expect(delays).toHaveLength(2)
+    expect(delays[1]).toBeGreaterThan(delays[0])
+  })
+
+  it('uses maxAttempts = 1 to disable retry', async () => {
+    const networkErr = new Error('ECONNRESET connection reset')
+    const fn = jest.fn().mockRejectedValue(networkErr)
+
+    await expect(withRetry(fn, 'test', { maxAttempts: 1, delayFn: noDelay.delayFn })).rejects.toThrow()
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+})
+
+// --- scoreSessions retry behavior ---
+
+describe('scoreSessions retry behavior', () => {
+  it('retries on rate limit error and returns score on eventual success', async () => {
+    const rateLimitErr = Object.assign(new Error('Too Many Requests'), { status: 429 })
+    const scoreJson = { overall_score: 75, coding_pattern: 'conceptual_inquiry' }
+    const fn = jest.fn()
+      .mockRejectedValueOnce(rateLimitErr)
+      .mockResolvedValueOnce(makeApiResponse(scoreJson))
+
+    const client = { messages: { create: fn } } as any
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(['sess-1'], sessions, {}, client, false, noDelay)
+
+    expect(fn).toHaveBeenCalledTimes(2)
+    expect(results['sess-1'].overall_score).toBe(75)
+    expect(results['sess-1'].error).toBeUndefined()
+  })
+
+  it('returns error result after exhausting retries on server error', async () => {
+    const serverErr = Object.assign(new Error('Internal Server Error'), { status: 500 })
+    const fn = jest.fn().mockRejectedValue(serverErr)
+    const client = { messages: { create: fn } } as any
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(
+      ['sess-1'], sessions, {}, client, false,
+      { maxAttempts: 3, delayFn: noDelay.delayFn }
+    )
+
+    expect(fn).toHaveBeenCalledTimes(3)
+    expect(results['sess-1'].error).toBe('Internal Server Error')
+    expect(results['sess-1'].session_id).toBe('sess-1')
+  })
+
+  it('does not retry auth failures', async () => {
+    const authErr = Object.assign(new Error('Invalid API key'), { status: 401 })
+    const fn = jest.fn().mockRejectedValue(authErr)
+    const client = { messages: { create: fn } } as any
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(['sess-1'], sessions, {}, client, false, noDelay)
+
+    expect(fn).toHaveBeenCalledTimes(1)
+    expect(results['sess-1'].error).toBe('Invalid API key')
+  })
+
+  it('does not cache error results after retry exhaustion', async () => {
+    const serverErr = Object.assign(new Error('Server error'), { status: 500 })
+    const fn = jest.fn().mockRejectedValue(serverErr)
+    const client = { messages: { create: fn } } as any
+    const sessions = { 'sess-1': makeSession() }
+    const cached: Record<string, any> = {}
+
+    await scoreSessions(['sess-1'], sessions, cached, client, false, { maxAttempts: 2, delayFn: noDelay.delayFn })
+
+    expect(cached['sess-1']).toBeUndefined()
+  })
+
+  it('returns error when API response has empty content array', async () => {
+    const client = {
+      messages: { create: jest.fn().mockResolvedValue({ content: [] }) },
+    } as any
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+
+    expect(results['sess-1'].error).toContain('empty response content')
+    expect(results['sess-1'].session_id).toBe('sess-1')
+  })
+
+  it('returns error when API response has non-text content block', async () => {
+    const client = {
+      messages: { create: jest.fn().mockResolvedValue({ content: [{ type: 'tool_use', id: 'x' }] }) },
+    } as any
+    const sessions = { 'sess-1': makeSession() }
+
+    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+
+    expect(results['sess-1'].error).toContain('unexpected content type')
+  })
+
+  it('continues scoring remaining sessions after one exhausts retries', async () => {
+    const serverErr = Object.assign(new Error('Server Error'), { status: 500 })
+    let callCount = 0
+    const fn = jest.fn().mockImplementation(() => {
+      callCount++
+      // First 2 calls are for sess-1 (maxAttempts=2), third is for sess-2
+      if (callCount <= 2) return Promise.reject(serverErr)
+      return Promise.resolve(makeApiResponse({ overall_score: 88 }))
+    })
+
+    const client = { messages: { create: fn } } as any
+    const sessions = {
+      'sess-1': makeSession({ id: 'sess-1' }),
+      'sess-2': makeSession({ id: 'sess-2' }),
+    }
+
+    const results = await scoreSessions(
+      ['sess-1', 'sess-2'], sessions, {}, client, false,
+      { maxAttempts: 2, delayFn: noDelay.delayFn }
+    )
+
+    expect(results['sess-1'].error).toBe('Server Error')
+    expect(results['sess-2'].overall_score).toBe(88)
+    expect(results['sess-2'].error).toBeUndefined()
+  })
+})
+
+// --- scoreClaudeMd error handling ---
+
+describe('scoreClaudeMd error handling', () => {
+  const validConfigJson = {
+    fluency_behaviors: { iteration_and_refinement: true },
+    one_line_summary: 'Good config.',
+  }
+
+  it('retries on network error and returns result on success', async () => {
+    const networkErr = new Error('ECONNRESET connection reset')
+    const fn = jest.fn()
+      .mockRejectedValueOnce(networkErr)
+      .mockResolvedValueOnce(makeApiResponse(validConfigJson))
+
+    const client = { messages: { create: fn } } as any
+
+    const result = await scoreClaudeMd('# Project\nDo stuff', client, noDelay)
+
+    expect(fn).toHaveBeenCalledTimes(2)
+    expect(result.fluency_behaviors.iteration_and_refinement).toBe(true)
+  })
+
+  it('throws after exhausting all retries on server error', async () => {
+    const serverErr = Object.assign(new Error('Service Unavailable'), { status: 503 })
+    const fn = jest.fn().mockRejectedValue(serverErr)
+    const client = { messages: { create: fn } } as any
+
+    await expect(
+      scoreClaudeMd('content', client, { maxAttempts: 3, delayFn: noDelay.delayFn })
+    ).rejects.toThrow('Service Unavailable')
+    expect(fn).toHaveBeenCalledTimes(3)
+  })
+
+  it('throws immediately on auth failure without retry', async () => {
+    const authErr = Object.assign(new Error('Unauthorized'), { status: 401 })
+    const fn = jest.fn().mockRejectedValue(authErr)
+    const client = { messages: { create: fn } } as any
+
+    await expect(scoreClaudeMd('content', client, noDelay)).rejects.toThrow('Unauthorized')
+    expect(fn).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws when API returns empty content array', async () => {
+    const fn = jest.fn().mockResolvedValue({ content: [] })
+    const client = { messages: { create: fn } } as any
+
+    await expect(scoreClaudeMd('content', client, noDelay)).rejects.toThrow('empty response content')
+  })
+
+  it('throws when API returns non-text content type', async () => {
+    const fn = jest.fn().mockResolvedValue({ content: [{ type: 'tool_use', id: 'x' }] })
+    const client = { messages: { create: fn } } as any
+
+    await expect(scoreClaudeMd('content', client, noDelay)).rejects.toThrow('unexpected content type')
+  })
+
+  it('throws on malformed JSON response', async () => {
+    const fn = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: 'this is not json {{{' }],
+    })
+    const client = { messages: { create: fn } } as any
+
+    await expect(scoreClaudeMd('content', client, noDelay)).rejects.toThrow()
+  })
+
+  it('strips markdown fences from config response before parsing', async () => {
+    const fn = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: '```json\n' + JSON.stringify(validConfigJson) + '\n```' }],
+    })
+    const client = { messages: { create: fn } } as any
+
+    const result = await scoreClaudeMd('content', client, noDelay)
+    expect(result.one_line_summary).toBe('Good config.')
   })
 })
