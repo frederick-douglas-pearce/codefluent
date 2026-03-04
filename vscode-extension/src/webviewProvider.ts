@@ -300,21 +300,31 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const scopedScores: Record<string, any> = lastScoredIds.length
       ? Object.fromEntries(lastScoredIds.filter(id => id in cached).map(id => [id, cached[id]]))
       : cached
-    const scored = Object.values(scopedScores).filter((r: any) => r.fluency_behaviors)
+
+    // Filter to workspace project sessions only
+    const projectName = this.getWorkspaceProjectName()
+    const sessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
+    const workspaceSessionIds = projectName
+      ? new Set(sessionData.sessions.filter((s: any) => s.project === projectName).map((s: any) => s.id))
+      : null
+    const projectScores: Record<string, any> = workspaceSessionIds
+      ? Object.fromEntries(Object.entries(scopedScores).filter(([id]) => workspaceSessionIds.has(id)))
+      : scopedScores
+    const scored = Object.values(projectScores).filter((r: any) => r.fluency_behaviors)
 
     // Load cached config score
     const configBehaviors = this.getCachedConfigBehaviors()
     const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
     if (lastScoredIds.length) {
-      aggregate.sessions_requested = lastScoredIds.length
-      aggregate.sessions_skipped = lastScoredIds.length - scored.length
+      const projectScoredCount = Object.keys(projectScores).length
+      aggregate.sessions_requested = projectScoredCount
+      aggregate.sessions_skipped = projectScoredCount - scored.length
     }
-    const cachedSessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
-    aggregate.score_history = computeScoreHistory(cached, cachedSessionData.sessions, configBehaviors)
+    aggregate.score_history = computeScoreHistory(cached, sessionData.sessions.filter((s: any) => !projectName || s.project === projectName), configBehaviors)
 
     this.updateStatusBar(aggregate)
 
-    return { scores: scopedScores, aggregate }
+    return { scores: projectScores, aggregate }
   }
 
   private async scoreWorkspaceClaudeMd(
