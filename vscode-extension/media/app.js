@@ -348,6 +348,27 @@ document.addEventListener('click', (e) => {
     return
   }
 
+  // Show more sessions
+  if (target.classList.contains('show-more-btn')) {
+    const btn = target
+    let shown = parseInt(btn.dataset.shown, 10)
+    const total = parseInt(btn.dataset.total, 10)
+    const batch = parseInt(btn.dataset.batch, 10)
+    const items = btn.parentElement.querySelectorAll('.session-item')
+    const newShown = Math.min(shown + batch, total)
+    for (let i = shown; i < newShown; i++) {
+      items[i].style.display = ''
+    }
+    btn.dataset.shown = newShown
+    const remaining = total - newShown
+    if (remaining <= 0) {
+      btn.remove()
+    } else {
+      btn.textContent = `Show ${remaining} more session${remaining !== 1 ? 's' : ''}`
+    }
+    return
+  }
+
   // Session item expand/collapse
   const sessionItem = target.closest('.session-item')
   if (sessionItem) {
@@ -699,15 +720,18 @@ function renderFluencyScore() {
     </div>`
 
   // Session breakdown
+  const INITIAL_SHOWN = 5
+  const BATCH_SIZE = 10
+  const validSessions = Object.entries(scores).filter(([, sd]) => !sd.error)
   html += '<div class="session-list"><h3>Session Breakdown</h3>'
-  for (const [sid, scoreData] of Object.entries(scores)) {
-    if (scoreData.error) continue
+  validSessions.forEach(([sid, scoreData], idx) => {
     const session = state.sessions.sessions.find(s => s.id === sid)
     const date = session?.started_at ? new Date(session.started_at).toLocaleDateString() : ''
     const project = session?.project || ''
     const effectiveScore = scoreData.effective_score ?? scoreData.overall_score
+    const hidden = idx >= INITIAL_SHOWN ? ' style="display:none"' : ''
     html += `
-      <div class="session-item">
+      <div class="session-item"${hidden}>
         <div class="session-header">
           <span class="session-id">${escapeHtml(project)} (${date})</span>
           <span class="session-score" style="color: ${effectiveScore >= 70 ? 'var(--success)' : effectiveScore >= 50 ? 'var(--warning)' : 'var(--danger)'}">
@@ -719,6 +743,10 @@ function renderFluencyScore() {
           <p>Pattern: ${PATTERN_LABELS[scoreData.coding_pattern] || escapeHtml(scoreData.coding_pattern)}</p>
         </div>
       </div>`
+  })
+  if (validSessions.length > INITIAL_SHOWN) {
+    const remaining = validSessions.length - INITIAL_SHOWN
+    html += `<button class="show-more-btn" data-shown="${INITIAL_SHOWN}" data-total="${validSessions.length}" data-batch="${BATCH_SIZE}">Show ${remaining} more session${remaining !== 1 ? 's' : ''}</button>`
   }
   html += '</div>'
 

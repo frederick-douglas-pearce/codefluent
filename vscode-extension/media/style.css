@@ -450,6 +450,22 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   display: none;
 }
 .session-item.expanded .session-detail { display: block; }
+.show-more-btn {
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.show-more-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 /* Quick Wins */
 .quickwins-controls { margin-bottom: 24px; }
