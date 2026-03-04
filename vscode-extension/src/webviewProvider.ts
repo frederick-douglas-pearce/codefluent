@@ -316,9 +316,11 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const configBehaviors = this.getCachedConfigBehaviors()
     const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
     if (lastScoredIds.length) {
-      const projectScoredCount = Object.keys(projectScores).length
-      aggregate.sessions_requested = projectScoredCount
-      aggregate.sessions_skipped = projectScoredCount - scored.length
+      const workspaceLastScoredIds = workspaceSessionIds
+        ? lastScoredIds.filter(id => workspaceSessionIds.has(id))
+        : lastScoredIds
+      aggregate.sessions_requested = workspaceLastScoredIds.length
+      aggregate.sessions_skipped = workspaceLastScoredIds.length - scored.length
     }
     aggregate.score_history = computeScoreHistory(cached, sessionData.sessions.filter((s: any) => !projectName || s.project === projectName), configBehaviors)
 
