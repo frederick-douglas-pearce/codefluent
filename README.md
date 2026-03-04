@@ -160,6 +160,8 @@ Claude Code stores session files at `~/.claude/projects/` on all platforms:
 
 The extension resolves this automatically via the system home directory.
 
+> **Note:** Session transcript files are only available from late January 2026 onward. Earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (AI-spawned) are excluded from scoring. See [`docs/SESSION_DATA.md`](docs/SESSION_DATA.md) for details on data availability, storage format, and scoring scope.
+
 ### Configure
 
 The extension looks for your API key in this order:

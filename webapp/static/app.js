@@ -169,7 +169,7 @@ async function loadData() {
   try {
     const [usage, sessions] = await Promise.all([
       fetch('/api/usage').then(r => r.json()),
-      fetch('/api/sessions').then(r => r.json()),
+      fetch('/api/sessions?limit=1000').then(r => r.json()),
     ])
     state.usage = usage
     state.sessions = sessions

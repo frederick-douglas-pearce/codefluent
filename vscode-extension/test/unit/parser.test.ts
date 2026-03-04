@@ -378,6 +378,35 @@ describe('parseSessionFile', () => {
     const result = parseSessionFile('/home/.claude/projects/-home-user-my-project/session.jsonl')
     expect(result!.project_path_encoded).toBe('-home-user-my-project')
   })
+
+  it('returns null for sidechain sessions', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Subagent prompt', { isSidechain: true }),
+      assistantMsg(),
+    ))
+    expect(parseSessionFile('/fake/project/agent.jsonl')).toBeNull()
+  })
+
+  it('parses normal sessions with isSidechain false', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Normal prompt', { isSidechain: false }),
+      assistantMsg(),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    expect(result).not.toBeNull()
+    expect(result!.user_prompts).toEqual(['Normal prompt'])
+  })
+
+  it('sets project_path_encoded from grandparent for nested UUID dir', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hi'),
+      assistantMsg(),
+    ))
+    const result = parseSessionFile(
+      '/home/.claude/projects/-home-user-my-project/1a67a55f-b4ed-45f9-8347-bde22cd0609c/session.jsonl'
+    )
+    expect(result!.project_path_encoded).toBe('-home-user-my-project')
+  })
 })
 
 describe('getAllSessions', () => {
@@ -572,6 +601,83 @@ describe('getAllSessions', () => {
     mockFs.existsSync.mockReturnValue(false)
     const result = getAllSessions()
     expect(result.metadata.extracted_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
+  })
+
+  it('discovers sessions in UUID subdirectories', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readdirSync.mockImplementation((dir: any) => {
+      const d = String(dir)
+      if (d.endsWith('projects')) return ['proj'] as any
+      if (d.endsWith('proj')) return ['abc-uuid-dir'] as any
+      if (d.endsWith('abc-uuid-dir')) return ['session.jsonl'] as any
+      return [] as any
+    })
+    mockFs.statSync.mockReturnValue({ isDirectory: () => true } as any)
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Nested session', { sessionId: 'nested-1' }),
+      assistantMsg(),
+    ))
+
+    const result = getAllSessions()
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0].id).toBe('nested-1')
+  })
+
+  it('skips UUID subdir when flat file exists with same name', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readdirSync.mockImplementation((dir: any) => {
+      const d = String(dir)
+      if (d.endsWith('projects')) return ['proj'] as any
+      // Both flat file and matching directory exist
+      if (d.endsWith('proj')) return ['sess-1', 'sess-1.jsonl'] as any
+      // Subdir also has a jsonl file
+      if (d.endsWith('sess-1')) return ['session.jsonl'] as any
+      return [] as any
+    })
+    mockFs.statSync.mockReturnValue({ isDirectory: () => true } as any)
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello', { sessionId: 'sess-1' }),
+      assistantMsg(),
+    ))
+
+    const result = getAllSessions()
+    // Should only have 1 session (flat file), not 2
+    expect(result.sessions).toHaveLength(1)
+  })
+
+  it('skips subagent sessions via isSidechain in nested dirs', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readdirSync.mockImplementation((dir: any) => {
+      const d = String(dir)
+      if (d.endsWith('projects')) return ['proj'] as any
+      if (d.endsWith('proj')) return ['orphan-uuid'] as any
+      if (d.endsWith('orphan-uuid')) return ['agent.jsonl'] as any
+      return [] as any
+    })
+    mockFs.statSync.mockReturnValue({ isDirectory: () => true } as any)
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Subagent prompt', { isSidechain: true }),
+      assistantMsg(),
+    ))
+
+    const result = getAllSessions()
+    expect(result.sessions).toHaveLength(0)
+  })
+
+  it('handles UUID subdir with no JSONL files', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readdirSync.mockImplementation((dir: any) => {
+      const d = String(dir)
+      if (d.endsWith('projects')) return ['proj'] as any
+      if (d.endsWith('proj')) return ['empty-uuid-dir'] as any
+      if (d.endsWith('empty-uuid-dir')) return ['subagents'] as any
+      return [] as any
+    })
+    mockFs.statSync.mockReturnValue({ isDirectory: () => true } as any)
+
+    expect(() => getAllSessions()).not.toThrow()
+    const result = getAllSessions()
+    expect(result.sessions).toHaveLength(0)
   })
 
   it('handles null started_at in sort without crashing', () => {

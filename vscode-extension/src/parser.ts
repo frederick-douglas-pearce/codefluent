@@ -86,6 +86,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
   let model: string | null = null
   let version: string | null = null
   let gitBranch: string | null = null
+  let isSidechain = false
 
   for (const msg of lines) {
     const msgType = msg.type || ''
@@ -96,6 +97,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     if (!projectCwd && msg.cwd) projectCwd = msg.cwd
     if (!version && msg.version) version = msg.version
     if (!gitBranch && msg.gitBranch) gitBranch = msg.gitBranch
+    if (msg.isSidechain === true) isSidechain = true
 
     if (msg.timestamp) timestamps.push(msg.timestamp)
 
@@ -140,6 +142,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     }
   }
 
+  if (isSidechain) return null
   if (userPrompts.length === 0) return null
 
   if (!sessionId) sessionId = path.basename(filepath, '.jsonl')
@@ -150,10 +153,17 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
 
   timestamps.sort()
 
+  // For nested files (<project>/<uuid>/session.jsonl), go up two levels for project dir
+  const parentDirName = path.basename(path.dirname(filepath))
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+  const projectPathEncoded = uuidPattern.test(parentDirName)
+    ? path.basename(path.dirname(path.dirname(filepath)))
+    : parentDirName
+
   return {
     id: sessionId,
     project: projectName,
-    project_path_encoded: path.basename(path.dirname(filepath)),
+    project_path_encoded: projectPathEncoded,
     started_at: timestamps[0] || null,
     ended_at: timestamps[timestamps.length - 1] || null,
     user_prompts: userPrompts,
@@ -185,10 +195,29 @@ export function getAllSessions(limit?: number, project?: string): SessionsResult
     const projectDir = path.join(claudeDir, entry)
     if (!fs.statSync(projectDir).isDirectory()) continue
 
-    const jsonlFiles = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl')).sort()
-    for (const file of jsonlFiles) {
+    const entries = fs.readdirSync(projectDir).sort()
+    const flatJsonlFiles = entries.filter(f => f.endsWith('.jsonl'))
+    const seenIds = new Set(flatJsonlFiles.map(f => f.replace('.jsonl', '')))
+
+    // Parse flat files
+    for (const file of flatJsonlFiles) {
       const session = parseSessionFile(path.join(projectDir, file))
       if (session) sessions.push(session)
+    }
+
+    // Also check UUID subdirectories for main session files (future-proofing)
+    for (const entry of entries) {
+      if (entry.endsWith('.jsonl') || seenIds.has(entry)) continue
+      const subdir = path.join(projectDir, entry)
+      try {
+        if (!fs.statSync(subdir).isDirectory()) continue
+        // Only read JSONL files directly in the UUID dir (not in subagents/)
+        const nestedFiles = fs.readdirSync(subdir).filter(f => f.endsWith('.jsonl'))
+        for (const nf of nestedFiles) {
+          const session = parseSessionFile(path.join(subdir, nf))
+          if (session) sessions.push(session)
+        }
+      } catch { continue }
     }
   }
 

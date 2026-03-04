@@ -59,6 +59,12 @@ Personalized tips based on your weakest fluency behaviors. Each coaching suggest
 
 All data stays local. No telemetry, no external servers — just your local session files and direct Anthropic API calls for scoring.
 
+## Session Data
+
+Claude Code stores session transcripts as JSONL files at `~/.claude/projects/`. **Session transcripts are only available from late January 2026 onward** — earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (spawned by Claude's Agent tool) are excluded from scoring because they contain AI-generated prompts, not human input.
+
+See [`docs/SESSION_DATA.md`](../docs/SESSION_DATA.md) for details on data availability, storage format, and scoring scope.
+
 ## Extension Settings
 
 CodeFluent uses the following API key resolution order:

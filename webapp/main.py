@@ -179,7 +179,7 @@ async def get_usage():
 
 
 @app.get("/api/sessions")
-async def get_sessions(limit: int = Query(default=50, ge=1, le=500), project: str = Query(default=None, max_length=500)):
+async def get_sessions(limit: int = Query(default=1000, ge=1, le=1000), project: str = Query(default=None, max_length=500)):
     """Serve extracted prompt data."""
     path = Path("data/prompts/sessions.json")
     if not path.exists():

@@ -2,6 +2,7 @@
 """CodeFluent — Extract user prompts from Claude Code JSONL sessions."""
 
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 import argparse
@@ -15,6 +16,17 @@ SKIP_TYPES = {
     "file-history-snapshot", "tool_result", "progress",
     "hook_progress", "bash_progress", "system", "create",
 }
+
+
+_UUID_PATTERN = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+
+
+def _get_project_path_encoded(filepath: Path) -> str:
+    """Get project path encoded, handling nested UUID subdirectory format."""
+    dir_name = filepath.parent.name
+    if _UUID_PATTERN.match(dir_name):
+        return filepath.parent.parent.name
+    return dir_name
 
 
 def extract_user_text(message_content) -> str:
@@ -61,6 +73,7 @@ def parse_session_file(filepath: Path) -> dict | None:
     model = None
     version = None
     git_branch = None
+    is_sidechain = False
 
     for msg in lines:
         msg_type = msg.get("type", "")
@@ -76,6 +89,8 @@ def parse_session_file(filepath: Path) -> dict | None:
             version = msg["version"]
         if not git_branch and msg.get("gitBranch"):
             git_branch = msg["gitBranch"]
+        if msg.get("isSidechain") is True:
+            is_sidechain = True
 
         timestamp = msg.get("timestamp")
         if timestamp:
@@ -119,6 +134,8 @@ def parse_session_file(filepath: Path) -> dict | None:
         elif msg_type == "thinking":
             thinking_count += 1
 
+    if is_sidechain:
+        return None
     if not user_prompts:
         return None
 
@@ -131,7 +148,7 @@ def parse_session_file(filepath: Path) -> dict | None:
     return {
         "id": session_id,
         "project": project_name,
-        "project_path_encoded": filepath.parent.name,
+        "project_path_encoded": _get_project_path_encoded(filepath),
         "started_at": timestamps[0] if timestamps else None,
         "ended_at": timestamps[-1] if timestamps else None,
         "user_prompts": user_prompts,
@@ -169,10 +186,23 @@ def main():
     for project_dir in sorted(data_dir.iterdir()):
         if not project_dir.is_dir():
             continue
-        for jsonl_file in sorted(project_dir.glob("*.jsonl")):
+
+        # Parse flat .jsonl files
+        flat_files = sorted(project_dir.glob("*.jsonl"))
+        seen_ids = {f.stem for f in flat_files}
+        for jsonl_file in flat_files:
             session = parse_session_file(jsonl_file)
             if session:
                 sessions.append(session)
+
+        # Also check UUID subdirectories for main session files (future-proofing)
+        for subdir in sorted(project_dir.iterdir()):
+            if not subdir.is_dir() or subdir.name in seen_ids:
+                continue
+            for jsonl_file in sorted(subdir.glob("*.jsonl")):
+                session = parse_session_file(jsonl_file)
+                if session:
+                    sessions.append(session)
 
     sessions.sort(key=lambda s: s.get("started_at") or "", reverse=True)
 
