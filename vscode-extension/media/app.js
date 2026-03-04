@@ -550,9 +550,6 @@ async function runScoring(scopeValue) {
   }
 
   const forceRescore = document.getElementById('force-rescore').checked
-  if (forceRescore && ids.length > 20) {
-    if (!confirm(`Force Rescore will re-score all ${ids.length} sessions using the Anthropic API. Continue?`)) return
-  }
 
   // Persist selection
   const s = vscode.getState() || {}
