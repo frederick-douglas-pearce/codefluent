@@ -363,6 +363,59 @@ describe('CodeFluentViewProvider', () => {
         }),
       })
     })
+
+    it('auto-scopes to workspace project when no explicit project filter', async () => {
+      ;(vscode.workspace as any).workspaceFolders = [
+        { uri: vscode.Uri.file('/home/user/my-project') },
+      ]
+      const mockSessions = {
+        sessions: [
+          { id: 's1', project: 'my-project', user_prompts: ['hi'] },
+          { id: 's2', project: 'other-project', user_prompts: ['bye'] },
+        ],
+        metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
+      }
+      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+
+      await sendMessage({ type: 'getSessions', requestId: 'req-scope-1' })
+
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getSessions',
+        requestId: 'req-scope-1',
+        data: expect.objectContaining({
+          sessions: [expect.objectContaining({ id: 's1', project: 'my-project' })],
+          metadata: expect.objectContaining({ total_sessions: 1 }),
+        }),
+      })
+
+      ;(vscode.workspace as any).workspaceFolders = undefined
+    })
+
+    it('returns all projects when no workspace is open', async () => {
+      ;(vscode.workspace as any).workspaceFolders = undefined
+      const mockSessions = {
+        sessions: [
+          { id: 's1', project: 'proj-a', user_prompts: ['hi'] },
+          { id: 's2', project: 'proj-b', user_prompts: ['bye'] },
+        ],
+        metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
+      }
+      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+
+      await sendMessage({ type: 'getSessions', requestId: 'req-scope-2' })
+
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getSessions',
+        requestId: 'req-scope-2',
+        data: expect.objectContaining({
+          sessions: expect.arrayContaining([
+            expect.objectContaining({ id: 's1' }),
+            expect.objectContaining({ id: 's2' }),
+          ]),
+          metadata: expect.objectContaining({ total_sessions: 2 }),
+        }),
+      })
+    })
   })
 
   describe('message handling: runScoring', () => {

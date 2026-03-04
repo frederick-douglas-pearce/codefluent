@@ -191,9 +191,14 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     return fresh
   }
 
+  private getWorkspaceProjectName(): string | undefined {
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    return workspacePath ? path.basename(workspacePath) : undefined
+  }
+
   private async handleGetSessions(payload?: { limit?: number; project?: string }) {
     const limit = payload?.limit ?? 1000
-    const project = payload?.project
+    const project = payload?.project ?? this.getWorkspaceProjectName()
     const { data, isStale } = this.dataCache.getSessions()
     if (data && !isStale) return this.filterSessions(data, limit, project)
     if (data && isStale) {
