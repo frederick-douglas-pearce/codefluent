@@ -562,6 +562,7 @@ async function runScoring(scopeValue) {
   showLoader('fluency-results')
 
   try {
+    state.hasFreshScores = true
     state.scores = await postMessageRequest('runScoring', { session_ids: ids, force_rescore: forceRescore })
     renderFluencyScore()
   } catch (e) {
@@ -926,7 +927,7 @@ function renderRecCard(rec) {
 async function loadCachedScores() {
   try {
     const data = await postMessageRequest('getCachedScores')
-    if (data.aggregate?.average_score) {
+    if (data.aggregate?.average_score && !state.hasFreshScores) {
       state.scores = data
       renderFluencyScore()
     }
