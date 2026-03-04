@@ -1,5 +1,8 @@
-import { execFileSync } from 'child_process'
+import { execFile } from 'child_process'
+import { promisify } from 'util'
 import { getNpxCommand } from './platform'
+
+const execFileAsync = promisify(execFile)
 
 export interface UsageData {
   daily?: any
@@ -7,27 +10,31 @@ export interface UsageData {
   session?: any
 }
 
-export function getUsageData(): UsageData {
-  const result: UsageData = {}
-
+export async function getUsageData(): Promise<UsageData> {
   const commands: Array<{ key: keyof UsageData; args: string[] }> = [
     { key: 'daily', args: ['ccusage@latest', 'daily', '--json'] },
     { key: 'monthly', args: ['ccusage@latest', 'monthly', '--json'] },
     { key: 'session', args: ['ccusage@latest', 'session', '--json', '-o', 'desc'] },
   ]
 
-  for (const { key, args } of commands) {
-    try {
-      const output = execFileSync(getNpxCommand(), args, {
-        timeout: 30000,
-        encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-      result[key] = JSON.parse(output)
-    } catch {
-      // Leave undefined on failure
+  const npx = getNpxCommand()
+  const promises = commands.map(({ args }) =>
+    execFileAsync(npx, args, { timeout: 30000, encoding: 'utf8' })
+  )
+
+  const results = await Promise.allSettled(promises)
+  const data: UsageData = {}
+
+  for (let i = 0; i < commands.length; i++) {
+    const r = results[i]
+    if (r.status === 'fulfilled') {
+      try {
+        data[commands[i].key] = JSON.parse(r.value.stdout)
+      } catch {
+        // Invalid JSON — leave undefined
+      }
     }
   }
 
-  return result
+  return data
 }

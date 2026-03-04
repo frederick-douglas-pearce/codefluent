@@ -289,7 +289,7 @@ describe('CodeFluentViewProvider', () => {
   describe('message handling: getUsage', () => {
     it('fetches usage data and posts response', async () => {
       const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
-      ;(getUsageData as jest.Mock).mockReturnValue(mockUsage)
+      ;(getUsageData as jest.Mock).mockResolvedValue(mockUsage)
 
       await sendMessage({ type: 'getUsage', requestId: 'req-1' })
 
@@ -302,9 +302,7 @@ describe('CodeFluentViewProvider', () => {
     })
 
     it('posts error when getUsage throws', async () => {
-      ;(getUsageData as jest.Mock).mockImplementation(() => {
-        throw new Error('ccusage not found')
-      })
+      ;(getUsageData as jest.Mock).mockRejectedValue(new Error('ccusage not found'))
 
       await sendMessage({ type: 'getUsage', requestId: 'req-2' })
 
@@ -326,7 +324,7 @@ describe('CodeFluentViewProvider', () => {
 
       await sendMessage({ type: 'getSessions', requestId: 'req-3' })
 
-      expect(getAllSessions).toHaveBeenCalledWith(undefined, undefined, undefined)
+      expect(getAllSessions).toHaveBeenCalledWith(undefined, undefined, undefined, 200)
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getSessions',
         requestId: 'req-3',
@@ -354,7 +352,7 @@ describe('CodeFluentViewProvider', () => {
       })
 
       // getAllSessions is called without args (full result cached)
-      expect(getAllSessions).toHaveBeenCalledWith(undefined, undefined, undefined)
+      expect(getAllSessions).toHaveBeenCalledWith(undefined, undefined, undefined, 200)
       // But the response is filtered
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getSessions',
@@ -604,7 +602,7 @@ describe('CodeFluentViewProvider', () => {
 
   describe('message handling: messages without requestId', () => {
     it('ignores non-clipboard/terminal messages without requestId', async () => {
-      ;(getUsageData as jest.Mock).mockReturnValue({})
+      ;(getUsageData as jest.Mock).mockResolvedValue({})
 
       await sendMessage({ type: 'getUsage' })
 
@@ -781,7 +779,7 @@ describe('CodeFluentViewProvider', () => {
   describe('data caching', () => {
     it('second getUsage call returns cached data without re-fetching', async () => {
       const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
-      ;(getUsageData as jest.Mock).mockReturnValue(mockUsage)
+      ;(getUsageData as jest.Mock).mockResolvedValue(mockUsage)
 
       await sendMessage({ type: 'getUsage', requestId: 'req-cache-1' })
       expect(getUsageData).toHaveBeenCalledTimes(1)
@@ -814,7 +812,7 @@ describe('CodeFluentViewProvider', () => {
 
     it('refreshData message invalidates cache and triggers background refresh', async () => {
       const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
-      ;(getUsageData as jest.Mock).mockReturnValue(mockUsage)
+      ;(getUsageData as jest.Mock).mockResolvedValue(mockUsage)
       const mockSessions = {
         sessions: [],
         metadata: { total_sessions: 0, total_projects: 0, total_prompts: 0, extracted_at: '' },
@@ -829,7 +827,8 @@ describe('CodeFluentViewProvider', () => {
       // Send refreshData (fire-and-forget, no requestId)
       await sendMessage({ type: 'refreshData' })
 
-      // Allow setImmediate callbacks to run
+      // Allow setImmediate callbacks and their inner async operations to run
+      await new Promise(resolve => setImmediate(resolve))
       await new Promise(resolve => setImmediate(resolve))
 
       // Background refresh should have called getUsageData and getAllSessions

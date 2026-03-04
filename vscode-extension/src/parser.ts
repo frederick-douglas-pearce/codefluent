@@ -179,7 +179,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
   }
 }
 
-export function getAllSessions(limit?: number, project?: string, sessionDataPath?: string): SessionsResult {
+export function getAllSessions(limit?: number, project?: string, sessionDataPath?: string, maxFiles?: number): SessionsResult {
   const claudeDir = sessionDataPath || path.join(os.homedir(), '.claude', 'projects')
 
   if (!fs.existsSync(claudeDir)) {
@@ -189,7 +189,8 @@ export function getAllSessions(limit?: number, project?: string, sessionDataPath
     }
   }
 
-  const sessions: ParsedSession[] = []
+  // Collect all JSONL file paths first
+  const filePaths: string[] = []
 
   for (const entry of fs.readdirSync(claudeDir).sort()) {
     const projectDir = path.join(claudeDir, entry)
@@ -199,10 +200,8 @@ export function getAllSessions(limit?: number, project?: string, sessionDataPath
     const flatJsonlFiles = entries.filter(f => f.endsWith('.jsonl'))
     const seenIds = new Set(flatJsonlFiles.map(f => f.replace('.jsonl', '')))
 
-    // Parse flat files
     for (const file of flatJsonlFiles) {
-      const session = parseSessionFile(path.join(projectDir, file))
-      if (session) sessions.push(session)
+      filePaths.push(path.join(projectDir, file))
     }
 
     // Also check UUID subdirectories for main session files (future-proofing)
@@ -211,14 +210,33 @@ export function getAllSessions(limit?: number, project?: string, sessionDataPath
       const subdir = path.join(projectDir, entry)
       try {
         if (!fs.statSync(subdir).isDirectory()) continue
-        // Only read JSONL files directly in the UUID dir (not in subagents/)
         const nestedFiles = fs.readdirSync(subdir).filter(f => f.endsWith('.jsonl'))
         for (const nf of nestedFiles) {
-          const session = parseSessionFile(path.join(subdir, nf))
-          if (session) sessions.push(session)
+          filePaths.push(path.join(subdir, nf))
         }
       } catch { continue }
     }
+  }
+
+  // When maxFiles is set, sort by mtime descending and take only the newest files
+  let pathsToParse = filePaths
+  if (maxFiles && maxFiles < filePaths.length) {
+    const withMtime = filePaths.map(fp => {
+      try {
+        return { path: fp, mtime: fs.statSync(fp).mtimeMs }
+      } catch {
+        return { path: fp, mtime: 0 }
+      }
+    })
+    withMtime.sort((a, b) => b.mtime - a.mtime)
+    pathsToParse = withMtime.slice(0, maxFiles).map(e => e.path)
+  }
+
+  // Parse the selected files
+  const sessions: ParsedSession[] = []
+  for (const fp of pathsToParse) {
+    const session = parseSessionFile(fp)
+    if (session) sessions.push(session)
   }
 
   sessions.sort((a, b) => {

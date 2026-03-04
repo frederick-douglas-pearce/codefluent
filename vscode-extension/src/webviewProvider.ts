@@ -186,7 +186,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       this.refreshUsageInBackground()
       return data
     }
-    const fresh = getUsageData()
+    const fresh = await getUsageData()
     this.dataCache.setUsage(fresh)
     return fresh
   }
@@ -200,7 +200,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       this.refreshSessionsInBackground()
       return this.filterSessions(data, limit, project)
     }
-    const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath())
+    const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
     this.dataCache.setSessions(fresh)
     return this.filterSessions(fresh, limit, project)
   }
@@ -236,7 +236,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     const client = new Anthropic({ apiKey })
     const cached = this.cache.read()
-    const sessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath())
+    const sessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
     const { sessions } = sessionData as { sessions: any[] }
     const allSessions = Object.fromEntries(sessions.map((s: any) => [s.id, s]))
 
@@ -304,7 +304,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       aggregate.sessions_requested = lastScoredIds.length
       aggregate.sessions_skipped = lastScoredIds.length - scored.length
     }
-    const cachedSessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath())
+    const cachedSessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
     aggregate.score_history = computeScoreHistory(cached, cachedSessionData.sessions, configBehaviors)
 
     this.updateStatusBar(aggregate)
@@ -371,9 +371,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   }
 
   private refreshUsageInBackground(): void {
-    setImmediate(() => {
+    setImmediate(async () => {
       try {
-        const fresh = getUsageData()
+        const fresh = await getUsageData()
         this.dataCache.setUsage(fresh)
         this.view?.webview.postMessage({ type: 'usageUpdated', data: fresh })
       } catch (err: any) {
@@ -385,7 +385,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   private refreshSessionsInBackground(): void {
     setImmediate(() => {
       try {
-        const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath())
+        const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
         this.dataCache.setSessions(fresh)
         this.view?.webview.postMessage({ type: 'sessionsUpdated', data: fresh })
       } catch (err: any) {
