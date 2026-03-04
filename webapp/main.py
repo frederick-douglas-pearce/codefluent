@@ -78,7 +78,7 @@ CONFIG_SCORING_PROMPT_VERSION = _config_prompt["version"]
 
 
 class ScoreRequest(BaseModel):
-    session_ids: list[str] = Field(..., min_length=1, max_length=50)
+    session_ids: list[str] = Field(..., min_length=1, max_length=500)
     force_rescore: bool = False
 
     @field_validator("session_ids", mode="before")

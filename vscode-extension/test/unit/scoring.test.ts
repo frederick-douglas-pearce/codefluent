@@ -1550,3 +1550,132 @@ describe.each([
     expect(computeEffectiveScore(fb, cb)).toBe(Math.round(5 / 11 * 100))
   })
 })
+
+// --- resolveSessionIds (frontend helper, extracted from app.js) ---
+
+function extractResolveSessionIds(filePath: string): (scopeValue: string, sessions: any[]) => { ids: string[], description: string } {
+  const src = fs.readFileSync(filePath, 'utf-8')
+  const startIdx = src.indexOf('function resolveSessionIds(')
+  if (startIdx === -1) throw new Error(`resolveSessionIds not found in ${filePath}`)
+  const braceIdx = src.indexOf('{', startIdx)
+  let depth = 0, endIdx = braceIdx
+  for (let i = braceIdx; i < src.length; i++) {
+    if (src[i] === '{') depth++
+    if (src[i] === '}') depth--
+    if (depth === 0) { endIdx = i; break }
+  }
+  const fnSrc = src.substring(startIdx, endIdx + 1)
+  const fn = new Function(`return (${fnSrc.replace('function resolveSessionIds', 'function')})`)()
+  return fn
+}
+
+const resolveSessionIdsVscode = extractResolveSessionIds(VSCODE_APP_PATH)
+const resolveSessionIdsWebapp = extractResolveSessionIds(WEBAPP_APP_PATH)
+
+describe.each([
+  ['vscode', resolveSessionIdsVscode],
+  ['webapp', resolveSessionIdsWebapp],
+])('resolveSessionIds (%s)', (_label, resolveSessionIds) => {
+  const makeSessions = (count: number, daysAgo: number[] = []) => {
+    return Array.from({ length: count }, (_, i) => {
+      const date = new Date()
+      if (daysAgo[i] !== undefined) {
+        date.setDate(date.getDate() - daysAgo[i])
+      } else {
+        date.setDate(date.getDate() - i)
+      }
+      return { id: `sess-${i}`, started_at: date.toISOString() }
+    })
+  }
+
+  // --- Count-based tests ---
+
+  it('count-based: returns correct number of sessions', () => {
+    const sessions = makeSessions(10)
+    const result = resolveSessionIds('count:5', sessions)
+    expect(result.ids).toHaveLength(5)
+    expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2', 'sess-3', 'sess-4'])
+    expect(result.description).toBe('5 sessions')
+  })
+
+  it('count-based: handles fewer sessions than requested', () => {
+    const sessions = makeSessions(3)
+    const result = resolveSessionIds('count:10', sessions)
+    expect(result.ids).toHaveLength(3)
+    expect(result.description).toBe('3 sessions')
+  })
+
+  it('count-based: handles count:50', () => {
+    const sessions = makeSessions(60)
+    const result = resolveSessionIds('count:50', sessions)
+    expect(result.ids).toHaveLength(50)
+  })
+
+  // --- Time-based tests ---
+
+  it('time-based: filters sessions within 7 days', () => {
+    const sessions = makeSessions(5, [1, 3, 5, 8, 15])
+    const result = resolveSessionIds('days:7', sessions)
+    expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
+    expect(result.description).toBe('Last 7 days (3 sessions)')
+  })
+
+  it('time-based: filters sessions within 30 days', () => {
+    const sessions = makeSessions(5, [1, 10, 25, 35, 60])
+    const result = resolveSessionIds('days:30', sessions)
+    expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
+    expect(result.description).toBe('Last 30 days (3 sessions)')
+  })
+
+  it('time-based: filters sessions within 60 days', () => {
+    const sessions = makeSessions(4, [5, 30, 55, 65])
+    const result = resolveSessionIds('days:60', sessions)
+    expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
+  })
+
+  it('time-based: filters sessions within 90 days', () => {
+    const sessions = makeSessions(4, [10, 50, 85, 100])
+    const result = resolveSessionIds('days:90', sessions)
+    expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
+  })
+
+  it('time-based: returns 0 sessions when none match', () => {
+    const sessions = makeSessions(3, [100, 200, 300])
+    const result = resolveSessionIds('days:7', sessions)
+    expect(result.ids).toHaveLength(0)
+    expect(result.description).toBe('Last 7 days (0 sessions)')
+  })
+
+  // --- Edge cases ---
+
+  it('skips sessions with null started_at for time-based', () => {
+    const sessions = [
+      { id: 'sess-0', started_at: new Date().toISOString() },
+      { id: 'sess-1', started_at: null },
+      { id: 'sess-2', started_at: new Date().toISOString() },
+    ]
+    const result = resolveSessionIds('days:7', sessions)
+    expect(result.ids).toEqual(['sess-0', 'sess-2'])
+  })
+
+  it('includes sessions with null started_at for count-based', () => {
+    const sessions = [
+      { id: 'sess-0', started_at: null },
+      { id: 'sess-1', started_at: null },
+      { id: 'sess-2', started_at: null },
+    ]
+    const result = resolveSessionIds('count:5', sessions)
+    expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
+  })
+
+  it('handles empty sessions array', () => {
+    expect(resolveSessionIds('count:5', []).ids).toHaveLength(0)
+    expect(resolveSessionIds('days:7', []).ids).toHaveLength(0)
+  })
+
+  it('unknown type falls back to count:5', () => {
+    const sessions = makeSessions(10)
+    const result = resolveSessionIds('unknown:abc', sessions)
+    expect(result.ids).toHaveLength(5)
+  })
+})

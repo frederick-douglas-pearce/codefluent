@@ -46,16 +46,23 @@
           <p>AI fluency measures how effectively you interact with Claude Code. Based on Anthropic's research, we analyze 11 prompting behaviors across your sessions.</p>
         </div>
         <div class="scoring-controls">
-          <label for="session-count">Analyze last</label>
-          <select id="session-count">
-            <option value="3">3</option>
-            <option value="5" selected>5</option>
-            <option value="10">10</option>
-            <option value="20">20</option>
+          <label for="session-scope">Analyze last</label>
+          <select id="session-scope">
+            <optgroup label="By count">
+              <option value="count:5" selected>5 sessions</option>
+              <option value="count:10">10 sessions</option>
+              <option value="count:20">20 sessions</option>
+              <option value="count:50">50 sessions</option>
+            </optgroup>
+            <optgroup label="By time">
+              <option value="days:7">Last 7 days</option>
+              <option value="days:30">Last 30 days</option>
+              <option value="days:60">Last 60 days</option>
+              <option value="days:90">Last 90 days</option>
+            </optgroup>
           </select>
-          <label>sessions</label>
           <label class="force-rescore-label">
-            <input type="checkbox" id="force-rescore"> Force rescore
+            <input type="checkbox" id="force-rescore"> Force Rescore
           </label>
           <button class="btn btn-primary" id="run-scoring-btn">Run Analysis</button>
         </div>

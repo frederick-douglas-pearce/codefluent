@@ -174,6 +174,7 @@ async function loadData() {
     state.usage = usage
     state.sessions = sessions
     renderUsageDashboard()
+    updateTimeScopeCounts()
   } catch (e) {
     console.error('Failed to load data:', e)
   }
@@ -216,6 +217,42 @@ function destroyChart(name) {
 function showLoader(tabId) {
   document.getElementById(tabId).innerHTML =
     '<div class="scoring-loader"><div class="spinner"></div><p>Analyzing sessions with Claude...</p></div>'
+}
+
+// --- Session Scope Resolution ---
+function resolveSessionIds(scopeValue, sessions) {
+  const [type, rawVal] = scopeValue.split(':')
+  const val = parseInt(rawVal)
+
+  if (type === 'days') {
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - val)
+    const filtered = sessions.filter(s =>
+      s.started_at && new Date(s.started_at) >= cutoff
+    )
+    return {
+      ids: filtered.map(s => s.id),
+      description: `Last ${val} days (${filtered.length} sessions)`
+    }
+  }
+
+  // Default: count-based
+  const count = isNaN(val) ? 5 : val
+  const sliced = sessions.slice(0, count)
+  return {
+    ids: sliced.map(s => s.id),
+    description: `${sliced.length} sessions`
+  }
+}
+
+function updateTimeScopeCounts() {
+  if (!state.sessions?.sessions) return
+  const select = document.getElementById('session-scope')
+  for (const option of select.options) {
+    if (!option.value.startsWith('days:')) continue
+    const { description } = resolveSessionIds(option.value, state.sessions.sessions)
+    option.textContent = description
+  }
 }
 
 // --- Event Delegation (replaces inline onclick handlers) ---
@@ -402,12 +439,27 @@ function renderUsagePace(daily) {
 
 // --- Fluency Scoring ---
 document.getElementById('run-scoring-btn').addEventListener('click', () => {
-  const count = parseInt(document.getElementById('session-count').value)
-  runScoring(count)
+  const scopeValue = document.getElementById('session-scope').value
+  runScoring(scopeValue)
 })
 
-async function runScoring(count) {
+async function runScoring(scopeValue) {
   if (!state.sessions?.sessions?.length) return
+
+  const { ids, description } = resolveSessionIds(scopeValue, state.sessions.sessions)
+  if (ids.length === 0) {
+    document.getElementById('fluency-results').innerHTML =
+      '<p class="empty-state">No sessions found in the selected time range.</p>'
+    return
+  }
+
+  const forceRescore = document.getElementById('force-rescore').checked
+  if (forceRescore && ids.length > 20) {
+    if (!confirm(`Force Rescore will re-score all ${ids.length} sessions using the Anthropic API. Continue?`)) return
+  }
+
+  // Persist selection
+  localStorage.setItem('codefluent-session-scope', scopeValue)
 
   const btn = document.getElementById('run-scoring-btn')
   btn.disabled = true
@@ -415,8 +467,6 @@ async function runScoring(count) {
   showLoader('fluency-results')
 
   try {
-    const ids = state.sessions.sessions.slice(0, count).map(s => s.id)
-    const forceRescore = document.getElementById('force-rescore').checked
     const res = await fetch('/api/score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -829,6 +879,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!localStorage.getItem('hasSeenOnboarding')) {
     const card = document.getElementById('onboarding-card')
     if (card) card.style.display = 'block'
+  }
+
+  // Restore saved session scope selection
+  const savedScope = localStorage.getItem('codefluent-session-scope')
+  if (savedScope) {
+    const select = document.getElementById('session-scope')
+    if (select) select.value = savedScope
   }
 
   await loadBenchmarks()
