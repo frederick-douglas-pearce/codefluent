@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator
 import json
 import subprocess
 from anthropic import Anthropic
+from extract_prompts import get_all_sessions
 
 BEHAVIORS = [
     "iteration_and_refinement", "clarifying_goals", "specifying_format",
@@ -178,18 +179,30 @@ async def get_usage():
     return data
 
 
+def _resolve_data_dir(data_path: str | None = None) -> Path:
+    """Resolve the session data directory from query param, env var, or default."""
+    if data_path:
+        p = Path(data_path)
+        if not p.is_absolute():
+            raise HTTPException(status_code=400, detail="data_path must be an absolute path")
+        if not p.is_dir():
+            raise HTTPException(status_code=400, detail=f"data_path does not exist or is not a directory: {data_path}")
+        return p
+    env_dir = os.environ.get("CLAUDE_DATA_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path.home() / ".claude" / "projects"
+
+
 @app.get("/api/sessions")
-async def get_sessions(limit: int = Query(default=1000, ge=1, le=1000), project: str = Query(default=None, max_length=500)):
-    """Serve extracted prompt data."""
-    path = Path("data/prompts/sessions.json")
-    if not path.exists():
-        return {"sessions": [], "metadata": {}}
-    with open(path) as f:
-        data = json.load(f)
-    sessions = data["sessions"]
-    if project:
-        sessions = [s for s in sessions if s["project"] == project]
-    return {"sessions": sessions[:limit], "metadata": data["metadata"]}
+async def get_sessions(
+    limit: int = Query(default=1000, ge=1, le=1000),
+    project: str = Query(default=None, max_length=500),
+    data_path: str = Query(default=None, max_length=1000),
+):
+    """Parse sessions on-demand from JSONL files."""
+    data_dir = _resolve_data_dir(data_path)
+    return get_all_sessions(data_dir, limit, project)
 
 
 @app.get("/api/scores")
@@ -230,11 +243,9 @@ async def get_scores():
         aggregate["sessions_skipped"] = len(last_ids) - len(scored)
 
     # Attach score history from all cached scores + sessions
-    sessions_path = Path("data/prompts/sessions.json")
-    sessions_list = []
-    if sessions_path.exists():
-        with open(sessions_path) as f:
-            sessions_list = json.load(f).get("sessions", [])
+    data_dir = _resolve_data_dir()
+    session_data = get_all_sessions(data_dir)
+    sessions_list = session_data.get("sessions", [])
     aggregate["score_history"] = compute_score_history(cached, sessions_list, config_behaviors)
 
     return {"scores": scoped, "aggregate": aggregate}
@@ -255,8 +266,9 @@ async def score_sessions(request: ScoreRequest):
         with open(scores_path) as f:
             cached = json.load(f)
 
-    with open("data/prompts/sessions.json") as f:
-        all_sessions = {s["id"]: s for s in json.load(f)["sessions"]}
+    data_dir = _resolve_data_dir()
+    session_data = get_all_sessions(data_dir)
+    all_sessions = {s["id"]: s for s in session_data["sessions"]}
 
     results = {}
     for sid in session_ids:

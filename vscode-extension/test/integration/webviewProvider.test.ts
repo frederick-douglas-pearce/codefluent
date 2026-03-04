@@ -326,7 +326,7 @@ describe('CodeFluentViewProvider', () => {
 
       await sendMessage({ type: 'getSessions', requestId: 'req-3' })
 
-      expect(getAllSessions).toHaveBeenCalledWith()
+      expect(getAllSessions).toHaveBeenCalledWith(undefined, undefined, undefined)
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getSessions',
         requestId: 'req-3',
@@ -354,7 +354,7 @@ describe('CodeFluentViewProvider', () => {
       })
 
       // getAllSessions is called without args (full result cached)
-      expect(getAllSessions).toHaveBeenCalledWith()
+      expect(getAllSessions).toHaveBeenCalledWith(undefined, undefined, undefined)
       // But the response is filtered
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getSessions',

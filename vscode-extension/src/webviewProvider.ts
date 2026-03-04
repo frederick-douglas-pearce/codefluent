@@ -60,6 +60,11 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private getSessionDataPath(): string | undefined {
+    const customPath = vscode.workspace.getConfiguration('codefluent').get<string>('sessionDataPath')
+    return customPath || undefined
+  }
+
   private readDotEnv(): string | undefined {
     const dirs: string[] = []
 
@@ -195,7 +200,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       this.refreshSessionsInBackground()
       return this.filterSessions(data, limit, project)
     }
-    const fresh = getAllSessions()
+    const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath())
     this.dataCache.setSessions(fresh)
     return this.filterSessions(fresh, limit, project)
   }
@@ -231,7 +236,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     const client = new Anthropic({ apiKey })
     const cached = this.cache.read()
-    const sessionData = this.dataCache.getSessions().data || getAllSessions()
+    const sessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath())
     const { sessions } = sessionData as { sessions: any[] }
     const allSessions = Object.fromEntries(sessions.map((s: any) => [s.id, s]))
 
@@ -299,7 +304,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       aggregate.sessions_requested = lastScoredIds.length
       aggregate.sessions_skipped = lastScoredIds.length - scored.length
     }
-    const cachedSessionData = this.dataCache.getSessions().data || getAllSessions()
+    const cachedSessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath())
     aggregate.score_history = computeScoreHistory(cached, cachedSessionData.sessions, configBehaviors)
 
     this.updateStatusBar(aggregate)
@@ -380,7 +385,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   private refreshSessionsInBackground(): void {
     setImmediate(() => {
       try {
-        const fresh = getAllSessions()
+        const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath())
         this.dataCache.setSessions(fresh)
         this.view?.webview.postMessage({ type: 'sessionsUpdated', data: fresh })
       } catch (err: any) {

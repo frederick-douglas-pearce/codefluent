@@ -680,6 +680,32 @@ describe('getAllSessions', () => {
     expect(result.sessions).toHaveLength(0)
   })
 
+  it('uses custom sessionDataPath when provided', () => {
+    mockFs.existsSync.mockReturnValue(true)
+    mockFs.readdirSync.mockImplementation((dir: any) => {
+      const d = String(dir)
+      if (d === '/custom/data/path') return ['proj'] as any
+      if (d.endsWith('proj')) return ['s1.jsonl'] as any
+      return [] as any
+    })
+    mockFs.statSync.mockReturnValue({ isDirectory: () => true } as any)
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hi', { sessionId: 's1' }),
+      assistantMsg(),
+    ))
+
+    const result = getAllSessions(undefined, undefined, '/custom/data/path')
+    expect(result.sessions).toHaveLength(1)
+    expect(mockFs.existsSync).toHaveBeenCalledWith('/custom/data/path')
+  })
+
+  it('falls back to default when sessionDataPath is empty string', () => {
+    mockFs.existsSync.mockReturnValue(false)
+    const result = getAllSessions(undefined, undefined, '')
+    expect(result.sessions).toEqual([])
+    expect(mockFs.existsSync).toHaveBeenCalledWith('/home/testuser/.claude/projects')
+  })
+
   it('handles null started_at in sort without crashing', () => {
     mockFs.existsSync.mockReturnValue(true)
     mockFs.readdirSync.mockImplementation((dir: any) => {

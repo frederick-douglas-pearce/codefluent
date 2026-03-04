@@ -164,12 +164,24 @@ function switchTab(tabName) {
   }
 }
 
+// --- Data Path ---
+function getDataPath() {
+  return localStorage.getItem('codefluent-dataPath') || ''
+}
+
+function buildSessionsUrl(limit = 1000) {
+  const dataPath = getDataPath()
+  let url = `/api/sessions?limit=${limit}`
+  if (dataPath) url += `&data_path=${encodeURIComponent(dataPath)}`
+  return url
+}
+
 // --- Data Loading ---
 async function loadData() {
   try {
     const [usage, sessions] = await Promise.all([
       fetch('/api/usage').then(r => r.json()),
-      fetch('/api/sessions?limit=1000').then(r => r.json()),
+      fetch(buildSessionsUrl()).then(r => r.json()),
     ])
     state.usage = usage
     state.sessions = sessions
@@ -873,6 +885,18 @@ async function loadBenchmarks() {
   }
 }
 
+// --- Settings: Data Path ---
+document.getElementById('apply-path-btn').addEventListener('click', () => {
+  const input = document.getElementById('data-path')
+  const path = input.value.trim()
+  if (path) {
+    localStorage.setItem('codefluent-dataPath', path)
+  } else {
+    localStorage.removeItem('codefluent-dataPath')
+  }
+  loadData()
+})
+
 // --- Init ---
 document.addEventListener('DOMContentLoaded', async () => {
   // Show onboarding card on first run
@@ -886,6 +910,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (savedScope) {
     const select = document.getElementById('session-scope')
     if (select) select.value = savedScope
+  }
+
+  // Restore saved data path
+  const savedPath = localStorage.getItem('codefluent-dataPath')
+  if (savedPath) {
+    const pathInput = document.getElementById('data-path')
+    if (pathInput) pathInput.value = savedPath
   }
 
   await loadBenchmarks()

@@ -164,23 +164,21 @@ def parse_session_file(filepath: Path) -> dict | None:
     }
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Extract user prompts from Claude Code sessions")
-    parser.add_argument("--path", type=str, help="Custom Claude data directory")
-    parser.add_argument("--output", type=str, default="data/prompts", help="Output directory")
-    parser.add_argument("--limit", type=int, help="Limit number of sessions to process")
-    args = parser.parse_args()
-
-    data_dir = Path(args.path) if args.path else CLAUDE_DATA_DIR
+def get_all_sessions(data_dir: Path = None, limit: int = None, project: str = None) -> dict:
+    """Parse all sessions from JSONL files. Used by both CLI and API."""
+    if data_dir is None:
+        data_dir = CLAUDE_DATA_DIR
 
     if not data_dir.exists():
-        print(f"Claude data directory not found: {data_dir}")
-        return
-
-    print(f"Reading from: {data_dir}")
-
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
+        return {
+            "sessions": [],
+            "metadata": {
+                "total_sessions": 0,
+                "total_projects": 0,
+                "total_prompts": 0,
+                "extracted_at": datetime.now().isoformat(),
+            },
+        }
 
     sessions = []
     for project_dir in sorted(data_dir.iterdir()):
@@ -206,27 +204,48 @@ def main():
 
     sessions.sort(key=lambda s: s.get("started_at") or "", reverse=True)
 
-    if args.limit:
-        sessions = sessions[:args.limit]
+    if project:
+        sessions = [s for s in sessions if s["project"] == project]
+    if limit:
+        sessions = sessions[:limit]
 
     projects = set(s["project"] for s in sessions)
     total_prompts = sum(len(s["user_prompts"]) for s in sessions)
 
-    print(f"Extracted {total_prompts} prompts from {len(sessions)} sessions across {len(projects)} projects")
-
-    output = {
+    return {
         "sessions": sessions,
         "metadata": {
             "total_sessions": len(sessions),
             "total_projects": len(projects),
             "total_prompts": total_prompts,
             "extracted_at": datetime.now().isoformat(),
-        }
+        },
     }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Extract user prompts from Claude Code sessions")
+    parser.add_argument("--path", type=str, help="Custom Claude data directory")
+    parser.add_argument("--output", type=str, default="data/prompts", help="Output directory")
+    parser.add_argument("--limit", type=int, help="Limit number of sessions to process")
+    args = parser.parse_args()
+
+    data_dir = Path(args.path) if args.path else None
+    result = get_all_sessions(data_dir, args.limit)
+
+    if not result["sessions"] and data_dir:
+        print(f"Claude data directory not found or empty: {data_dir}")
+        return
+
+    print(f"Reading from: {data_dir or CLAUDE_DATA_DIR}")
+    print(f"Extracted {result['metadata']['total_prompts']} prompts from {result['metadata']['total_sessions']} sessions across {result['metadata']['total_projects']} projects")
+
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = output_dir / "sessions.json"
     with open(output_path, "w") as f:
-        json.dump(output, f, indent=2, default=str)
+        json.dump(result, f, indent=2, default=str)
 
     print(f"Written to {output_path}")
 

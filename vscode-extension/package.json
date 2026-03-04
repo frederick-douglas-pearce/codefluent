@@ -59,7 +59,18 @@
         "command": "codefluent.openPanel",
         "title": "CodeFluent: Open Dashboard"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "CodeFluent",
+      "properties": {
+        "codefluent.sessionDataPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Custom path to Claude Code session data directory. Leave empty to use the default (`~/.claude/projects/`).",
+          "scope": "machine"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

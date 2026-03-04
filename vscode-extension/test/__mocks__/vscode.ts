@@ -58,6 +58,9 @@ export const commands = {
 
 export const workspace = {
   workspaceFolders: undefined as any,
+  getConfiguration: jest.fn(() => ({
+    get: jest.fn(() => undefined),
+  })),
 }
 
 export const env = {

@@ -66,6 +66,44 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   font-weight: 600;
 }
 
+/* Settings Bar */
+.settings-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 24px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.settings-bar label {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.settings-bar input[type="text"] {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+.settings-bar .btn-secondary {
+  padding: 6px 14px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-weight: 500;
+}
+.settings-bar .btn-secondary:hover {
+  background: var(--bg-hover);
+}
+
 /* Tabs */
 .tabs {
   display: flex;

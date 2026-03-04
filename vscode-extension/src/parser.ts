@@ -179,8 +179,8 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
   }
 }
 
-export function getAllSessions(limit?: number, project?: string): SessionsResult {
-  const claudeDir = path.join(os.homedir(), '.claude', 'projects')
+export function getAllSessions(limit?: number, project?: string, sessionDataPath?: string): SessionsResult {
+  const claudeDir = sessionDataPath || path.join(os.homedir(), '.claude', 'projects')
 
   if (!fs.existsSync(claudeDir)) {
     return {
