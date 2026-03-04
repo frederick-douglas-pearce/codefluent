@@ -479,13 +479,16 @@ def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> d
     cfg = config_behaviors or {}
 
     # Compute per-session effective scores based on behavior counts (session OR config)
+    # Attach effective_score to each session so the frontend can display it directly
     score_sum = 0
     for s in scored_sessions:
         effective_count = sum(
             1 for b in BEHAVIORS
             if s.get("fluency_behaviors", {}).get(b, False) or cfg.get(b, False)
         )
-        score_sum += (effective_count / total_behaviors) * 100
+        effective_score = round((effective_count / total_behaviors) * 100)
+        s["effective_score"] = effective_score
+        score_sum += effective_score
 
     for b in BEHAVIORS:
         count = sum(

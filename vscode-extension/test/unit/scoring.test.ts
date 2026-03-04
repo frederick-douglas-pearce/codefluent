@@ -343,6 +343,32 @@ describe('computeAggregate', () => {
     expect(result.behavior_prevalence['specifying_format']).toBe(0)
   })
 
+  it('attaches effective_score to each session object', () => {
+    const session = makeScoreResult()
+    computeAggregate([session])
+    expect((session as any).effective_score).toBe(36)
+  })
+
+  it('attaches config-boosted effective_score to each session', () => {
+    const session = makeScoreResult() // 4/11 true
+    const configBehaviors: Record<string, boolean> = {
+      iteration_and_refinement: false,
+      clarifying_goals: false,
+      specifying_format: true,
+      providing_examples: true,
+      setting_interaction_terms: true,
+      checking_facts: true,
+      questioning_reasoning: true,
+      identifying_missing_context: false,
+      adjusting_approach: false,
+      building_on_responses: false,
+      providing_feedback: true,
+    }
+    computeAggregate([session], configBehaviors)
+    // Session: 4 + Config adds: 6 = 10/11 → 91
+    expect((session as any).effective_score).toBe(91)
+  })
+
   it('computes correct average across multiple sessions', () => {
     const sessions = [
       makeScoreResult({ session_id: 'a' }),

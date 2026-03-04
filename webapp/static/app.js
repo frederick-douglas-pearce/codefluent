@@ -562,14 +562,13 @@ function renderFluencyScore() {
     </div>`
 
   // Session breakdown
-  const configBehaviors = aggregate.config_behaviors || {}
   html += '<div class="session-list"><h3>Session Breakdown</h3>'
   for (const [sid, scoreData] of Object.entries(scores)) {
     if (scoreData.error) continue
     const session = state.sessions.sessions.find(s => s.id === sid)
     const date = session?.started_at ? new Date(session.started_at).toLocaleDateString() : ''
     const project = session?.project || ''
-    const effectiveScore = computeEffectiveScore(scoreData.fluency_behaviors, configBehaviors)
+    const effectiveScore = scoreData.effective_score ?? scoreData.overall_score
     html += `
       <div class="session-item">
         <div class="session-header">

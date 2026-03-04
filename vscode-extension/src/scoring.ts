@@ -302,6 +302,7 @@ export function computeAggregate(
   const totalBehaviors = BEHAVIORS.length
 
   // Compute per-session effective scores based on behavior counts (session OR config)
+  // Attach effective_score to each session object so the frontend can display it directly
   let scoreSum = 0
   for (const s of scoredSessions) {
     let effectiveCount = 0
@@ -310,7 +311,9 @@ export function computeAggregate(
       const configHas = configBehaviors?.[b]
       if (sessionHas || configHas) effectiveCount++
     }
-    scoreSum += (effectiveCount / totalBehaviors) * 100
+    const effectiveScore = Math.round((effectiveCount / totalBehaviors) * 100)
+    s.effective_score = effectiveScore
+    scoreSum += effectiveScore
   }
 
   for (const b of BEHAVIORS) {
