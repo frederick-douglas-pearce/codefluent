@@ -619,18 +619,20 @@ function renderFluencyScore() {
   html += `
     <div class="pattern-section">
       <h3>Coding Interaction Patterns</h3>
+      <p class="section-desc">Each session is classified into one of six coding interaction patterns based on how you engaged with Claude.</p>
       <div class="pattern-layout">
         <div class="pattern-chart-wrap"><canvas id="pattern-chart"></canvas></div>
         <div class="pattern-legend">`
 
   patternEntries.forEach(([p, count], i) => {
     const pct = totalSessions > 0 ? Math.round(count / totalSessions * 100) : 0
-    const qualityTag = HIGH_QUALITY_PATTERNS.includes(p)
-      ? '<span class="pattern-quality-tag quality-high">High</span>'
-      : '<span class="pattern-quality-tag quality-low">Low</span>'
+    const isHighQuality = HIGH_QUALITY_PATTERNS.includes(p)
+    const nameClass = isHighQuality ? 'pattern-name-high' : 'pattern-name-low'
+    const desc = PATTERN_DESCRIPTIONS[p] || ''
+    const qualitySuffix = isHighQuality ? ' (High-quality pattern)' : ' (Low-quality pattern)'
     html += `
       <div class="pattern-legend-item">
-        <span>${PATTERN_LABELS[p] || escapeHtml(p)} ${qualityTag} ${renderTooltip(PATTERN_DESCRIPTIONS[p] || '')}</span>
+        <span><span class="${nameClass}">${PATTERN_LABELS[p] || escapeHtml(p)}</span> ${renderTooltip(desc + qualitySuffix)}</span>
         <span>${count} (${pct}%)</span>
       </div>`
   })
