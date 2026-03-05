@@ -404,7 +404,8 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       try {
         const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
         this.dataCache.setSessions(fresh)
-        this.view?.webview.postMessage({ type: 'sessionsUpdated', data: fresh })
+        const filtered = this.filterSessions(fresh, undefined, this.getWorkspaceProjectName())
+        this.view?.webview.postMessage({ type: 'sessionsUpdated', data: filtered })
       } catch (err: any) {
         console.error('[CodeFluent] Background sessions refresh failed:', err?.message || err)
       }
