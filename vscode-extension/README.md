@@ -85,7 +85,6 @@ CodeFluent uses the following API key resolution order:
 
 ## Known Issues
 
-- Screenshots are placeholders until the first marketplace release
 - `ccusage` must be available via `npx` (requires Node.js and npm on PATH)
 - Quick Wins requires `gh` CLI to be installed and authenticated
 
