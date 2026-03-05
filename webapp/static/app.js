@@ -218,6 +218,16 @@ function renderTooltip(text) {
   return `<span class="info-icon" tabindex="0" aria-describedby="${id}">i<span class="info-tooltip" id="${id}" role="tooltip">${text}</span></span>`
 }
 
+// --- Cache Status ---
+let cacheStatusTimer = null
+function updateCacheStatus(text) {
+  const el = document.getElementById('cache-status')
+  if (!el) return
+  el.textContent = text
+  if (cacheStatusTimer) clearTimeout(cacheStatusTimer)
+  cacheStatusTimer = setTimeout(() => { el.textContent = '' }, 3000)
+}
+
 // Disable Chart.js animations for reliable rendering
 Chart.defaults.animation = false
 
@@ -272,6 +282,22 @@ function updateTimeScopeCounts() {
 // --- Event Delegation (replaces inline onclick handlers) ---
 document.addEventListener('click', (e) => {
   const target = e.target
+
+  // Refresh data button
+  if (target.id === 'refresh-data-btn') {
+    target.disabled = true
+    updateCacheStatus('Refreshing...')
+    fetch('/api/usage/refresh', { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        state.usage = data
+        renderUsageDashboard()
+        updateCacheStatus('Usage data refreshed')
+      })
+      .catch(() => updateCacheStatus('Refresh failed'))
+      .finally(() => { target.disabled = false })
+    return
+  }
 
   // Onboarding dismiss
   if (target.classList.contains('onboarding-dismiss')) {

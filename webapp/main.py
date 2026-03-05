@@ -15,6 +15,8 @@ from fastapi.responses import FileResponse
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator
 import json
+import asyncio
+import shutil
 import subprocess
 from anthropic import Anthropic
 from extract_prompts import get_all_sessions
@@ -166,16 +168,67 @@ async def get_benchmarks():
     return data["benchmarks"]
 
 
+DATA_DIR = Path(__file__).parent.parent / "data"
+CCUSAGE_DIR = DATA_DIR / "ccusage"
+
+
 @app.get("/api/usage")
 async def get_usage():
     """Serve ccusage JSON data directly."""
     data = {}
-    ccusage_dir = Path("data/ccusage")
     for name in ["daily", "monthly", "session"]:
-        path = ccusage_dir / f"{name}.json"
+        path = CCUSAGE_DIR / f"{name}.json"
         if path.exists():
             with open(path) as f:
                 data[name] = json.load(f)
+    return data
+
+
+@app.post("/api/usage/refresh")
+async def refresh_usage():
+    """Run ccusage CLI to refresh usage data (daily, monthly, session)."""
+    npx = shutil.which("npx")
+    if not npx:
+        raise HTTPException(status_code=500, detail="npx not found on PATH")
+
+    CCUSAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+    commands = [
+        {"key": "daily", "args": [npx, "ccusage@latest", "daily", "--json"]},
+        {"key": "monthly", "args": [npx, "ccusage@latest", "monthly", "--json"]},
+        {"key": "session", "args": [npx, "ccusage@latest", "session", "--json", "-o", "desc"]},
+    ]
+
+    async def run_one(cmd):
+        proc = await asyncio.create_subprocess_exec(
+            *cmd["args"],
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        if proc.returncode != 0:
+            return cmd["key"], None
+        try:
+            data = json.loads(stdout.decode())
+            (CCUSAGE_DIR / f"{cmd['key']}.json").write_text(
+                json.dumps(data, indent=2)
+            )
+            return cmd["key"], data
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return cmd["key"], None
+
+    results = await asyncio.gather(
+        *(run_one(cmd) for cmd in commands), return_exceptions=True
+    )
+
+    data = {}
+    for r in results:
+        if isinstance(r, Exception):
+            continue
+        key, value = r
+        if value is not None:
+            data[key] = value
+
     return data
 
 
@@ -208,14 +261,14 @@ async def get_sessions(
 @app.get("/api/scores")
 async def get_scores():
     """Return cached fluency scores scoped to last-scored sessions."""
-    scores_path = Path("data/scores.json")
+    scores_path = DATA_DIR / "scores.json"
     if not scores_path.exists():
         return {"scores": {}, "aggregate": {}}
     with open(scores_path) as f:
         cached = json.load(f)
 
     # Scope to last-scored session IDs if available
-    last_scored_path = Path("data/last_scored_ids.json")
+    last_scored_path = DATA_DIR / "last_scored_ids.json"
     scoped = cached
     last_ids = None
     if last_scored_path.exists():
@@ -260,7 +313,7 @@ async def score_sessions(request: ScoreRequest):
     session_ids = request.session_ids
     force = request.force_rescore
 
-    scores_path = Path("data/scores.json")
+    scores_path = DATA_DIR / "scores.json"
     cached = {}
     if scores_path.exists():
         with open(scores_path) as f:
@@ -315,7 +368,7 @@ async def score_sessions(request: ScoreRequest):
         json.dump(cached, f, indent=2)
 
     # Persist last-scored session IDs for scoped cache retrieval
-    last_scored_path = Path("data/last_scored_ids.json")
+    last_scored_path = DATA_DIR / "last_scored_ids.json"
     last_scored_path.parent.mkdir(parents=True, exist_ok=True)
     with open(last_scored_path, "w") as f:
         json.dump(session_ids, f)
@@ -463,7 +516,7 @@ def score_claude_md(content: str) -> dict:
 
 def _load_config_cache() -> dict:
     """Load config scores cache."""
-    cache_path = Path("data/config_scores.json")
+    cache_path = DATA_DIR / "config_scores.json"
     if cache_path.exists():
         with open(cache_path) as f:
             return json.load(f)
@@ -472,7 +525,7 @@ def _load_config_cache() -> dict:
 
 def _save_config_cache(cache: dict) -> None:
     """Save config scores cache."""
-    cache_path = Path("data/config_scores.json")
+    cache_path = DATA_DIR / "config_scores.json"
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     with open(cache_path, "w") as f:
         json.dump(cache, f, indent=2)

@@ -68,7 +68,7 @@ Terminal launch, shell escaping, subprocess invocation, and session path resolut
 
 - **Fluency Score** — Scores your sessions against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
 - **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
-- **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). Stacked area charts show cache read/creation/input/output token breakdown.
+- **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). A **Refresh** button fetches the latest data on demand. Stacked area charts show cache read/creation/input/output token breakdown.
 - **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
 - **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
 - **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
@@ -121,9 +121,6 @@ Then reload VS Code. The CodeFluent icon appears in the activity bar.
 git clone https://github.com/frederick-douglas-pearce/codefluent.git
 cd codefluent/webapp
 uv sync
-mkdir -p ../data/ccusage ../data/prompts
-npx ccusage@latest daily --json > ../data/ccusage/daily.json
-uv run python extract_prompts.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
@@ -133,13 +130,10 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 git clone https://github.com/frederick-douglas-pearce/codefluent.git
 cd codefluent\webapp
 uv sync
-New-Item -ItemType Directory -Force -Path ..\data\ccusage, ..\data\prompts
-npx ccusage@latest daily --json > ..\data\ccusage\daily.json
-uv run python extract_prompts.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Then open `http://localhost:8000` in your browser. See [`webapp/README.md`](webapp/README.md) for detailed setup instructions.
+Then open `http://localhost:8000` in your browser. Usage data is fetched on demand via the **Refresh** button in the Usage tab — no manual `ccusage` commands needed. See [`webapp/README.md`](webapp/README.md) for detailed setup instructions.
 
 ### Prerequisites
 
@@ -186,7 +180,7 @@ ANTHROPIC_API_KEY=sk-ant-api03-...
 | **No sessions found** | Check that `~/.claude/projects/` contains `.jsonl` session files. Claude Code creates these automatically during use. |
 | **API key not found** | The extension checks: env var → workspace `.env` → VS Code secrets → interactive prompt. Make sure `ANTHROPIC_API_KEY` is set in at least one location. |
 | **Quick Wins shows no results** | Run `gh auth login` to authenticate the GitHub CLI. Quick Wins requires `gh` to fetch repo context and issues. |
-| **ccusage returns no data** | Run `npx ccusage@latest daily --json` manually to verify output. Ensure you've used Claude Code at least once so session data exists. |
+| **ccusage returns no data** | Click the Refresh button in the Usage tab, or run `npx ccusage@latest daily --json` manually to verify output. Ensure you've used Claude Code at least once so session data exists. |
 | **Extension doesn't activate** | Look for the CodeFluent icon in the VS Code activity bar (left sidebar). If missing, try reloading the window (`Ctrl+Shift+P` → "Reload Window"). |
 | **VSIX is too small (~100KB)** | The `.vscodeignore` file must not exclude `node_modules/`. The Anthropic SDK is a runtime dependency and must be bundled. Expected VSIX size is ~1.2MB. |
 
