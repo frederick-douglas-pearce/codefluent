@@ -69,7 +69,7 @@ Terminal launch, shell escaping, subprocess invocation, and session path resolut
 - **Fluency Score** — Scores your sessions against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
 - **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
 - **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). Stacked area charts show cache read/creation/input/output token breakdown.
-- **Quick Wins** — Scans your current workspace's GitHub repo (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. Includes a "Run" button that launches Claude Code in a terminal with the suggested prompt.
+- **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
 - **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
 - **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
 - **VS Code Theming** — Automatically respects your light/dark theme.
@@ -250,7 +250,7 @@ npm run watch          # Continuous TypeScript compilation
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (313 tests across 10 suites)
+npm test               # Run all Jest tests (416 tests across 12 suites)
 ```
 
 ### Packaging
