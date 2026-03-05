@@ -12,6 +12,8 @@ let state = {
 // --- Chart instances (destroy before re-creating) ---
 let charts = {}
 
+const SPARKLINE_MAX_WEEKS = 12
+
 // --- Anthropic Benchmarks (loaded from /api/benchmarks) ---
 let BENCHMARKS = {}
 
@@ -518,17 +520,44 @@ async function runScoring(scopeValue) {
   }
 }
 
+function renderSparkline(history) {
+  const scores = history.map(h => h.score)
+  const min = 0
+  const max = 100
+  const w = 80
+  const h = 28
+  const pad = 3
+  const points = scores.map((s, i) => {
+    const x = pad + (i / Math.max(scores.length - 1, 1)) * (w - pad * 2)
+    const y = pad + (1 - (s - min) / (max - min)) * (h - pad * 2)
+    return `${x},${y}`
+  })
+  const polyline = points.join(' ')
+  const fillPoints = `${points[0].split(',')[0]},${h - pad} ${polyline} ${points[points.length - 1].split(',')[0]},${h - pad}`
+  const last = scores[scores.length - 1]
+  const color = last >= 70 ? 'var(--success)' : last >= 50 ? 'var(--warning)' : 'var(--danger)'
+  return `<svg class="sparkline" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">` +
+    `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="4" fill="var(--bg-card)" stroke="var(--border)" stroke-width="1"/>` +
+    `<polygon points="${fillPoints}" fill="${color}" opacity="0.12"/>` +
+    `<polyline points="${polyline}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `</svg>`
+}
+
 function renderTrajectoryText(history) {
   if (!history || history.length < 2) return ''
   const current = history[history.length - 1]
   const previous = history[history.length - 2]
   const diff = current.score - previous.score
+  const sparkline = renderSparkline(history.slice(-SPARKLINE_MAX_WEEKS))
+  let text
   if (diff > 0) {
-    return `<span class="trend-up">&#9650; Up from ${previous.score} last week</span>`
+    text = `<span class="trend-up">&#9650; Up from ${previous.score} last week</span>`
   } else if (diff < 0) {
-    return `<span class="trend-down">&#9660; Down from ${previous.score} last week</span>`
+    text = `<span class="trend-down">&#9660; Down from ${previous.score} last week</span>`
+  } else {
+    text = `<span class="trend-flat">&#8213; Same as last week</span>`
   }
-  return `<span class="trend-flat">&#8213; Same as last week</span>`
+  return `<div class="trend-line">${sparkline} ${text}</div>`
 }
 
 function renderFluencyScore() {
@@ -562,18 +591,6 @@ function renderFluencyScore() {
       <p class="score-summary">${aggregate.sessions_scored} sessions analyzed${aggregate.sessions_skipped ? ` (${aggregate.sessions_skipped} skipped — no prompts)` : ''}</p>
       ${renderTrajectoryText(aggregate.score_history)}
     </div>`
-
-  // Score trend chart
-  const history = aggregate.score_history || []
-  if (history.length >= 2) {
-    html += `
-    <div class="trend-section">
-      <h3>Score Trend</h3>
-      <div class="chart-container chart-container-small">
-        <canvas id="trend-chart"></canvas>
-      </div>
-    </div>`
-  }
 
   // Behavior bars
   html += '<div class="behaviors-section"><h3>Fluency Behaviors vs. Anthropic Benchmarks</h3>'
@@ -700,47 +717,6 @@ function renderFluencyScore() {
     })
   }
 
-  // Render trend line chart
-  if (history.length >= 2) {
-    destroyChart('trend')
-    const trendLabels = history.map(h => {
-      const d = new Date(h.period_start + 'T00:00:00')
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-    })
-    charts.trend = new Chart(document.getElementById('trend-chart').getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: trendLabels,
-        datasets: [{
-          label: 'Fluency Score',
-          data: history.map(h => h.score),
-          borderColor: '#D97706',
-          backgroundColor: 'rgba(217, 119, 6, 0.15)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          borderWidth: 2,
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: ctx => `Score: ${ctx.raw} (${history[ctx.dataIndex].sessions_scored} sessions)`
-            }
-          }
-        },
-        scales: {
-          y: { min: 0, max: 100, ticks: { stepSize: 25 } },
-          x: { ticks: { maxTicksLimit: 10 } }
-        }
-      }
-    })
-  }
 }
 
 // --- Quick Wins ---
@@ -768,8 +744,11 @@ async function loadQuickWins() {
 function renderQuickWins() {
   const suggestions = state.quickwins?.suggestions || []
   if (!suggestions.length) {
+    const errorMsg = state.quickwins?.error
+      ? `<br><small style="color:var(--text-secondary)">${escapeHtml(state.quickwins.error)}</small>`
+      : ''
     document.getElementById('quickwins-results').innerHTML =
-      '<p class="empty-state">No suggestions available.</p>'
+      `<p class="empty-state">No suggestions available.${errorMsg}</p>`
     return
   }
 
@@ -918,15 +897,40 @@ async function loadBenchmarks() {
 }
 
 // --- Settings: Data Path ---
-document.getElementById('apply-path-btn').addEventListener('click', () => {
+function showPathStatus(msg, isError) {
+  const el = document.getElementById('path-status')
+  el.textContent = msg.length > 50 ? msg.slice(0, 50) + '...' : msg
+  el.title = msg
+  el.className = 'path-status ' + (isError ? 'path-error' : 'path-ok')
+  setTimeout(() => { el.textContent = ''; el.title = ''; el.className = 'path-status' }, isError ? 6000 : 3000)
+}
+
+document.getElementById('apply-path-btn').addEventListener('click', async () => {
   const input = document.getElementById('data-path')
   const path = input.value.trim()
-  if (path) {
-    localStorage.setItem('codefluent-dataPath', path)
-  } else {
+
+  if (!path) {
     localStorage.removeItem('codefluent-dataPath')
+    await loadData()
+    showPathStatus('Using default path', false)
+    return
   }
-  loadData()
+
+  // Validate path by making a lightweight API call
+  try {
+    const res = await fetch(`/api/sessions?limit=1&data_path=${encodeURIComponent(path)}`)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      const detail = body.detail || `Error ${res.status}`
+      showPathStatus(detail, true)
+      return
+    }
+    localStorage.setItem('codefluent-dataPath', path)
+    await loadData()
+    showPathStatus('Path applied', false)
+  } catch (e) {
+    showPathStatus('Failed to connect', true)
+  }
 })
 
 // --- Init ---
