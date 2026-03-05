@@ -701,7 +701,7 @@ async def get_quickwins():
         response = with_retry(
             lambda: client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=1024,
+                max_tokens=2048,
                 messages=[{"role": "user", "content": prompt}],
             ),
             context="generating quick wins",
