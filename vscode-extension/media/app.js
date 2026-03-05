@@ -492,8 +492,10 @@ function renderUsagePace(daily) {
   // Monthly projection from last 7 day avg
   const projectedMonthly = avg7 * 30
 
-  // Bar width capped at 100%
-  const barWidth = Math.min(todayPct, 200)
+  // Bar and average marker positions: scale is 0 to max(todayCost, avgDaily)
+  const scaleMax = Math.max(todayCost, avgDaily, 0.01)
+  const barWidth = (todayCost / scaleMax) * 100
+  const avgPos = (avgDaily / scaleMax) * 100
 
   container.innerHTML = `
     <h3>Usage Pace</h3>
@@ -504,7 +506,7 @@ function renderUsagePace(daily) {
         <div class="pace-card-detail">${formatTokens(todayTokens)} tokens</div>
         <div class="pace-bar-track">
           <div class="pace-bar-fill ${paceClass}" style="width: ${Math.min(barWidth, 100)}%"></div>
-          <div class="pace-bar-avg" style="left: ${Math.min(100, 100)}%" title="Daily average: ${formatCost(avgDaily)}"></div>
+          <div class="pace-bar-avg" style="left: ${Math.min(avgPos, 100)}%" title="Daily average: ${formatCost(avgDaily)}"></div>
         </div>
         <div class="pace-bar-labels">
           <span class="${paceClass}">${paceLabel} (${todayPct}% of avg)</span>
@@ -740,7 +742,7 @@ function renderFluencyScore() {
         </div>
         <div class="session-detail">
           <p>${escapeHtml(scoreData.one_line_summary || '')}</p>
-          <p>Pattern: ${PATTERN_LABELS[scoreData.coding_pattern] || escapeHtml(scoreData.coding_pattern)}</p>
+          <p>Pattern: ${escapeHtml(PATTERN_LABELS[scoreData.coding_pattern] || scoreData.coding_pattern || '')}</p>
         </div>
       </div>`
   })
@@ -909,9 +911,9 @@ function renderRecommendations() {
 function renderRecCard(rec) {
   return `
     <div class="rec-card">
-      <div class="rec-title">${rec.title}</div>
-      <div class="rec-advice">${rec.advice}</div>
-      ${rec.action ? `<div class="rec-action">${rec.action}</div>` : ''}
+      <div class="rec-title">${escapeHtml(rec.title)}</div>
+      <div class="rec-advice">${escapeHtml(rec.advice)}</div>
+      ${rec.action ? `<div class="rec-action">${escapeHtml(rec.action)}</div>` : ''}
       ${rec.prompt ? `
         <div class="rec-prompt-section">
           <div class="rec-prompt-label">Try this prompt in Claude Code:</div>
@@ -919,10 +921,10 @@ function renderRecCard(rec) {
             <div class="prompt-box-header">
               <button class="copy-btn">Copy</button>
             </div>
-            <pre class="prompt-box">${rec.prompt}</pre>
+            <pre class="prompt-box">${escapeHtml(rec.prompt)}</pre>
           </div>
         </div>` : ''}
-      <div class="rec-source">${rec.source}</div>
+      <div class="rec-source">${escapeHtml(rec.source)}</div>
     </div>`
 }
 

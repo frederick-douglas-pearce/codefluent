@@ -110,7 +110,7 @@ describe('XSS vector coverage in media/app.js (VS Code extension)', () => {
   })
 
   test('renderFluencyScore escapes coding_pattern', () => {
-    expect(src).toMatch(/escapeHtml\(scoreData\.coding_pattern/)
+    expect(src).toMatch(/escapeHtml\(PATTERN_LABELS\[scoreData\.coding_pattern\]/)
   })
 
   test('renderFluencyScore escapes unknown pattern labels', () => {
@@ -136,6 +136,22 @@ describe('XSS vector coverage in media/app.js (VS Code extension)', () => {
 
   test('renderQuickWins escapes prompt text', () => {
     expect(src).toContain('escapeHtml(s.prompt)')
+  })
+
+  test('renderRecCard escapes title', () => {
+    expect(src).toContain('escapeHtml(rec.title)')
+  })
+
+  test('renderRecCard escapes advice', () => {
+    expect(src).toContain('escapeHtml(rec.advice)')
+  })
+
+  test('renderRecCard escapes prompt', () => {
+    expect(src).toContain('escapeHtml(rec.prompt)')
+  })
+
+  test('renderRecCard escapes source', () => {
+    expect(src).toContain('escapeHtml(rec.source)')
   })
 
   test('error catch blocks escape error messages', () => {
@@ -246,7 +262,7 @@ describe('XSS vector coverage in webapp/static/app.js', () => {
   })
 
   test('renderFluencyScore escapes coding_pattern', () => {
-    expect(src).toMatch(/escapeHtml\(scoreData\.coding_pattern/)
+    expect(src).toMatch(/escapeHtml\(PATTERN_LABELS\[scoreData\.coding_pattern\]/)
   })
 
   test('renderQuickWins escapes task title', () => {
@@ -267,6 +283,22 @@ describe('XSS vector coverage in webapp/static/app.js', () => {
 
   test('renderQuickWins escapes prompt text', () => {
     expect(src).toContain('escapeHtml(s.prompt)')
+  })
+
+  test('renderRecCard escapes title', () => {
+    expect(src).toContain('escapeHtml(rec.title)')
+  })
+
+  test('renderRecCard escapes advice', () => {
+    expect(src).toContain('escapeHtml(rec.advice)')
+  })
+
+  test('renderRecCard escapes prompt', () => {
+    expect(src).toContain('escapeHtml(rec.prompt)')
+  })
+
+  test('renderRecCard escapes source', () => {
+    expect(src).toContain('escapeHtml(rec.source)')
   })
 
   test('error catch blocks escape error messages', () => {
