@@ -28,16 +28,6 @@ Tailored coaching based on your weakest fluency behaviors, with high/medium impa
 
 Get credit for fluency behaviors encoded in your project's `CLAUDE.md` file. Behaviors defined as project conventions are merged with your session scores — so good project setup boosts your fluency rating.
 
-### Usage Dashboard
-
-Track daily and monthly token usage, costs, and session history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage).
-
-![Usage Dashboard](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage.png)
-
-### Weekly Trend Tracking
-
-See your fluency score trend over time with a sparkline chart and trajectory text (improving, stable, or declining).
-
 ### Quick Wins
 
 GitHub-repo-scoped task suggestions — CodeFluent detects your current workspace repo, fetches open issues, and suggests high-impact tasks you can launch directly in Claude Code with one click.
@@ -46,9 +36,11 @@ GitHub-repo-scoped task suggestions — CodeFluent detects your current workspac
 
 ![Quick Wins Suggestions](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-quickwins.png)
 
-### Coaching
+### Usage Dashboard
 
-Personalized tips based on your weakest fluency behaviors. Each coaching suggestion targets a specific behavior with concrete examples.
+Track daily and monthly token usage, costs, and session history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage).
+
+![Usage Dashboard](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage.png)
 
 ## Requirements
 
