@@ -797,8 +797,11 @@ async function loadQuickWins() {
 function renderQuickWins() {
   const suggestions = state.quickwins?.suggestions || []
   if (!suggestions.length) {
+    const errorMsg = state.quickwins?.error
+      ? `<br><small style="color:var(--text-secondary)">${escapeHtml(state.quickwins.error)}</small>`
+      : ''
     document.getElementById('quickwins-results').innerHTML =
-      '<p class="empty-state">No suggestions available.</p>'
+      `<p class="empty-state">No suggestions available.${errorMsg}</p>`
     return
   }
 

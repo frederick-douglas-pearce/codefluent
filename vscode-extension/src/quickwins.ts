@@ -161,7 +161,7 @@ export async function getQuickWins(client: Anthropic, workspacePath?: string, cl
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+      max_tokens: 2048,
       messages: [{ role: 'user', content: prompt }],
     })
 
