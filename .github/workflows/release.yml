@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vscode-extension
+        run: npm ci
+
+      - name: Compile TypeScript
+        working-directory: vscode-extension
+        run: npm run compile
+
+      - name: Run tests
+        working-directory: vscode-extension
+        run: npm test
+
+      - name: Package VSIX
+        working-directory: vscode-extension
+        run: npx @vscode/vsce package --allow-missing-repository
+
+      - name: Verify VSIX size
+        working-directory: vscode-extension
+        run: |
+          VSIX=$(ls *.vsix)
+          SIZE=$(stat --format=%s "$VSIX")
+          echo "VSIX: $VSIX ($SIZE bytes)"
+          if [ "$SIZE" -lt 500000 ]; then
+            echo "ERROR: VSIX is too small (<500KB) — node_modules likely excluded"
+            exit 1
+          fi
+          echo "vsix_path=vscode-extension/$VSIX" >> "$GITHUB_ENV"
+          echo "vsix_name=$VSIX" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --generate-notes \
+            --title "${{ github.ref_name }}" \
+            "${{ env.vsix_path }}#${{ env.vsix_name }}"

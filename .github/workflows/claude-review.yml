@@ -1,0 +1,49 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+
+jobs:
+  claude-review:
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'pull_request_review_comment') ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          trigger_phrase: "@claude"
+          prompt: |
+            You are reviewing code for the CodeFluent project — an AI fluency analytics tool
+            for Claude Code users. It has two interfaces: a VS Code extension (TypeScript) and
+            a web app (Python/FastAPI + vanilla JS).
+
+            Key standards to check:
+            - All user-controlled strings rendered in HTML must use escapeHtml()
+            - Shell commands must use execFileSync with argument arrays, never string interpolation
+            - No inline onclick handlers in webview HTML (CSP blocks them)
+            - node_modules must NOT be excluded from .vscodeignore
+            - New features should have test coverage
+            - Feature parity: changes to one interface should be mirrored in the other where applicable
+
+            Review with focus on:
+            - Code quality and adherence to project conventions
+            - Security (XSS, injection, OWASP top 10)
+            - Potential bugs or regressions
+            - Test coverage for new functionality
