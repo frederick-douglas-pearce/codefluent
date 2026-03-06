@@ -31,6 +31,8 @@ jest.mock('../../src/scoring', () => {
     computeAggregate: jest.fn(),
     scoreClaudeMd: jest.fn(),
     computeScoreHistory: jest.fn().mockReturnValue([]),
+    optimizePrompt: jest.fn(),
+    scoreSinglePrompt: jest.fn(),
   }
 })
 jest.mock('../../src/quickwins')
@@ -40,7 +42,7 @@ import { getDefaultShell, getShellArgs, getClaudeCommand, escapePromptForShell }
 
 import { getAllSessions } from '../../src/parser'
 import { getUsageData } from '../../src/usage'
-import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION } from '../../src/scoring'
+import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt } from '../../src/scoring'
 import { getQuickWins } from '../../src/quickwins'
 
 function makeContext(overrides: Partial<Record<string, any>> = {}): any {
@@ -1068,6 +1070,143 @@ describe('CodeFluentViewProvider', () => {
       expect(scoreClaudeMd).toHaveBeenCalled()
 
       fsMock.readFileSync.mockImplementation(origImpl)
+    })
+  })
+
+  describe('optimizePrompt message', () => {
+    it('returns optimized result with two API calls', async () => {
+      const ctx = makeContext({
+        secrets: { get: jest.fn().mockResolvedValue('sk-test-key'), store: jest.fn() },
+      })
+      const provider = new CodeFluentViewProvider(ctx)
+      const view = makeWebviewView()
+      provider.resolveWebviewView(view, {} as any, {} as any)
+      const sendMessage = view._messageHandlers[0]
+
+      ;(optimizePrompt as jest.Mock).mockResolvedValue({
+        input_behaviors: { clarifying_goals: true },
+        input_score: 18,
+        optimized_prompt: 'Better prompt',
+        behaviors_added: ['checking_facts'],
+        explanation: 'Added checking.',
+        one_line_summary: 'Basic prompt.',
+      })
+      ;(scoreSinglePrompt as jest.Mock).mockResolvedValue({
+        fluency_behaviors: { clarifying_goals: true, checking_facts: true },
+        overall_score: 82,
+        one_line_summary: 'Good prompt.',
+      })
+
+      await sendMessage({
+        type: 'optimizePrompt',
+        requestId: 'req-opt-1',
+        payload: { prompt: 'Fix the bug in auth' },
+      })
+
+      const response = view.webview.postMessage.mock.calls.find(
+        (c: any) => c[0].requestId === 'req-opt-1'
+      )
+      expect(response).toBeTruthy()
+      expect(response[0].data.input_score).toBe(18)
+      expect(response[0].data.output_score).toBe(82)
+      expect(response[0].data.optimized_prompt).toBe('Better prompt')
+    })
+
+    it('returns already_good when input_score >= 90', async () => {
+      const ctx = makeContext({
+        secrets: { get: jest.fn().mockResolvedValue('sk-test-key'), store: jest.fn() },
+      })
+      const provider = new CodeFluentViewProvider(ctx)
+      const view = makeWebviewView()
+      provider.resolveWebviewView(view, {} as any, {} as any)
+      const sendMessage = view._messageHandlers[0]
+
+      ;(optimizePrompt as jest.Mock).mockResolvedValue({
+        input_behaviors: { clarifying_goals: true },
+        input_score: 92,
+        optimized_prompt: undefined,
+        behaviors_added: [],
+        one_line_summary: 'Great prompt.',
+      })
+
+      await sendMessage({
+        type: 'optimizePrompt',
+        requestId: 'req-opt-2',
+        payload: { prompt: 'A very comprehensive prompt' },
+      })
+
+      const response = view.webview.postMessage.mock.calls.find(
+        (c: any) => c[0].requestId === 'req-opt-2'
+      )
+      expect(response).toBeTruthy()
+      expect(response[0].data.already_good).toBe(true)
+      expect(response[0].data.input_score).toBe(92)
+      expect(scoreSinglePrompt).not.toHaveBeenCalled()
+    })
+
+    it('returns error for empty prompt', async () => {
+      const ctx = makeContext({
+        secrets: { get: jest.fn().mockResolvedValue('sk-test-key'), store: jest.fn() },
+      })
+      const provider = new CodeFluentViewProvider(ctx)
+      const view = makeWebviewView()
+      provider.resolveWebviewView(view, {} as any, {} as any)
+      const sendMessage = view._messageHandlers[0]
+
+      await sendMessage({
+        type: 'optimizePrompt',
+        requestId: 'req-opt-3',
+        payload: { prompt: '' },
+      })
+
+      const response = view.webview.postMessage.mock.calls.find(
+        (c: any) => c[0].requestId === 'req-opt-3'
+      )
+      expect(response).toBeTruthy()
+      expect(response[0].error).toContain('required')
+    })
+
+    it('returns error for oversized prompt', async () => {
+      const ctx = makeContext({
+        secrets: { get: jest.fn().mockResolvedValue('sk-test-key'), store: jest.fn() },
+      })
+      const provider = new CodeFluentViewProvider(ctx)
+      const view = makeWebviewView()
+      provider.resolveWebviewView(view, {} as any, {} as any)
+      const sendMessage = view._messageHandlers[0]
+
+      await sendMessage({
+        type: 'optimizePrompt',
+        requestId: 'req-opt-4',
+        payload: { prompt: 'a'.repeat(10001) },
+      })
+
+      const response = view.webview.postMessage.mock.calls.find(
+        (c: any) => c[0].requestId === 'req-opt-4'
+      )
+      expect(response).toBeTruthy()
+      expect(response[0].error).toContain('10,000')
+    })
+
+    it('requires API key', async () => {
+      const ctx = makeContext()
+      ;(vscode.window.showInputBox as jest.Mock).mockResolvedValue(undefined)
+      const provider = new CodeFluentViewProvider(ctx)
+      const view = makeWebviewView()
+      provider.resolveWebviewView(view, {} as any, {} as any)
+      const sendMessage = view._messageHandlers[0]
+
+      await sendMessage({
+        type: 'optimizePrompt',
+        requestId: 'req-opt-5',
+        payload: { prompt: 'Fix the bug' },
+      })
+
+      const response = view.webview.postMessage.mock.calls.find(
+        (c: any) => c[0].requestId === 'req-opt-5'
+      )
+      expect(response).toBeTruthy()
+      expect(response[0].error).toContain('API key')
     })
   })
 })

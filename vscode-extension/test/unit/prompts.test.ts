@@ -1,4 +1,4 @@
-import { loadScoringPrompt, loadConfigPrompt, fillTemplate } from '../../src/prompts'
+import { loadScoringPrompt, loadConfigPrompt, loadOptimizerPrompt, loadSingleScoringPrompt, fillTemplate } from '../../src/prompts'
 
 describe('loadScoringPrompt', () => {
   it('returns version and template with non-empty values', () => {
@@ -40,6 +40,47 @@ describe('loadConfigPrompt', () => {
   it('version matches registry format', () => {
     const { version } = loadConfigPrompt()
     expect(version).toMatch(/^config-v\d+\.\d+$/)
+  })
+})
+
+describe('loadOptimizerPrompt', () => {
+  it('returns version and template with non-empty values', () => {
+    const { version, template } = loadOptimizerPrompt()
+    expect(version).toBeTruthy()
+    expect(typeof version).toBe('string')
+    expect(template).toBeTruthy()
+    expect(typeof template).toBe('string')
+  })
+
+  it('template contains expected placeholders', () => {
+    const { template } = loadOptimizerPrompt()
+    expect(template).toContain('{{PROMPT}}')
+    expect(template).toContain('{{MAX_LENGTH}}')
+  })
+
+  it('version matches registry format', () => {
+    const { version } = loadOptimizerPrompt()
+    expect(version).toMatch(/^optimizer-v\d+\.\d+$/)
+  })
+})
+
+describe('loadSingleScoringPrompt', () => {
+  it('returns version and template with non-empty values', () => {
+    const { version, template } = loadSingleScoringPrompt()
+    expect(version).toBeTruthy()
+    expect(typeof version).toBe('string')
+    expect(template).toBeTruthy()
+    expect(typeof template).toBe('string')
+  })
+
+  it('template contains expected placeholder', () => {
+    const { template } = loadSingleScoringPrompt()
+    expect(template).toContain('{{PROMPT}}')
+  })
+
+  it('version matches registry format', () => {
+    const { version } = loadSingleScoringPrompt()
+    expect(version).toMatch(/^single_scoring-v\d+\.\d+$/)
   })
 })
 

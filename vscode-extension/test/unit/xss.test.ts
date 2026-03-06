@@ -157,6 +157,26 @@ describe('XSS vector coverage in media/app.js (VS Code extension)', () => {
   test('error catch blocks escape error messages', () => {
     expect(src).toContain('escapeHtml(e.message)')
   })
+
+  test('renderOptimizerResults escapes input prompt', () => {
+    expect(src).toContain('escapeHtml(inputPrompt)')
+  })
+
+  test('renderOptimizerResults escapes optimized_prompt', () => {
+    expect(src).toContain('escapeHtml(data.optimized_prompt)')
+  })
+
+  test('renderOptimizerResults escapes explanation', () => {
+    expect(src).toContain('escapeHtml(data.explanation)')
+  })
+
+  test('renderOptimizerResults escapes one_line_summary', () => {
+    expect(src).toContain('escapeHtml(data.one_line_summary)')
+  })
+
+  test('renderOptimizerBehaviorTags escapes behavior labels', () => {
+    expect(src).toMatch(/escapeHtml\(BEHAVIOR_LABELS\[key\]\s*\|\|\s*key\)/)
+  })
 })
 
 // --- 3. Accessibility and Onboarding verification ---
@@ -312,5 +332,25 @@ describe('XSS vector coverage in webapp/static/app.js', () => {
     for (const fn of renderFunctions) {
       expect(fn).not.toMatch(/onclick\s*=/)
     }
+  })
+
+  test('renderOptimizerResults escapes input prompt', () => {
+    expect(src).toContain('escapeHtml(inputPrompt)')
+  })
+
+  test('renderOptimizerResults escapes optimized_prompt', () => {
+    expect(src).toContain('escapeHtml(data.optimized_prompt)')
+  })
+
+  test('renderOptimizerResults escapes explanation', () => {
+    expect(src).toContain('escapeHtml(data.explanation)')
+  })
+
+  test('renderOptimizerResults escapes one_line_summary', () => {
+    expect(src).toContain('escapeHtml(data.one_line_summary)')
+  })
+
+  test('renderOptimizerBehaviorTags escapes behavior labels', () => {
+    expect(src).toMatch(/escapeHtml\(BEHAVIOR_LABELS\[key\]\s*\|\|\s*key\)/)
   })
 })
