@@ -17,6 +17,8 @@ jobs:
           fetch-depth: 2
 
       - uses: anthropics/claude-code-security-review@main
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           comment-pr: true
           claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
