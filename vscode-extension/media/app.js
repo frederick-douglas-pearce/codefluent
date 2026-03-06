@@ -218,6 +218,14 @@ async function loadData() {
     updateTimeScopeCounts()
   } catch (e) {
     console.error('Failed to load data:', e)
+    const pace = document.getElementById('usage-pace')
+    const canvas = document.getElementById('usage-chart')
+    if (pace) pace.innerHTML = ''
+    if (canvas) {
+      canvas.style.display = 'none'
+      canvas.parentElement.querySelector('h3').insertAdjacentHTML('afterend',
+        '<div class="empty-state-box"><div class="empty-state-icon">⚠️</div><p class="empty-state">Failed to load usage data. Ensure ccusage is installed (npx ccusage) and try the Refresh button on the Usage tab.</p></div>')
+    }
   }
 }
 
