@@ -404,7 +404,17 @@ document.addEventListener('click', (e) => {
 // --- Usage Dashboard ---
 function renderUsageDashboard() {
   const daily = state.usage?.daily?.daily || []
-  if (!daily.length) return
+  if (!daily.length) {
+    document.getElementById('usage-pace').innerHTML = ''
+    const canvas = document.getElementById('usage-chart')
+    if (canvas) {
+      destroyChart('usage')
+      canvas.parentElement.querySelector('h3').insertAdjacentHTML('afterend',
+        '<div class="empty-state-box"><div class="empty-state-icon">📊</div><p class="empty-state">No usage data yet. Start using Claude Code to see your token usage and costs here.</p></div>')
+      canvas.style.display = 'none'
+    }
+    return
+  }
 
   // Token usage stacked area chart (cache read, cache creation, input, output)
   destroyChart('usage')
@@ -925,9 +935,9 @@ function renderRecommendations() {
   html += `
     <div class="research-sources">
       <h3>Research Sources</h3>
-      <a href="https://www.anthropic.com/research/AI-fluency-index">AI Fluency Index (Feb 23, 2026)</a>
-      <a href="https://www.anthropic.com/research/coding-skill-formation">Coding Skills Formation (Jan 29, 2026)</a>
-      <a href="https://www.anthropic.com/research/claude-code-best-practices">Claude Code Best Practices</a>
+      <a href="https://www.anthropic.com/research/AI-fluency-index" target="_blank" rel="noopener noreferrer">AI Fluency Index (Feb 23, 2026)</a>
+      <a href="https://www.anthropic.com/research/coding-skill-formation" target="_blank" rel="noopener noreferrer">Coding Skills Formation (Jan 29, 2026)</a>
+      <a href="https://www.anthropic.com/research/claude-code-best-practices" target="_blank" rel="noopener noreferrer">Claude Code Best Practices</a>
     </div>`
 
   document.getElementById('recommendations-content').innerHTML = html
