@@ -79,6 +79,14 @@ _config_prompt = _load_prompt("config")
 CONFIG_SCORING_PROMPT_TEMPLATE = _config_prompt["template"]
 CONFIG_SCORING_PROMPT_VERSION = _config_prompt["version"]
 
+_optimizer_prompt = _load_prompt("optimizer")
+OPTIMIZER_PROMPT_TEMPLATE = _optimizer_prompt["template"]
+OPTIMIZER_PROMPT_VERSION = _optimizer_prompt["version"]
+
+_single_scoring_prompt = _load_prompt("single_scoring")
+SINGLE_SCORING_PROMPT_TEMPLATE = _single_scoring_prompt["template"]
+SINGLE_SCORING_PROMPT_VERSION = _single_scoring_prompt["version"]
+
 
 class ScoreRequest(BaseModel):
     session_ids: list[str] = Field(..., min_length=1, max_length=500)
@@ -416,6 +424,172 @@ async def score_sessions(request: ScoreRequest):
 
     return {"scores": results, "aggregate": aggregate}
 
+
+class OptimizeRequest(BaseModel):
+    prompt: str = Field(..., min_length=1, max_length=10000)
+
+
+def validate_optimizer_result(raw) -> dict:
+    """Validate and sanitize an optimizer API response."""
+    if not isinstance(raw, dict):
+        raise ValueError("Optimizer API response is not a valid object")
+
+    raw_behaviors = raw.get("input_behaviors", {})
+    if not isinstance(raw_behaviors, dict):
+        raw_behaviors = {}
+    input_behaviors = {
+        b: raw_behaviors.get(b, False) if isinstance(raw_behaviors.get(b), bool) else False
+        for b in BEHAVIORS
+    }
+
+    input_score = 0
+    raw_score = raw.get("input_score")
+    if isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool):
+        input_score = round(min(100, max(0, raw_score)))
+
+    optimized_prompt = None
+    if isinstance(raw.get("optimized_prompt"), str) and raw["optimized_prompt"]:
+        optimized_prompt = raw["optimized_prompt"]
+
+    behaviors_added = []
+    if isinstance(raw.get("behaviors_added"), list):
+        behaviors_added = [b for b in raw["behaviors_added"] if isinstance(b, str) and b in BEHAVIORS]
+
+    explanation = None
+    if isinstance(raw.get("explanation"), str):
+        explanation = raw["explanation"][:500]
+
+    one_line_summary = ""
+    if isinstance(raw.get("one_line_summary"), str):
+        one_line_summary = raw["one_line_summary"][:200]
+
+    return {
+        "input_behaviors": input_behaviors,
+        "input_score": input_score,
+        "optimized_prompt": optimized_prompt,
+        "behaviors_added": behaviors_added,
+        "explanation": explanation,
+        "one_line_summary": one_line_summary,
+    }
+
+
+def validate_single_score_result(raw) -> dict:
+    """Validate and sanitize a single scoring API response."""
+    if not isinstance(raw, dict):
+        raise ValueError("Single scoring API response is not a valid object")
+
+    raw_behaviors = raw.get("fluency_behaviors", {})
+    if not isinstance(raw_behaviors, dict):
+        raw_behaviors = {}
+    fluency_behaviors = {
+        b: raw_behaviors.get(b, False) if isinstance(raw_behaviors.get(b), bool) else False
+        for b in BEHAVIORS
+    }
+
+    overall_score = 0
+    raw_score = raw.get("overall_score")
+    if isinstance(raw_score, (int, float)) and not isinstance(raw_score, bool):
+        overall_score = round(min(100, max(0, raw_score)))
+
+    one_line_summary = ""
+    if isinstance(raw.get("one_line_summary"), str):
+        one_line_summary = raw["one_line_summary"][:200]
+
+    return {"fluency_behaviors": fluency_behaviors, "overall_score": overall_score, "one_line_summary": one_line_summary}
+
+
+def _load_optimizer_cache() -> dict:
+    cache_path = DATA_DIR / "optimizer_cache.json"
+    if cache_path.exists():
+        with open(cache_path) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_optimizer_cache(cache: dict) -> None:
+    cache_path = DATA_DIR / "optimizer_cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(cache_path, "w") as f:
+        json.dump(cache, f, indent=2)
+
+
+@app.post("/api/optimize")
+async def optimize_prompt(request: OptimizeRequest):
+    """Optimize a prompt for AI fluency behaviors."""
+    _check_rate_limit()
+    input_prompt = request.prompt.strip()
+    if not input_prompt:
+        raise HTTPException(status_code=400, detail="Prompt is required")
+
+    # Check cache
+    cache_key = _config_content_hash(input_prompt)
+    opt_cache = _load_optimizer_cache()
+    if opt_cache.get(cache_key, {}).get("prompt_version") == OPTIMIZER_PROMPT_VERSION:
+        return opt_cache[cache_key]
+
+    # Call 1: Optimize
+    max_length = min(len(input_prompt) * 3, 4000)
+    prompt = _fill_template(OPTIMIZER_PROMPT_TEMPLATE, {
+        "PROMPT": input_prompt,
+        "MAX_LENGTH": str(max_length),
+    })
+    response = with_retry(
+        lambda: client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        ),
+        context="optimizing prompt",
+    )
+    text = extract_text_from_response(response)
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    optimizer_result = validate_optimizer_result(json.loads(text))
+
+    # No-op: already good
+    if optimizer_result["input_score"] >= 90 or not optimizer_result["optimized_prompt"]:
+        result = {
+            "already_good": True,
+            "input_score": optimizer_result["input_score"],
+            "input_behaviors": optimizer_result["input_behaviors"],
+            "one_line_summary": optimizer_result["one_line_summary"],
+            "prompt_version": OPTIMIZER_PROMPT_VERSION,
+        }
+        opt_cache[cache_key] = result
+        _save_optimizer_cache(opt_cache)
+        return result
+
+    # Call 2: Independently score the optimized prompt
+    single_prompt = _fill_template(SINGLE_SCORING_PROMPT_TEMPLATE, {
+        "PROMPT": optimizer_result["optimized_prompt"],
+    })
+    single_response = with_retry(
+        lambda: client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": single_prompt}],
+        ),
+        context="scoring optimized prompt",
+    )
+    single_text = extract_text_from_response(single_response)
+    if single_text.startswith("```"):
+        single_text = single_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    single_score = validate_single_score_result(json.loads(single_text))
+
+    result = {
+        "input_score": optimizer_result["input_score"],
+        "input_behaviors": optimizer_result["input_behaviors"],
+        "optimized_prompt": optimizer_result["optimized_prompt"],
+        "output_score": single_score["overall_score"],
+        "output_behaviors": single_score["fluency_behaviors"],
+        "behaviors_added": optimizer_result["behaviors_added"],
+        "explanation": optimizer_result["explanation"],
+        "one_line_summary": optimizer_result["one_line_summary"],
+        "prompt_version": OPTIMIZER_PROMPT_VERSION,
+    }
+    opt_cache[cache_key] = result
+    _save_optimizer_cache(opt_cache)
+    return result
 
 
 
