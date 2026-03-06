@@ -4,7 +4,7 @@ import * as path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
 import { getAllSessions } from './parser'
 import { getUsageData } from './usage'
-import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION } from './scoring'
+import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, OptimizeResponse } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 import { DataCache } from './dataCache'
@@ -169,6 +169,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getBenchmarks':
           data = this.handleGetBenchmarks()
           break
+        case 'optimizePrompt':
+          data = await this.handleOptimizePrompt(payload)
+          break
         default:
           return
       }
@@ -290,6 +293,65 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const benchmarksPath = path.join(this.context.extensionUri.fsPath, 'shared', 'benchmarks.json')
     const data = JSON.parse(fs.readFileSync(benchmarksPath, 'utf8'))
     return data.benchmarks
+  }
+
+  private async handleOptimizePrompt(payload?: { prompt?: string }): Promise<OptimizeResponse> {
+    const inputPrompt = payload?.prompt?.trim()
+    if (!inputPrompt) {
+      throw new Error('Prompt is required')
+    }
+    if (inputPrompt.length > 10000) {
+      throw new Error('Prompt must be 10,000 characters or less')
+    }
+
+    // Check cache
+    const cacheKey = ScoreCache.contentHash(inputPrompt)
+    const optimizerCache = this.cache.readOptimizer()
+    if (optimizerCache[cacheKey]?.prompt_version === OPTIMIZER_PROMPT_VERSION) {
+      return optimizerCache[cacheKey]
+    }
+
+    const apiKey = await this.getApiKey()
+    if (!apiKey) {
+      throw new Error('Anthropic API key is required for prompt optimization')
+    }
+    const client = new Anthropic({ apiKey })
+
+    // Call 1: Optimize
+    const optimizerResult = await optimizePrompt(inputPrompt, client)
+
+    // No-op: already good
+    if (optimizerResult.input_score >= 90 || !optimizerResult.optimized_prompt) {
+      const response: OptimizeResponse = {
+        already_good: true,
+        input_score: optimizerResult.input_score,
+        input_behaviors: optimizerResult.input_behaviors,
+        one_line_summary: optimizerResult.one_line_summary,
+        prompt_version: OPTIMIZER_PROMPT_VERSION,
+      }
+      optimizerCache[cacheKey] = response
+      this.cache.writeOptimizer(optimizerCache)
+      return response
+    }
+
+    // Call 2: Independently score the optimized prompt
+    const singleScore = await scoreSinglePrompt(optimizerResult.optimized_prompt, client)
+
+    const response: OptimizeResponse = {
+      input_score: optimizerResult.input_score,
+      input_behaviors: optimizerResult.input_behaviors,
+      optimized_prompt: optimizerResult.optimized_prompt,
+      output_score: singleScore.overall_score,
+      output_behaviors: singleScore.fluency_behaviors,
+      behaviors_added: optimizerResult.behaviors_added,
+      explanation: optimizerResult.explanation,
+      one_line_summary: optimizerResult.one_line_summary,
+      prompt_version: OPTIMIZER_PROMPT_VERSION,
+    }
+
+    optimizerCache[cacheKey] = response
+    this.cache.writeOptimizer(optimizerCache)
+    return response
   }
 
   private async handleGetCachedScores() {

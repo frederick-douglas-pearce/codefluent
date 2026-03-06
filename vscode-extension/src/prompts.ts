@@ -9,6 +9,8 @@ interface PromptEntry {
 interface Registry {
   scoring: PromptEntry
   config: PromptEntry
+  optimizer: PromptEntry
+  single_scoring: PromptEntry
 }
 
 function getPromptsDir(): string {
@@ -34,6 +36,24 @@ export function loadConfigPrompt(): { version: string; template: string } {
   const filePath = path.join(getPromptsDir(), registry.config.file)
   return {
     version: registry.config.version,
+    template: fs.readFileSync(filePath, 'utf8'),
+  }
+}
+
+export function loadOptimizerPrompt(): { version: string; template: string } {
+  const registry = loadRegistry()
+  const filePath = path.join(getPromptsDir(), registry.optimizer.file)
+  return {
+    version: registry.optimizer.version,
+    template: fs.readFileSync(filePath, 'utf8'),
+  }
+}
+
+export function loadSingleScoringPrompt(): { version: string; template: string } {
+  const registry = loadRegistry()
+  const filePath = path.join(getPromptsDir(), registry.single_scoring.file)
+  return {
+    version: registry.single_scoring.version,
     template: fs.readFileSync(filePath, 'utf8'),
   }
 }
