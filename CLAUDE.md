@@ -161,10 +161,17 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 - Use descriptive variable names over comments
 - Error handling: wrap API calls in try/catch, show user-friendly errors in webview
 
+## Branching & PR Workflow
+- **`main`** — Always releasable. Protected by CI (tests must pass) and requires a PR to merge.
+- **Feature branches** — `feature/<issue-number>-short-description` (e.g., `feature/44-remaining-recommendations`)
+- **Bug fix branches** — `fix/<issue-number>-short-description` (e.g., `fix/46-cache-unbounded`)
+- **PR required to merge to main** — CI runs automatically on the PR. All tests must pass before merge.
+- **Commit to feature/fix branches freely** — push often, squash or merge to main via PR.
+
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 356 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 416 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 
 ## JSONL Data Format (VERIFIED against real data)
