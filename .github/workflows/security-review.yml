@@ -1,0 +1,29 @@
+name: Security Review
+
+on:
+  pull_request:
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          exclude-directories: node_modules,out,data,.claude
+          custom-security-scan-instructions: |
+            This project has two attack surfaces:
+            1. VS Code webview (media/app.js) — nonce-based CSP, must use escapeHtml() for all user strings
+            2. Web app (webapp/static/app.js + webapp/main.py) — localhost-only CORS, Pydantic validation
+            Pay special attention to: XSS via HTML injection, shell command injection via
+            unsanitized input to subprocess/execFileSync, and path traversal in the data_path parameter.
