@@ -70,11 +70,28 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .settings-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px 24px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   font-size: 13px;
+}
+.settings-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+#project-filter {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  max-width: 280px;
 }
 .settings-bar label {
   color: var(--text-secondary);

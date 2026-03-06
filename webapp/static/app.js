@@ -171,6 +171,48 @@ function getDataPath() {
   return localStorage.getItem('codefluent-dataPath') || ''
 }
 
+// --- Project Filter ---
+function getSelectedProject() {
+  return localStorage.getItem('codefluent-project') || ''
+}
+
+function getFilteredSessions() {
+  const sessions = state.sessions?.sessions || []
+  const project = getSelectedProject()
+  if (!project) return sessions
+  return sessions.filter(s => s.project === project)
+}
+
+function populateProjectDropdown() {
+  const select = document.getElementById('project-filter')
+  const sessions = state.sessions?.sessions || []
+  const projectCounts = {}
+  for (const s of sessions) {
+    const p = s.project || '(unknown)'
+    projectCounts[p] = (projectCounts[p] || 0) + 1
+  }
+  const projects = Object.keys(projectCounts).sort()
+
+  // Preserve current selection
+  const saved = getSelectedProject()
+
+  // Clear existing options except "All projects"
+  select.innerHTML = `<option value="">All projects (${sessions.length})</option>`
+  for (const p of projects) {
+    const opt = document.createElement('option')
+    opt.value = p
+    opt.textContent = `${p} (${projectCounts[p]})`
+    select.appendChild(opt)
+  }
+
+  // Restore selection if it still exists
+  if (saved && projectCounts[saved]) {
+    select.value = saved
+  } else {
+    localStorage.removeItem('codefluent-project')
+  }
+}
+
 function buildSessionsUrl(limit = 1000) {
   const dataPath = getDataPath()
   let url = `/api/sessions?limit=${limit}`
@@ -187,6 +229,7 @@ async function loadData() {
     ])
     state.usage = usage
     state.sessions = sessions
+    populateProjectDropdown()
     renderUsageDashboard()
     updateTimeScopeCounts()
   } catch (e) {
@@ -271,13 +314,25 @@ function resolveSessionIds(scopeValue, sessions) {
 
 function updateTimeScopeCounts() {
   if (!state.sessions?.sessions) return
+  const sessions = getFilteredSessions()
   const select = document.getElementById('session-scope')
   for (const option of select.options) {
     if (!option.value.startsWith('days:')) continue
-    const { description } = resolveSessionIds(option.value, state.sessions.sessions)
+    const { description } = resolveSessionIds(option.value, sessions)
     option.textContent = description
   }
 }
+
+// --- Project Filter ---
+document.getElementById('project-filter').addEventListener('change', (e) => {
+  const value = e.target.value
+  if (value) {
+    localStorage.setItem('codefluent-project', value)
+  } else {
+    localStorage.removeItem('codefluent-project')
+  }
+  updateTimeScopeCounts()
+})
 
 // --- Event Delegation (replaces inline onclick handlers) ---
 document.addEventListener('click', (e) => {
@@ -509,7 +564,7 @@ document.getElementById('run-scoring-btn').addEventListener('click', () => {
 async function runScoring(scopeValue) {
   if (!state.sessions?.sessions?.length) return
 
-  const { ids, description } = resolveSessionIds(scopeValue, state.sessions.sessions)
+  const { ids, description } = resolveSessionIds(scopeValue, getFilteredSessions())
   if (ids.length === 0) {
     document.getElementById('fluency-results').innerHTML =
       '<p class="empty-state">No sessions found in the selected time range.</p>'
