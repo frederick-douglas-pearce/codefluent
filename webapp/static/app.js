@@ -234,6 +234,14 @@ function getSelectedProject() {
   return localStorage.getItem('codefluent-project') || ''
 }
 
+function getSelectedProjectEncoded() {
+  const project = getSelectedProject()
+  if (!project) return ''
+  const sessions = state.sessions?.sessions || []
+  const match = sessions.find(s => s.project === project && s.project_path_encoded)
+  return match ? match.project_path_encoded : ''
+}
+
 function getFilteredSessions() {
   const sessions = state.sessions?.sessions || []
   const project = getSelectedProject()
@@ -916,7 +924,7 @@ async function runOptimizer() {
     const resp = await fetch('/api/optimize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, project: getSelectedProject() }),
+      body: JSON.stringify({ prompt, project: getSelectedProjectEncoded() }),
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}))
