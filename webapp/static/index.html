@@ -24,15 +24,19 @@
     </header>
 
     <div class="settings-bar">
-      <label for="data-path">Session data path:</label>
-      <input type="text" id="data-path" placeholder="~/.claude/projects/ (default)">
-      <button class="btn btn-secondary" id="apply-path-btn">Apply</button>
-      <span id="path-status" class="path-status"></span>
-      <span class="settings-divider"></span>
-      <label for="project-filter">Project:</label>
-      <select id="project-filter">
-        <option value="">All projects</option>
-      </select>
+      <span id="data-path-group">
+        <label for="data-path">Session data path:</label>
+        <input type="text" id="data-path" placeholder="~/.claude/projects/ (default)">
+        <button class="btn btn-secondary" id="apply-path-btn">Apply</button>
+        <span id="path-status" class="path-status"></span>
+        <span class="settings-divider"></span>
+      </span>
+      <span id="project-filter-group">
+        <label for="project-filter">Project:</label>
+        <select id="project-filter">
+          <option value="">All projects</option>
+        </select>
+      </span>
     </div>
 
     <nav class="tabs">

@@ -210,6 +210,16 @@ function switchTab(tabName) {
   document.querySelector(`[data-tab="${tabName}"]`).classList.add('active')
   document.getElementById(`tab-${tabName}`).classList.add('active')
 
+  // Show/hide settings bar controls based on tab relevance
+  const dataPathGroup = document.getElementById('data-path-group')
+  const projectGroup = document.getElementById('project-filter-group')
+  const settingsBar = document.querySelector('.settings-bar')
+  const showDataPath = ['fluency', 'recommendations'].includes(tabName)
+  const showProject = ['fluency', 'recommendations', 'optimizer'].includes(tabName)
+  if (dataPathGroup) dataPathGroup.style.display = showDataPath ? '' : 'none'
+  if (projectGroup) projectGroup.style.display = showProject ? '' : 'none'
+  if (settingsBar) settingsBar.style.display = (showDataPath || showProject) ? '' : 'none'
+
   if (tabName === 'recommendations' && state.scores) {
     renderRecommendations()
   }
