@@ -66,6 +66,8 @@ Get credit for fluency behaviors encoded in your project's `CLAUDE.md` file. Beh
 
 Paste any prompt and get an optimized version back. The optimizer considers your CLAUDE.md config (scoring it on demand if not cached) so it won't add behaviors already covered by project conventions. Shows a side-by-side comparison with before/after effective scores so you can copy whichever you prefer.
 
+![Prompt Optimizer](../images/demo-optimizer.png)
+
 ### Quick Wins
 
 GitHub-repo-scoped task suggestions. Fetches open issues and recent activity, then suggests high-impact tasks with copy-ready Claude Code prompts.

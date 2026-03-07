@@ -138,9 +138,13 @@ The extension resolves this automatically via the system home directory.
 |---------------|-----------------|
 | ![Fluency tab](images/demo-fluency.png) | ![Recommendations tab](images/demo-recommendations.png) |
 
-| Quick Wins | Usage |
-|------------|-------|
-| ![Quick Wins tab](images/demo-quickwins.png) | ![Usage tab](images/demo-usage.png) |
+| Prompt Optimizer | Quick Wins |
+|------------------|------------|
+| ![Prompt Optimizer tab](images/demo-optimizer.png) | ![Quick Wins tab](images/demo-quickwins.png) |
+
+| Usage |
+|-------|
+| ![Usage tab](images/demo-usage.png) |
 
 ### VS Code Extension
 
@@ -148,9 +152,13 @@ The extension resolves this automatically via the system home directory.
 |---------------|-----------------|
 | ![VS Code sidebar showing Fluency Score tab with score ring, behavior bars, and benchmark comparison](images/vscode-scoring.png) | ![VS Code sidebar showing Recommendations tab](images/vscode-recommendations.png) |
 
-| Quick Wins | Usage |
-|------------|-------|
-| ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) | ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) |
+| Prompt Optimizer | Quick Wins |
+|------------------|------------|
+| ![VS Code sidebar showing Prompt Optimizer](images/vscode-optimizer.png) | ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) |
+
+| Usage |
+|-------|
+| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) |
 
 ## Features
 
