@@ -51,7 +51,7 @@ Get credit for fluency behaviors encoded in your project's `CLAUDE.md` file. Beh
 
 ### Prompt Optimizer
 
-Paste any prompt and get an optimized version back. The optimizer rewrites your prompt to better align with fluency best practices, then shows a side-by-side comparison of your original and the improved version so you can copy whichever you prefer.
+Paste any prompt and get an optimized version back. The optimizer considers your workspace CLAUDE.md config (scoring it on demand if not cached) so it won't add behaviors already covered by project conventions. Shows a side-by-side comparison with before/after effective scores so you can copy or run the improved prompt directly.
 
 ### Quick Wins
 

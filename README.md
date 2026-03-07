@@ -156,7 +156,7 @@ The extension resolves this automatically via the system home directory.
 
 - **Fluency Score** — Scores your sessions against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
 - **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
-- **Prompt Optimizer** — Paste any prompt and get an optimized version that naturally incorporates missing fluency behaviors. Shows before/after scores, highlights added behaviors, and lets you copy or run the improved prompt directly.
+- **Prompt Optimizer** — Paste any prompt and get an optimized version that naturally incorporates missing fluency behaviors. Considers your CLAUDE.md config so it won't add behaviors already covered by project conventions. Shows before/after effective scores, highlights added behaviors, and lets you copy or run the improved prompt directly.
 - **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
 - **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). A **Refresh** button fetches the latest data on demand. Stacked area charts show cache read/creation/input/output token breakdown.
 - **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
@@ -169,7 +169,7 @@ The extension resolves this automatically via the system home directory.
 2. `ccusage` reads your Claude Code session history and exports token/cost data
 3. User prompts are sent to `claude-sonnet-4-20250514` for fluency scoring against Anthropic's 4D AI Fluency Framework
 4. If a `CLAUDE.md` exists in the workspace, it's scored separately against the same 11 behaviors — effective behavior = session OR config
-5. The Prompt Optimizer analyzes any prompt against the 11 behaviors, then generates an optimized version that naturally incorporates missing behaviors while preserving the original intent
+5. The Prompt Optimizer analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config (scoring on demand if not cached), then generates an optimized version that incorporates only the missing behaviors not already covered by project conventions
 6. Results are cached locally in VS Code's extension storage (by session ID and CLAUDE.md content hash) to avoid re-scoring
 7. Quick Wins uses the `gh` CLI to pull repo context and open issues, scoped to the current workspace
 
@@ -186,7 +186,7 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 456 tests including security-focused suites | Regressions |
+| Automated testing | 465 tests including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -246,9 +246,10 @@ codefluent/
 │   ├── benchmarks.json        # Population benchmark data
 │   └── prompts/               # Versioned prompt templates
 │       ├── registry.json      # Active version pointers
-│       ├── scoring/v1.0.md    # Session scoring prompt
-│       ├── config/v1.0.md     # CLAUDE.md scoring prompt
-│       └── optimizer/v1.0.md  # Prompt optimizer prompt
+│       ├── scoring/v1.0.md        # Session scoring prompt
+│       ├── config/v1.0.md         # CLAUDE.md scoring prompt
+│       ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
+│       └── single_scoring/v1.0.md # Single-prompt verification scorer
 ├── docs/                      # Design docs and specs
 │   ├── PROJECT_PLAN.md
 │   ├── TECHNICAL_SPEC.md
@@ -278,7 +279,7 @@ npm run watch          # Continuous TypeScript compilation
 
 Four GitHub Actions workflows run automatically:
 
-- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 456 tests. Must pass to merge.
+- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 465 tests. Must pass to merge.
 - **Claude Code Review** (`claude-review.yml`) — AI-powered PR review on all PRs, responds to `@claude` mentions.
 - **Security Review** (`security-review.yml`) — Claude-based security scan on PRs, checks for XSS/injection vectors.
 - **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
@@ -286,7 +287,7 @@ Four GitHub Actions workflows run automatically:
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (456 tests across 12 suites)
+npm test               # Run all Jest tests (465 tests across 12 suites)
 ```
 
 ### Packaging

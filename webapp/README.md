@@ -64,7 +64,7 @@ Get credit for fluency behaviors encoded in your project's `CLAUDE.md` file. Beh
 
 ### Prompt Optimizer
 
-Paste any prompt and get an optimized version back. The optimizer rewrites your prompt to naturally incorporate missing fluency behaviors, then shows a side-by-side comparison with before/after scores so you can copy whichever you prefer.
+Paste any prompt and get an optimized version back. The optimizer considers your CLAUDE.md config (scoring it on demand if not cached) so it won't add behaviors already covered by project conventions. Shows a side-by-side comparison with before/after effective scores so you can copy whichever you prefer.
 
 ### Quick Wins
 
@@ -84,7 +84,7 @@ Track daily and monthly token usage, costs, and session history. Powered by [`cc
 2. **Fluency scoring** — Sends prompts to Claude Sonnet for behavioral classification against 11 fluency indicators
 3. **Config scoring** — Reads your project's `CLAUDE.md` and scores it against the same behaviors
 4. **Score aggregation** — Merges session + config scores, caches results to minimize API calls
-5. **Prompt optimization** — Analyzes any prompt against the 11 behaviors and generates an improved version
+5. **Prompt optimization** — Analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config behaviors, and generates an improved version that skips behaviors already covered by project conventions
 6. **Recommendations** — Identifies your weakest behaviors and generates targeted improvement tips
 7. **Usage tracking** — Calls `ccusage` to aggregate token/cost data from Claude Code sessions
 
