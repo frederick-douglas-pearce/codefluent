@@ -53,6 +53,7 @@ codefluent/
 │   │   ├── quickwins.ts       # GitHub repo scoping + task suggestions
 │   │   ├── prompts.ts         # Prompt loader + template filler (shared/prompts/)
 │   │   ├── cache.ts           # Persistent score caching (globalStorageUri)
+│   │   ├── dataCache.ts       # Session/usage data caching (stale-while-revalidate)
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
 │   ├── media/
 │   │   ├── index.html         # Webview HTML template (nonce-based CSP)
@@ -73,9 +74,11 @@ codefluent/
 ├── shared/
 │   ├── benchmarks.json        # Benchmark data
 │   └── prompts/               # Versioned prompt templates
-│       ├── registry.json      # Active version pointers
-│       ├── scoring/v1.0.md    # Session scoring prompt
-│       └── config/v1.0.md     # CLAUDE.md scoring prompt
+│       ├── registry.json          # Active version pointers
+│       ├── scoring/v1.0.md        # Session scoring prompt
+│       ├── config/v1.0.md         # CLAUDE.md scoring prompt
+│       ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
+│       └── single_scoring/v1.0.md # Single-prompt verification scorer
 ├── data/                      # Generated data (gitignored)
 └── images/                    # Demo screenshots
 ```
@@ -93,7 +96,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 356 tests)
+npm test                   # Jest (unit + integration, 465 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -132,6 +135,7 @@ The webview (browser context) communicates with the extension host (Node context
 | `runScoring` | webview -> ext | Scores session prompts + workspace CLAUDE.md via Anthropic API, caches results |
 | `getCachedScores` | webview -> ext | Returns cached scores + aggregate (includes config behaviors) |
 | `getQuickwins` | webview -> ext | GitHub repo context + Claude suggestions |
+| `optimizePrompt` | webview -> ext | Scores input prompt, generates optimized version, scores output (2 API calls) |
 | `copyToClipboard` | webview -> ext | Copies text via `vscode.env.clipboard` |
 | `runInTerminal` | webview -> ext | Opens terminal, runs `claude "<prompt>"` |
 
@@ -171,7 +175,7 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 416 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 465 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 
 ## JSONL Data Format (VERIFIED against real data)
@@ -258,12 +262,13 @@ The parser MUST handle both.
 The extension scores the workspace's `CLAUDE.md` file separately against the same 11 fluency behaviors. This gives users credit for behaviors defined as project conventions.
 
 ### How it works
-1. After session scoring, `handleRunScoring()` reads `CLAUDE.md` from the workspace root
+1. `scoreWorkspaceClaudeMd()` reads `CLAUDE.md` from the workspace root (called by Fluency Score tab and Prompt Optimizer)
 2. Content is truncated to 4000 chars and sent to Claude Sonnet with `CONFIG_SCORING_PROMPT`
 3. Returns `{ fluency_behaviors: Record<string, boolean>, one_line_summary: string }`
 4. Results cached in `globalStorageUri/config_scores.json` keyed by workspace path + content hash
 5. `computeAggregate()` merges via `effective_behavior = session_behavior OR config_behavior`
 6. Frontend shows an amber "CLAUDE.md" tag next to config-boosted behaviors
+7. Prompt Optimizer also scores CLAUDE.md on demand if not cached, passes config behavior flags (~50 tokens) to avoid adding redundant behaviors
 
 ### Cache invalidation
 - Content hash = first 100 chars + length (`ScoreCache.contentHash()`)
@@ -282,16 +287,20 @@ Scoring prompts are extracted into standalone files under `shared/prompts/` with
 ### File structure
 ```
 shared/prompts/
-├── registry.json          # Points to active prompt file for each type
-├── scoring/v1.0.md        # Session scoring prompt template
-└── config/v1.0.md         # CLAUDE.md scoring prompt template
+├── registry.json              # Points to active prompt file for each type
+├── scoring/v1.0.md            # Session scoring prompt template
+├── config/v1.0.md             # CLAUDE.md scoring prompt template
+├── optimizer/v1.1.md          # Prompt optimizer template (config-aware)
+└── single_scoring/v1.0.md     # Single-prompt verification scorer
 ```
 
 ### Registry format (`registry.json`)
 ```json
 {
   "scoring": { "version": "scoring-v1.0", "file": "scoring/v1.0.md" },
-  "config": { "version": "config-v1.0", "file": "config/v1.0.md" }
+  "config": { "version": "config-v1.0", "file": "config/v1.0.md" },
+  "optimizer": { "version": "optimizer-v1.1", "file": "optimizer/v1.1.md" },
+  "single_scoring": { "version": "single_scoring-v1.0", "file": "single_scoring/v1.0.md" }
 }
 ```
 
@@ -305,9 +314,11 @@ Prompts use `{{PLACEHOLDER}}` for template variables (simple string replacement,
 
 - **Scoring prompt placeholders:** `{{USED_PLAN_MODE}}`, `{{THINKING_COUNT}}`, `{{TOOLS_USED}}`, `{{PROMPTS}}`
 - **Config prompt placeholder:** `{{CONTENT}}`
+- **Optimizer prompt placeholders:** `{{PROMPT}}`, `{{MAX_LENGTH}}`, `{{CONFIG_BEHAVIORS}}`
+- **Single scoring prompt placeholder:** `{{PROMPT}}`
 
 ### Cache invalidation
-Cached scores are stamped with `prompt_version`. On cache read, entries whose `prompt_version` doesn't match the current registry version are treated as stale and re-scored. This applies to both session scores (`scores.json`) and config scores (`config_scores.json`).
+Cached scores are stamped with `prompt_version`. On cache read, entries whose `prompt_version` doesn't match the current registry version are treated as stale and re-scored. This applies to session scores (`scores.json`), config scores (`config_scores.json`), and optimizer results (`optimizer_cache.json`).
 
 ### Build integration
 The compile script copies `shared/prompts/` into `vscode-extension/shared/prompts/` so the extension can load them at runtime via `prompts.ts`.
@@ -349,15 +360,15 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 356 Jest tests
+npm test                   # Runs all 465 Jest tests
 
 # Test structure:
-# test/unit/prompts.test.ts                    — prompt loader + template filler
-# test/unit/scoring.test.ts                    — scoreSessions + computeAggregate + prompt versioning
+# test/unit/prompts.test.ts                    — prompt loader + template filler (all prompt types)
+# test/unit/scoring.test.ts                    — scoreSessions, computeAggregate, optimizePrompt, scoreSinglePrompt, prompt versioning
 # test/unit/quickwins.test.ts                  — GitHub name validation, repo detection, arg safety
 # test/unit/xss.test.ts                        — escapeHtml payloads + source-level XSS vector coverage
 # test/unit/platform.test.ts                   — cross-platform shell, escaping, npx helpers
 # test/integration/extension.test.ts           — activation, status bar, commands
-# test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests
-# src/__mocks__/vscode.ts                      — VS Code API mock for Jest
+# test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests, optimizer IPC
+# test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 ```

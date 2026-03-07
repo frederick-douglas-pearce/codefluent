@@ -5,10 +5,12 @@ import * as path from 'path'
 export class ScoreCache {
   private readonly filePath: string
   private readonly configFilePath: string
+  private readonly optimizerFilePath: string
 
   constructor(globalStorageUri: vscode.Uri) {
     this.filePath = path.join(globalStorageUri.fsPath, 'scores.json')
     this.configFilePath = path.join(globalStorageUri.fsPath, 'config_scores.json')
+    this.optimizerFilePath = path.join(globalStorageUri.fsPath, 'optimizer_cache.json')
   }
 
   read(): Record<string, any> {
@@ -65,6 +67,23 @@ export class ScoreCache {
       fs.mkdirSync(dir, { recursive: true })
     }
     fs.writeFileSync(this.lastScoredPath, JSON.stringify(ids))
+  }
+
+  readOptimizer(): Record<string, any> {
+    try {
+      const data = fs.readFileSync(this.optimizerFilePath, 'utf8')
+      return JSON.parse(data)
+    } catch {
+      return {}
+    }
+  }
+
+  writeOptimizer(data: Record<string, any>): void {
+    const dir = path.dirname(this.optimizerFilePath)
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true })
+    }
+    fs.writeFileSync(this.optimizerFilePath, JSON.stringify(data, null, 2))
   }
 
   static contentHash(content: string): string {

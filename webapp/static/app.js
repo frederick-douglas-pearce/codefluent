@@ -6,6 +6,7 @@ let state = {
   sessions: null,
   scores: null,
   quickwins: null,
+  optimizer: null,
   activeTab: 'fluency'
 }
 
@@ -209,9 +210,28 @@ function switchTab(tabName) {
   document.querySelector(`[data-tab="${tabName}"]`).classList.add('active')
   document.getElementById(`tab-${tabName}`).classList.add('active')
 
+  // Show/hide settings bar controls based on tab relevance
+  const dataPathGroup = document.getElementById('data-path-group')
+  const projectGroup = document.getElementById('project-filter-group')
+  const settingsBar = document.querySelector('.settings-bar')
+  const showDataPath = ['fluency', 'recommendations'].includes(tabName)
+  const showProject = ['fluency', 'recommendations', 'optimizer'].includes(tabName)
+  if (dataPathGroup) dataPathGroup.style.display = showDataPath ? '' : 'none'
+  if (projectGroup) projectGroup.style.display = showProject ? '' : 'none'
+  if (settingsBar) settingsBar.style.display = (showDataPath || showProject) ? '' : 'none'
+
   if (tabName === 'recommendations' && state.scores) {
     renderRecommendations()
   }
+}
+
+// --- Optimizer char counter ---
+const optimizerTextarea = document.getElementById('optimizer-textarea')
+if (optimizerTextarea) {
+  optimizerTextarea.addEventListener('input', () => {
+    const count = optimizerTextarea.value.length
+    document.getElementById('optimizer-char-count').textContent = `${count.toLocaleString()} / 10,000`
+  })
 }
 
 // --- Data Path ---
@@ -222,6 +242,14 @@ function getDataPath() {
 // --- Project Filter ---
 function getSelectedProject() {
   return localStorage.getItem('codefluent-project') || ''
+}
+
+function getSelectedProjectEncoded() {
+  const project = getSelectedProject()
+  if (!project) return ''
+  const sessions = state.sessions?.sessions || []
+  const match = sessions.find(s => s.project === project && s.project_path_encoded)
+  return match ? match.project_path_encoded : ''
 }
 
 function getFilteredSessions() {
@@ -415,6 +443,22 @@ document.addEventListener('click', (e) => {
     const card = document.getElementById('onboarding-card')
     if (card) card.style.display = 'none'
     localStorage.setItem('hasSeenOnboarding', 'true')
+    return
+  }
+
+  // Optimize button
+  if (target.id === 'optimize-btn') {
+    runOptimizer()
+    return
+  }
+
+  // Optimizer copy button
+  if (target.classList.contains('optimizer-copy-btn')) {
+    const wrapper = target.closest('.optimizer-prompt-panel')
+    const text = wrapper.querySelector('.prompt-box').textContent
+    navigator.clipboard.writeText(text)
+    target.textContent = 'Copied!'
+    setTimeout(() => target.textContent = 'Copy', 2000)
     return
   }
 
@@ -864,6 +908,114 @@ function renderFluencyScore() {
     })
   }
 
+}
+
+// --- Prompt Optimizer ---
+async function runOptimizer() {
+  const textarea = document.getElementById('optimizer-textarea')
+  const prompt = textarea.value.trim()
+  if (!prompt) {
+    document.getElementById('optimizer-results').innerHTML =
+      '<p class="empty-state">Please enter a prompt to optimize.</p>'
+    return
+  }
+  if (prompt.length > 10000) {
+    document.getElementById('optimizer-results').innerHTML =
+      '<p class="empty-state">Prompt must be 10,000 characters or less.</p>'
+    return
+  }
+
+  const btn = document.getElementById('optimize-btn')
+  btn.disabled = true
+  btn.textContent = 'Optimizing...'
+  showLoader('optimizer-results')
+
+  try {
+    const resp = await fetch('/api/optimize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt, project: getSelectedProjectEncoded() }),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error(err.detail || `HTTP ${resp.status}`)
+    }
+    state.optimizer = await resp.json()
+    renderOptimizerResults(prompt)
+  } catch (e) {
+    document.getElementById('optimizer-results').innerHTML =
+      `<p class="empty-state">Error: ${escapeHtml(e.message)}</p>`
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Optimize'
+  }
+}
+
+function renderOptimizerBehaviorTags(behaviors, addedBehaviors) {
+  const added = new Set(addedBehaviors || [])
+  return Object.entries(behaviors).map(([key, val]) => {
+    let cls = 'opt-behavior-tag'
+    if (val && added.has(key)) cls += ' opt-behavior-added'
+    else if (val) cls += ' opt-behavior-present'
+    else cls += ' opt-behavior-absent'
+    return `<span class="${cls}">${escapeHtml(BEHAVIOR_LABELS[key] || key)}</span>`
+  }).join('')
+}
+
+function renderOptimizerResults(inputPrompt) {
+  const data = state.optimizer
+  if (!data) return
+
+  const scoreColor = s => s >= 70 ? 'var(--success)' : s >= 50 ? 'var(--warning)' : 'var(--danger)'
+
+  // Already good — no-op card
+  if (data.already_good) {
+    document.getElementById('optimizer-results').innerHTML = `
+      <div class="optimizer-good-card">
+        <div class="optimizer-good-icon">&#10003;</div>
+        <div class="optimizer-good-score" style="color: ${scoreColor(data.input_score)}">${data.input_score}/100</div>
+        <div class="optimizer-good-title">Great prompt!</div>
+        <p class="optimizer-good-desc">${escapeHtml(data.one_line_summary)}</p>
+        <div class="optimizer-behavior-tags">${renderOptimizerBehaviorTags(data.input_behaviors, [])}</div>
+      </div>`
+    return
+  }
+
+  const html = `
+    <div class="optimizer-comparison">
+      <div class="optimizer-prompt-panel optimizer-input-panel">
+        <div class="optimizer-panel-header">
+          <span class="optimizer-panel-title">Your Prompt</span>
+          <span class="optimizer-panel-score" style="color: ${scoreColor(data.input_score)}">${data.input_score}/100</span>
+        </div>
+        <div class="optimizer-behavior-tags">${renderOptimizerBehaviorTags(data.input_behaviors, [])}</div>
+        <div class="prompt-box-wrapper">
+          <pre class="prompt-box">${escapeHtml(inputPrompt)}</pre>
+        </div>
+      </div>
+      <div class="optimizer-arrow">&#x2192;</div>
+      <div class="optimizer-prompt-panel optimizer-output-panel">
+        <div class="optimizer-panel-header">
+          <span class="optimizer-panel-title">Optimized Prompt</span>
+          <span class="optimizer-panel-score" style="color: ${scoreColor(data.output_score)}">${data.output_score}/100</span>
+        </div>
+        <div class="optimizer-behavior-tags">${renderOptimizerBehaviorTags(data.output_behaviors || {}, data.behaviors_added)}</div>
+        <div class="prompt-box-wrapper">
+          <div class="prompt-box-header">
+            <button class="optimizer-copy-btn copy-btn">Copy</button>
+          </div>
+          <pre class="prompt-box">${escapeHtml(data.optimized_prompt)}</pre>
+        </div>
+      </div>
+    </div>
+    ${data.explanation ? `
+    <div class="optimizer-explanation">
+      <h4>What changed</h4>
+      <p>${escapeHtml(data.explanation)}</p>
+      ${data.behaviors_added?.length ? `<div class="optimizer-added-list">Behaviors added: ${data.behaviors_added.map(b => `<span class="opt-behavior-tag opt-behavior-added">${escapeHtml(BEHAVIOR_LABELS[b] || b)}</span>`).join('')}</div>` : ''}
+    </div>` : ''}`
+
+  document.getElementById('optimizer-results').innerHTML = html
 }
 
 // --- Quick Wins ---

@@ -24,20 +24,25 @@
     </header>
 
     <div class="settings-bar">
-      <label for="data-path">Session data path:</label>
-      <input type="text" id="data-path" placeholder="~/.claude/projects/ (default)">
-      <button class="btn btn-secondary" id="apply-path-btn">Apply</button>
-      <span id="path-status" class="path-status"></span>
-      <span class="settings-divider"></span>
-      <label for="project-filter">Project:</label>
-      <select id="project-filter">
-        <option value="">All projects</option>
-      </select>
+      <span id="data-path-group">
+        <label for="data-path">Session data path:</label>
+        <input type="text" id="data-path" placeholder="~/.claude/projects/ (default)">
+        <button class="btn btn-secondary" id="apply-path-btn">Apply</button>
+        <span id="path-status" class="path-status"></span>
+        <span class="settings-divider"></span>
+      </span>
+      <span id="project-filter-group">
+        <label for="project-filter">Project:</label>
+        <select id="project-filter">
+          <option value="">All projects</option>
+        </select>
+      </span>
     </div>
 
     <nav class="tabs">
       <button class="tab active" data-tab="fluency">Fluency Score</button>
       <button class="tab" data-tab="recommendations">Recommendations</button>
+      <button class="tab" data-tab="optimizer">Prompt Optimizer</button>
       <button class="tab" data-tab="quickwins">Quick Wins</button>
       <button class="tab" data-tab="usage">Usage</button>
     </nav>
@@ -96,6 +101,27 @@
           <div class="empty-state-box">
             <div class="empty-state-icon">💡</div>
             <p class="empty-state">Run a fluency analysis first to get personalized recommendations.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prompt Optimizer Tab -->
+      <div id="tab-optimizer" class="tab-panel">
+        <div class="section-header">
+          <h2>Prompt Optimizer</h2>
+          <p>Paste a prompt, see its fluency score, and get an optimized version with missing behaviors added.</p>
+        </div>
+        <div class="optimizer-input">
+          <textarea id="optimizer-textarea" placeholder="Paste your prompt here..." maxlength="10000"></textarea>
+          <div class="optimizer-input-footer">
+            <span id="optimizer-char-count" class="optimizer-char-count">0 / 10,000</span>
+            <button class="btn btn-primary" id="optimize-btn">Optimize</button>
+          </div>
+        </div>
+        <div id="optimizer-results">
+          <div class="empty-state-box">
+            <div class="empty-state-icon">✨</div>
+            <p class="empty-state">Paste a prompt above and click "Optimize" to see how to improve it.</p>
           </div>
         </div>
       </div>

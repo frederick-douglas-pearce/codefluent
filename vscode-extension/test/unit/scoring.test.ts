@@ -1,4 +1,4 @@
-import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions, SCORING_PROMPT_VERSION, CONFIG_SCORING_PROMPT_VERSION } from '../../src/scoring'
+import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions, SCORING_PROMPT_VERSION, CONFIG_SCORING_PROMPT_VERSION, validateOptimizerResult, validateSingleScoreResult, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, buildConfigBehaviorsContext } from '../../src/scoring'
 import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
@@ -1677,5 +1677,342 @@ describe.each([
     const sessions = makeSessions(10)
     const result = resolveSessionIds('unknown:abc', sessions)
     expect(result.ids).toHaveLength(5)
+  })
+})
+
+// ========================================
+// validateOptimizerResult
+// ========================================
+
+describe('validateOptimizerResult', () => {
+  const validResponse = {
+    input_behaviors: {
+      iteration_and_refinement: false,
+      clarifying_goals: true,
+      specifying_format: false,
+      providing_examples: false,
+      setting_interaction_terms: false,
+      checking_facts: false,
+      questioning_reasoning: false,
+      identifying_missing_context: false,
+      adjusting_approach: false,
+      building_on_responses: false,
+      providing_feedback: false,
+    },
+    input_score: 9,
+    optimized_prompt: 'Improved version of the prompt',
+    behaviors_added: ['checking_facts', 'setting_interaction_terms'],
+    explanation: 'Added fact-checking and interaction terms.',
+    one_line_summary: 'Basic prompt with one behavior.',
+  }
+
+  it('passes through a valid response', () => {
+    const result = validateOptimizerResult(validResponse)
+    expect(result.input_score).toBe(9)
+    expect(result.input_behaviors.clarifying_goals).toBe(true)
+    expect(result.input_behaviors.iteration_and_refinement).toBe(false)
+    expect(result.optimized_prompt).toBe('Improved version of the prompt')
+    expect(result.behaviors_added).toEqual(['checking_facts', 'setting_interaction_terms'])
+    expect(result.explanation).toBe('Added fact-checking and interaction terms.')
+    expect(result.one_line_summary).toBe('Basic prompt with one behavior.')
+  })
+
+  it('throws on non-object input', () => {
+    expect(() => validateOptimizerResult(null)).toThrow()
+    expect(() => validateOptimizerResult('string')).toThrow()
+    expect(() => validateOptimizerResult([])).toThrow()
+  })
+
+  it('defaults missing behaviors to false', () => {
+    const result = validateOptimizerResult({ input_behaviors: {}, input_score: 0 })
+    for (const val of Object.values(result.input_behaviors)) {
+      expect(val).toBe(false)
+    }
+    expect(Object.keys(result.input_behaviors)).toHaveLength(11)
+  })
+
+  it('clamps score to 0-100', () => {
+    expect(validateOptimizerResult({ ...validResponse, input_score: -10 }).input_score).toBe(0)
+    expect(validateOptimizerResult({ ...validResponse, input_score: 150 }).input_score).toBe(100)
+    expect(validateOptimizerResult({ ...validResponse, input_score: 45.7 }).input_score).toBe(46)
+  })
+
+  it('filters invalid behaviors_added entries', () => {
+    const result = validateOptimizerResult({
+      ...validResponse,
+      behaviors_added: ['checking_facts', 'invalid_behavior', 123],
+    })
+    expect(result.behaviors_added).toEqual(['checking_facts'])
+  })
+
+  it('handles missing optimized_prompt', () => {
+    const result = validateOptimizerResult({ ...validResponse, optimized_prompt: undefined })
+    expect(result.optimized_prompt).toBeUndefined()
+  })
+
+  it('truncates explanation to 500 chars', () => {
+    const result = validateOptimizerResult({ ...validResponse, explanation: 'a'.repeat(600) })
+    expect(result.explanation).toHaveLength(500)
+  })
+
+  it('truncates one_line_summary to 200 chars', () => {
+    const result = validateOptimizerResult({ ...validResponse, one_line_summary: 'a'.repeat(300) })
+    expect(result.one_line_summary).toHaveLength(200)
+  })
+})
+
+// ========================================
+// validateSingleScoreResult
+// ========================================
+
+describe('validateSingleScoreResult', () => {
+  const validResponse = {
+    fluency_behaviors: {
+      iteration_and_refinement: true,
+      clarifying_goals: true,
+      specifying_format: false,
+      providing_examples: false,
+      setting_interaction_terms: true,
+      checking_facts: true,
+      questioning_reasoning: false,
+      identifying_missing_context: false,
+      adjusting_approach: false,
+      building_on_responses: false,
+      providing_feedback: false,
+    },
+    overall_score: 36,
+    one_line_summary: 'Moderate fluency prompt.',
+  }
+
+  it('passes through a valid response', () => {
+    const result = validateSingleScoreResult(validResponse)
+    expect(result.overall_score).toBe(36)
+    expect(result.fluency_behaviors.iteration_and_refinement).toBe(true)
+    expect(result.fluency_behaviors.specifying_format).toBe(false)
+    expect(result.one_line_summary).toBe('Moderate fluency prompt.')
+  })
+
+  it('throws on non-object input', () => {
+    expect(() => validateSingleScoreResult(null)).toThrow()
+    expect(() => validateSingleScoreResult('string')).toThrow()
+    expect(() => validateSingleScoreResult([])).toThrow()
+  })
+
+  it('defaults missing behaviors to false', () => {
+    const result = validateSingleScoreResult({ fluency_behaviors: {} })
+    for (const val of Object.values(result.fluency_behaviors)) {
+      expect(val).toBe(false)
+    }
+    expect(Object.keys(result.fluency_behaviors)).toHaveLength(11)
+  })
+
+  it('clamps score to 0-100', () => {
+    expect(validateSingleScoreResult({ ...validResponse, overall_score: -10 }).overall_score).toBe(0)
+    expect(validateSingleScoreResult({ ...validResponse, overall_score: 150 }).overall_score).toBe(100)
+  })
+
+  it('defaults missing score to 0', () => {
+    expect(validateSingleScoreResult({ fluency_behaviors: {} }).overall_score).toBe(0)
+  })
+})
+
+// ========================================
+// optimizePrompt (mocked API)
+// ========================================
+
+describe('optimizePrompt', () => {
+  it('calls API with optimizer template and returns validated result', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          input_behaviors: { clarifying_goals: true },
+          input_score: 18,
+          optimized_prompt: 'Better prompt',
+          behaviors_added: ['checking_facts'],
+          explanation: 'Added checking.',
+          one_line_summary: 'Basic prompt.',
+        }),
+      }],
+    }
+    const mockClient = makeMockClient(mockResponse)
+    const result = await optimizePrompt('Fix the bug', mockClient as any)
+    expect(result.input_score).toBe(18)
+    expect(result.optimized_prompt).toBe('Better prompt')
+    expect(result.behaviors_added).toEqual(['checking_facts'])
+  })
+
+  it('strips markdown fences from API response', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: '```json\n' + JSON.stringify({
+          input_behaviors: {},
+          input_score: 9,
+          optimized_prompt: 'Better',
+          behaviors_added: [],
+          one_line_summary: 'Test.',
+        }) + '\n```',
+      }],
+    }
+    const mockClient = makeMockClient(mockResponse)
+    const result = await optimizePrompt('Test prompt', mockClient as any)
+    expect(result.input_score).toBe(9)
+  })
+
+  it('uses max_tokens 2048', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          input_behaviors: {},
+          input_score: 50,
+          optimized_prompt: 'Better',
+          behaviors_added: [],
+          one_line_summary: 'Test.',
+        }),
+      }],
+    }
+    const createFn = jest.fn().mockResolvedValue(mockResponse)
+    const client = { messages: { create: createFn } }
+    await optimizePrompt('Test', client as any)
+    expect(createFn).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: 2048 }),
+    )
+  })
+
+  it('includes config behaviors in API call when provided', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          input_behaviors: {},
+          input_score: 50,
+          optimized_prompt: 'Better',
+          behaviors_added: [],
+          one_line_summary: 'Test.',
+        }),
+      }],
+    }
+    const createFn = jest.fn().mockResolvedValue(mockResponse)
+    const client = { messages: { create: createFn } }
+    await optimizePrompt('Test', client as any, {
+      setting_interaction_terms: true,
+      checking_facts: true,
+      clarifying_goals: false,
+    })
+    const sentContent = createFn.mock.calls[0][0].messages[0].content
+    expect(sentContent).toContain('- setting_interaction_terms')
+    expect(sentContent).toContain('- checking_facts')
+    expect(sentContent).toContain('Already Covered by Project Config')
+    // clarifying_goals is false, so it should not appear in the covered list
+    expect(sentContent).not.toContain('- clarifying_goals')
+  })
+
+  it('omits config behaviors section when not provided', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          input_behaviors: {},
+          input_score: 50,
+          optimized_prompt: 'Better',
+          behaviors_added: [],
+          one_line_summary: 'Test.',
+        }),
+      }],
+    }
+    const createFn = jest.fn().mockResolvedValue(mockResponse)
+    const client = { messages: { create: createFn } }
+    await optimizePrompt('Test', client as any)
+    const sentContent = createFn.mock.calls[0][0].messages[0].content
+    expect(sentContent).not.toContain('Already Covered by Project Config')
+  })
+})
+
+// ========================================
+// scoreSinglePrompt (mocked API)
+// ========================================
+
+describe('scoreSinglePrompt', () => {
+  it('calls API with single scoring template and returns validated result', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          fluency_behaviors: { clarifying_goals: true, checking_facts: true },
+          overall_score: 82,
+          one_line_summary: 'Good prompt.',
+        }),
+      }],
+    }
+    const mockClient = makeMockClient(mockResponse)
+    const result = await scoreSinglePrompt('Optimized prompt text', mockClient as any)
+    expect(result.overall_score).toBe(82)
+    expect(result.fluency_behaviors.clarifying_goals).toBe(true)
+  })
+
+  it('uses max_tokens 1024', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          fluency_behaviors: {},
+          overall_score: 50,
+          one_line_summary: 'Test.',
+        }),
+      }],
+    }
+    const createFn = jest.fn().mockResolvedValue(mockResponse)
+    const client = { messages: { create: createFn } }
+    await scoreSinglePrompt('Test', client as any)
+    expect(createFn).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: 1024 }),
+    )
+  })
+
+})
+
+// ========================================
+// buildConfigBehaviorsContext
+// ========================================
+
+describe('buildConfigBehaviorsContext', () => {
+  it('returns empty string when no behaviors provided', () => {
+    expect(buildConfigBehaviorsContext()).toBe('')
+    expect(buildConfigBehaviorsContext(undefined)).toBe('')
+  })
+
+  it('returns empty string when no behaviors are true', () => {
+    expect(buildConfigBehaviorsContext({
+      clarifying_goals: false,
+      checking_facts: false,
+    })).toBe('')
+  })
+
+  it('lists only true behaviors with context header', () => {
+    const result = buildConfigBehaviorsContext({
+      setting_interaction_terms: true,
+      checking_facts: true,
+      clarifying_goals: false,
+    })
+    expect(result).toContain('Already Covered by Project Config')
+    expect(result).toContain('- setting_interaction_terms')
+    expect(result).toContain('- checking_facts')
+    expect(result).not.toContain('clarifying_goals')
+  })
+
+  it('returns empty string for empty object', () => {
+    expect(buildConfigBehaviorsContext({})).toBe('')
+  })
+})
+
+// ========================================
+// Optimizer prompt version
+// ========================================
+
+describe('Optimizer prompt version', () => {
+  it('OPTIMIZER_PROMPT_VERSION matches registry format', () => {
+    expect(OPTIMIZER_PROMPT_VERSION).toMatch(/^optimizer-v\d+\.\d+$/)
   })
 })

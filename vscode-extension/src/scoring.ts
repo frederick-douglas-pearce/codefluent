@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { ParsedSession } from './parser'
-import { loadScoringPrompt, loadConfigPrompt, fillTemplate } from './prompts'
+import { loadScoringPrompt, loadConfigPrompt, loadOptimizerPrompt, loadSingleScoringPrompt, fillTemplate } from './prompts'
 
 export type ScoringErrorType = 'rate_limit' | 'network' | 'server' | 'auth' | 'invalid_request' | 'unknown'
 
@@ -46,6 +46,34 @@ export interface ConfigScoreResult {
   one_line_summary: string
 }
 
+export interface OptimizerResult {
+  input_behaviors: Record<string, boolean>
+  input_score: number
+  optimized_prompt?: string
+  behaviors_added: string[]
+  explanation?: string
+  one_line_summary: string
+}
+
+export interface SingleScoreResult {
+  fluency_behaviors: Record<string, boolean>
+  overall_score: number
+  one_line_summary: string
+}
+
+export interface OptimizeResponse {
+  already_good?: boolean
+  input_score: number
+  input_behaviors: Record<string, boolean>
+  optimized_prompt?: string
+  output_score?: number
+  output_behaviors?: Record<string, boolean>
+  behaviors_added?: string[]
+  explanation?: string
+  one_line_summary: string
+  prompt_version: string
+}
+
 const _scoringPrompt = loadScoringPrompt()
 const SCORING_PROMPT_TEMPLATE = _scoringPrompt.template
 export const SCORING_PROMPT_VERSION = _scoringPrompt.version
@@ -53,6 +81,14 @@ export const SCORING_PROMPT_VERSION = _scoringPrompt.version
 const _configPrompt = loadConfigPrompt()
 const CONFIG_SCORING_PROMPT_TEMPLATE = _configPrompt.template
 export const CONFIG_SCORING_PROMPT_VERSION = _configPrompt.version
+
+const _optimizerPrompt = loadOptimizerPrompt()
+const OPTIMIZER_PROMPT_TEMPLATE = _optimizerPrompt.template
+export const OPTIMIZER_PROMPT_VERSION = _optimizerPrompt.version
+
+const _singleScoringPrompt = loadSingleScoringPrompt()
+const SINGLE_SCORING_PROMPT_TEMPLATE = _singleScoringPrompt.template
+export const SINGLE_SCORING_PROMPT_VERSION = _singleScoringPrompt.version
 
 const BEHAVIORS = [
   'iteration_and_refinement', 'clarifying_goals', 'specifying_format',
@@ -425,4 +461,142 @@ export function computeScoreHistory(
 
   history.sort((a, b) => a.period.localeCompare(b.period))
   return history
+}
+
+export function validateOptimizerResult(raw: unknown): OptimizerResult {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('Optimizer API response is not a valid object')
+  }
+
+  const obj = raw as Record<string, any>
+
+  const rawBehaviors = typeof obj.input_behaviors === 'object' && obj.input_behaviors !== null && !Array.isArray(obj.input_behaviors)
+    ? obj.input_behaviors : {}
+  const input_behaviors: Record<string, boolean> = {}
+  for (const b of BEHAVIORS) {
+    input_behaviors[b] = typeof rawBehaviors[b] === 'boolean' ? rawBehaviors[b] : false
+  }
+
+  let input_score = 0
+  if (typeof obj.input_score === 'number' && !isNaN(obj.input_score)) {
+    input_score = Math.round(Math.min(100, Math.max(0, obj.input_score)))
+  }
+
+  let optimized_prompt: string | undefined
+  if (typeof obj.optimized_prompt === 'string' && obj.optimized_prompt.length > 0) {
+    optimized_prompt = obj.optimized_prompt
+  }
+
+  const behaviors_added: string[] = []
+  if (Array.isArray(obj.behaviors_added)) {
+    for (const b of obj.behaviors_added) {
+      if (typeof b === 'string' && BEHAVIORS.includes(b)) {
+        behaviors_added.push(b)
+      }
+    }
+  }
+
+  let explanation: string | undefined
+  if (typeof obj.explanation === 'string') {
+    explanation = obj.explanation.slice(0, 500)
+  }
+
+  let one_line_summary = ''
+  if (typeof obj.one_line_summary === 'string') {
+    one_line_summary = obj.one_line_summary.slice(0, 200)
+  }
+
+  return { input_behaviors, input_score, optimized_prompt, behaviors_added, explanation, one_line_summary }
+}
+
+export function validateSingleScoreResult(raw: unknown): SingleScoreResult {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+    throw new Error('Single scoring API response is not a valid object')
+  }
+
+  const obj = raw as Record<string, any>
+
+  const rawBehaviors = typeof obj.fluency_behaviors === 'object' && obj.fluency_behaviors !== null && !Array.isArray(obj.fluency_behaviors)
+    ? obj.fluency_behaviors : {}
+  const fluency_behaviors: Record<string, boolean> = {}
+  for (const b of BEHAVIORS) {
+    fluency_behaviors[b] = typeof rawBehaviors[b] === 'boolean' ? rawBehaviors[b] : false
+  }
+
+  let overall_score = 0
+  if (typeof obj.overall_score === 'number' && !isNaN(obj.overall_score)) {
+    overall_score = Math.round(Math.min(100, Math.max(0, obj.overall_score)))
+  }
+
+  let one_line_summary = ''
+  if (typeof obj.one_line_summary === 'string') {
+    one_line_summary = obj.one_line_summary.slice(0, 200)
+  }
+
+  return { fluency_behaviors, overall_score, one_line_summary }
+}
+
+export function buildConfigBehaviorsContext(configBehaviors?: Record<string, boolean>): string {
+  if (!configBehaviors) return ''
+  const covered = Object.entries(configBehaviors)
+    .filter(([, v]) => v)
+    .map(([k]) => k)
+  if (covered.length === 0) return ''
+  return `\n\n## Behaviors Already Covered by Project Config (CLAUDE.md)\n\nThe following behaviors are already active via the project's CLAUDE.md file. Do NOT add these to the optimized prompt — they apply automatically:\n${covered.map(b => `- ${b}`).join('\n')}`
+}
+
+export async function optimizePrompt(
+  inputPrompt: string,
+  client: Anthropic,
+  configBehaviors?: Record<string, boolean>,
+  retryOptions?: RetryOptions,
+): Promise<OptimizerResult> {
+  const maxLength = Math.min(inputPrompt.length * 3, 4000)
+  const prompt = fillTemplate(OPTIMIZER_PROMPT_TEMPLATE, {
+    PROMPT: inputPrompt,
+    MAX_LENGTH: String(maxLength),
+    CONFIG_BEHAVIORS: buildConfigBehaviorsContext(configBehaviors),
+  })
+
+  const response = await withRetry(
+    () => client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 2048,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+    'optimizePrompt',
+    retryOptions,
+  )
+
+  let text = extractTextFromResponse(response)
+  if (text.startsWith('```')) {
+    text = text.split('\n').slice(1).join('\n').replace(/```\s*$/, '').trim()
+  }
+  return validateOptimizerResult(JSON.parse(text))
+}
+
+export async function scoreSinglePrompt(
+  inputPrompt: string,
+  client: Anthropic,
+  retryOptions?: RetryOptions,
+): Promise<SingleScoreResult> {
+  const prompt = fillTemplate(SINGLE_SCORING_PROMPT_TEMPLATE, {
+    PROMPT: inputPrompt,
+  })
+
+  const response = await withRetry(
+    () => client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+    'scoreSinglePrompt',
+    retryOptions,
+  )
+
+  let text = extractTextFromResponse(response)
+  if (text.startsWith('```')) {
+    text = text.split('\n').slice(1).join('\n').replace(/```\s*$/, '').trim()
+  }
+  return validateSingleScoreResult(JSON.parse(text))
 }

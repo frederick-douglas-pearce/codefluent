@@ -1,8 +1,27 @@
 # CodeFluent
 
-**AI fluency analytics for Claude Code users** — track your prompting skills, monitor token usage, and get personalized coaching to write better prompts.
+**AI fluency analytics for Claude Code users** — track your prompting skills, monitor token usage, and get personalized recommendations to write better prompts.
 
 CodeFluent parses your local Claude Code session files, scores your prompts against 11 research-backed fluency behaviors, and shows you exactly where to improve.
+
+## Getting Started
+
+### Requirements
+
+- **VS Code** 1.85 or later
+- **Claude Code** installed and used (session data in `~/.claude/projects/`)
+- **Anthropic API key** — for fluency scoring (set `ANTHROPIC_API_KEY` env var, add to workspace `.env`, or enter when prompted)
+- **Node.js** 22+ — for `ccusage` usage data (called via `npx`)
+- **GitHub CLI (`gh`)** — optional, for Quick Wins repo context and issue suggestions
+
+### Installation
+
+1. Install the `.vsix` package:
+   ```
+   code --install-extension codefluent-0.1.0.vsix
+   ```
+2. Open the CodeFluent sidebar by clicking the activity bar icon
+3. When prompted, enter your Anthropic API key (stored securely in VS Code SecretStorage)
 
 ## Features
 
@@ -13,6 +32,8 @@ Your prompts are scored (0–100) against 11 behaviors that distinguish effectiv
 - Specificity, decomposition, context-setting, constraint use
 - Iterative refinement, error recovery, verification requests
 - And more — each scored individually with actionable feedback
+
+A weekly trend sparkline tracks your score trajectory over time (improving, stable, or declining).
 
 ![Fluency Score Dashboard](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-scoring.png)
 
@@ -28,6 +49,12 @@ Tailored coaching based on your weakest fluency behaviors, with high/medium impa
 
 Get credit for fluency behaviors encoded in your project's `CLAUDE.md` file. Behaviors defined as project conventions are merged with your session scores — so good project setup boosts your fluency rating.
 
+### Prompt Optimizer
+
+Paste any prompt and get an optimized version back. The optimizer considers your workspace CLAUDE.md config (scoring it on demand if not cached) so it won't add behaviors already covered by project conventions. Shows a side-by-side comparison with before/after effective scores so you can copy or run the improved prompt directly.
+
+![Prompt Optimizer](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-optimizer.png)
+
 ### Quick Wins
 
 GitHub-repo-scoped task suggestions — CodeFluent detects your current workspace repo, fetches open issues, and suggests high-impact tasks you can launch directly in Claude Code with one click.
@@ -42,21 +69,13 @@ Track daily and monthly token usage, costs, and session history. Powered by [`cc
 
 ![Usage Dashboard](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage.png)
 
-## Requirements
-
-- **VS Code** 1.85 or later
-- **Claude Code** installed and used (session data in `~/.claude/projects/`)
-- **Anthropic API key** — for fluency scoring (set `ANTHROPIC_API_KEY` env var, add to workspace `.env`, or enter when prompted)
-- **Node.js** 18+ — for `ccusage` usage data (called via `npx`)
-- **GitHub CLI (`gh`)** — optional, for Quick Wins repo context and issue suggestions
-
 ## How It Works
 
 1. **Session parsing** — Reads JSONL session files from `~/.claude/projects/` to extract your prompts
 2. **Fluency scoring** — Sends prompts (up to 20 per session, max 2000 chars each) to Claude Sonnet for behavioral classification
 3. **Config scoring** — Reads your workspace `CLAUDE.md` and scores it against the same behaviors
 4. **Score aggregation** — Merges session + config scores, caches results to minimize API calls
-5. **Coaching** — Identifies your weakest behaviors and generates targeted improvement tips
+5. **Recommendations** — Identifies your weakest behaviors and generates targeted improvement tips
 6. **Usage tracking** — Calls `ccusage` to aggregate token/cost data from Claude Code sessions
 
 All data stays local. No telemetry, no external servers — just your local session files and direct Anthropic API calls for scoring.

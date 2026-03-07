@@ -4,7 +4,7 @@ import * as path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
 import { getAllSessions } from './parser'
 import { getUsageData } from './usage'
-import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION } from './scoring'
+import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, OptimizeResponse } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 import { DataCache } from './dataCache'
@@ -169,6 +169,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getBenchmarks':
           data = this.handleGetBenchmarks()
           break
+        case 'optimizePrompt':
+          data = await this.handleOptimizePrompt(payload)
+          break
         default:
           return
       }
@@ -290,6 +293,97 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const benchmarksPath = path.join(this.context.extensionUri.fsPath, 'shared', 'benchmarks.json')
     const data = JSON.parse(fs.readFileSync(benchmarksPath, 'utf8'))
     return data.benchmarks
+  }
+
+  private async handleOptimizePrompt(payload?: { prompt?: string }): Promise<OptimizeResponse> {
+    const inputPrompt = payload?.prompt?.trim()
+    if (!inputPrompt) {
+      throw new Error('Prompt is required')
+    }
+    if (inputPrompt.length > 10000) {
+      throw new Error('Prompt must be 10,000 characters or less')
+    }
+
+    // Check cache (include workspace path so different projects get separate entries)
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ''
+    const cacheKey = ScoreCache.contentHash(inputPrompt + workspacePath)
+    const optimizerCache = this.cache.readOptimizer()
+    if (optimizerCache[cacheKey]?.prompt_version === OPTIMIZER_PROMPT_VERSION) {
+      return optimizerCache[cacheKey]
+    }
+
+    const apiKey = await this.getApiKey()
+    if (!apiKey) {
+      throw new Error('Anthropic API key is required for prompt optimization')
+    }
+    const client = new Anthropic({ apiKey })
+
+    // Score CLAUDE.md if not cached (result benefits Fluency Score tab, Quick Wins, etc.)
+    const configBehaviors = await this.scoreWorkspaceClaudeMd(client, false)
+
+    // Call 1: Optimize (pass config behavior flags so it avoids redundant behaviors)
+    const optimizerResult = await optimizePrompt(inputPrompt, client, configBehaviors)
+
+    // Merge input behaviors with config: effective = prompt OR config
+    const effectiveInputBehaviors = this.mergeWithConfig(optimizerResult.input_behaviors, configBehaviors)
+    const effectiveInputScore = Math.round(
+      (Object.values(effectiveInputBehaviors).filter(Boolean).length / 11) * 100
+    )
+
+    // No-op: already good (check effective score including config)
+    if (effectiveInputScore >= 90 || !optimizerResult.optimized_prompt) {
+      const response: OptimizeResponse = {
+        already_good: true,
+        input_score: effectiveInputScore,
+        input_behaviors: effectiveInputBehaviors,
+        one_line_summary: optimizerResult.one_line_summary,
+        prompt_version: OPTIMIZER_PROMPT_VERSION,
+      }
+      optimizerCache[cacheKey] = response
+      this.cache.writeOptimizer(optimizerCache)
+      return response
+    }
+
+    // Call 2: Score the optimized prompt standalone (no config context needed)
+    const singleScore = await scoreSinglePrompt(optimizerResult.optimized_prompt, client)
+
+    // Merge output behaviors with config: effective = prompt OR config
+    const effectiveOutputBehaviors = this.mergeWithConfig(singleScore.fluency_behaviors, configBehaviors)
+    const effectiveOutputScore = Math.round(
+      (Object.values(effectiveOutputBehaviors).filter(Boolean).length / 11) * 100
+    )
+
+    // Compute behaviors_added from actual score difference (not optimizer self-report)
+    const behaviorsAdded = Object.keys(effectiveOutputBehaviors)
+      .filter(k => effectiveOutputBehaviors[k] && !effectiveInputBehaviors[k])
+
+    const response: OptimizeResponse = {
+      input_score: effectiveInputScore,
+      input_behaviors: effectiveInputBehaviors,
+      optimized_prompt: optimizerResult.optimized_prompt,
+      output_score: effectiveOutputScore,
+      output_behaviors: effectiveOutputBehaviors,
+      behaviors_added: behaviorsAdded,
+      explanation: optimizerResult.explanation,
+      one_line_summary: optimizerResult.one_line_summary,
+      prompt_version: OPTIMIZER_PROMPT_VERSION,
+    }
+
+    optimizerCache[cacheKey] = response
+    this.cache.writeOptimizer(optimizerCache)
+    return response
+  }
+
+  private mergeWithConfig(
+    promptBehaviors: Record<string, boolean>,
+    configBehaviors?: Record<string, boolean>,
+  ): Record<string, boolean> {
+    if (!configBehaviors) return { ...promptBehaviors }
+    const merged: Record<string, boolean> = { ...promptBehaviors }
+    for (const [key, value] of Object.entries(configBehaviors)) {
+      if (value) merged[key] = true
+    }
+    return merged
   }
 
   private async handleGetCachedScores() {

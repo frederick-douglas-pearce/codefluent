@@ -30,7 +30,7 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 - **AI evaluating AI collaboration.** Claude scores your prompts against the fluency framework, creating a feedback loop: the AI tells you how to work with it more effectively.
 - **Native VS Code integration.** Lives in your sidebar, respects your theme, launches Claude Code sessions directly from suggestions.
 - **Completely local and private.** All session data stays on your machine. The only external calls are to the Anthropic API for scoring.
-- **Zero infrastructure.** No database, no auth, no build step. Install the `.vsix` and go.
+- **No server infrastructure.** No database, no auth, no backend to maintain. Install the `.vsix` and go.
 
 ## Supported Platforms
 
@@ -42,50 +42,14 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 
 Terminal launch, shell escaping, subprocess invocation, and session path resolution all adapt automatically to the host platform. No configuration required.
 
-## Screenshots
+## Getting Started
 
-### Web App
+### Prerequisites
 
-| Usage | Fluency Score |
-|-------|---------------|
-| ![Usage tab](images/demo-usage.png) | ![Fluency tab](images/demo-fluency.png) |
-
-| Quick Wins | Recommendations |
-|------------|-----------------|
-| ![Quick Wins tab](images/demo-quickwins.png) | ![Recommendations tab](images/demo-recommendations.png) |
-
-### VS Code Extension
-
-| Fluency Score | Usage |
-|---------------|-------|
-| ![VS Code sidebar showing Fluency Score tab with score ring, behavior bars, and benchmark comparison](images/vscode-fluency.png) | ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) |
-
-| Quick Wins | Recommendations |
-|------------|-----------------|
-| ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) | ![VS Code sidebar showing Recommendations tab](images/vscode-recommendations.png) |
-
-## Features
-
-- **Fluency Score** — Scores your sessions against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
-- **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
-- **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). A **Refresh** button fetches the latest data on demand. Stacked area charts show cache read/creation/input/output token breakdown.
-- **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
-- **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
-- **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
-- **VS Code Theming** — Automatically respects your light/dark theme.
-
-## How It Works
-
-1. The extension parses JSONL session files from `~/.claude/projects/` to extract user prompts and metadata (plan mode usage, tool diversity, thinking count)
-2. `ccusage` reads your Claude Code session history and exports token/cost data
-3. User prompts are sent to `claude-sonnet-4-20250514` for fluency scoring against Anthropic's 4D AI Fluency Framework
-4. If a `CLAUDE.md` exists in the workspace, it's scored separately against the same 11 behaviors — effective behavior = session OR config
-5. Results are cached locally in VS Code's extension storage (by session ID and CLAUDE.md content hash) to avoid re-scoring
-6. Quick Wins uses the `gh` CLI to pull repo context and open issues, scoped to the current workspace
-
-Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
-
-## Install
+- **All platforms:** Node.js 22+ (for `npx ccusage`), an [Anthropic API key](https://console.anthropic.com/settings/keys) (sign up at [console.anthropic.com](https://console.anthropic.com/) if you don't have one), [`gh` CLI](https://cli.github.com/) authenticated (`gh auth login` must be run before Quick Wins works), Git
+- **VS Code extension:** VS Code 1.85+
+- **Web app:** Python 3.12+ / `uv`
+- **Windows:** No additional dependencies. The extension automatically uses `cmd.exe` and `npx.cmd` where needed.
 
 ### VS Code Extension
 
@@ -135,28 +99,7 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 Then open `http://localhost:8000` in your browser. Usage data is fetched on demand via the **Refresh** button in the Usage tab — no manual `ccusage` commands needed. See [`webapp/README.md`](webapp/README.md) for detailed setup instructions.
 
-### Prerequisites
-
-- **All platforms:** Node.js 22+ (for `npx ccusage`), an [Anthropic API key](https://console.anthropic.com/settings/keys) (sign up at [console.anthropic.com](https://console.anthropic.com/) if you don't have one), [`gh` CLI](https://cli.github.com/) authenticated (`gh auth login` must be run before Quick Wins works), Git
-- **VS Code extension:** VS Code 1.85+
-- **Web app:** Python 3.12+ / `uv`
-- **Windows:** No additional dependencies. The extension automatically uses `cmd.exe` and `npx.cmd` where needed.
-
-### Session Data Location
-
-Claude Code stores session files at `~/.claude/projects/` on all platforms:
-
-| Platform | Path |
-|----------|------|
-| Linux | `~/.claude/projects/` |
-| macOS | `~/.claude/projects/` |
-| Windows | `C:\Users\<username>\.claude\projects\` |
-
-The extension resolves this automatically via the system home directory.
-
-> **Note:** Session transcript files are only available from late January 2026 onward. Earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (AI-spawned) are excluded from scoring. See [`docs/SESSION_DATA.md`](docs/SESSION_DATA.md) for details on data availability, storage format, and scoring scope.
-
-### Configure
+### Configure (API Key)
 
 The extension looks for your API key in this order:
 
@@ -172,6 +115,89 @@ The web app reads `ANTHROPIC_API_KEY` from the environment or a `.env` file in t
 ```
 ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
+
+### Session Data Location
+
+Claude Code stores session files at `~/.claude/projects/` on all platforms:
+
+| Platform | Path |
+|----------|------|
+| Linux | `~/.claude/projects/` |
+| macOS | `~/.claude/projects/` |
+| Windows | `C:\Users\<username>\.claude\projects\` |
+
+The extension resolves this automatically via the system home directory.
+
+> **Note:** Session transcript files are only available from late January 2026 onward. Earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (AI-spawned) are excluded from scoring. See [`docs/SESSION_DATA.md`](docs/SESSION_DATA.md) for details on data availability, storage format, and scoring scope.
+
+## Screenshots
+
+### Web App
+
+| Fluency Score | Recommendations |
+|---------------|-----------------|
+| ![Fluency tab](images/demo-fluency.png) | ![Recommendations tab](images/demo-recommendations.png) |
+
+| Prompt Optimizer | Quick Wins |
+|------------------|------------|
+| ![Prompt Optimizer tab](images/demo-optimizer.png) | ![Quick Wins tab](images/demo-quickwins.png) |
+
+| Usage |
+|-------|
+| ![Usage tab](images/demo-usage.png) |
+
+### VS Code Extension
+
+| Fluency Score | Recommendations |
+|---------------|-----------------|
+| ![VS Code sidebar showing Fluency Score tab with score ring, behavior bars, and benchmark comparison](images/vscode-scoring.png) | ![VS Code sidebar showing Recommendations tab](images/vscode-recommendations.png) |
+
+| Prompt Optimizer | Quick Wins |
+|------------------|------------|
+| ![VS Code sidebar showing Prompt Optimizer](images/vscode-optimizer.png) | ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) |
+
+| Usage |
+|-------|
+| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) |
+
+## Features
+
+- **Fluency Score** — Scores your sessions against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
+- **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
+- **Prompt Optimizer** — Paste any prompt and get an optimized version that naturally incorporates missing fluency behaviors. Considers your CLAUDE.md config so it won't add behaviors already covered by project conventions. Shows before/after effective scores, highlights added behaviors, and lets you copy or run the improved prompt directly.
+- **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
+- **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). A **Refresh** button fetches the latest data on demand. Stacked area charts show cache read/creation/input/output token breakdown.
+- **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
+- **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
+- **VS Code Theming** — Automatically respects your light/dark theme.
+
+## How It Works
+
+1. The extension parses JSONL session files from `~/.claude/projects/` to extract user prompts and metadata (plan mode usage, tool diversity, thinking count)
+2. `ccusage` reads your Claude Code session history and exports token/cost data
+3. User prompts are sent to `claude-sonnet-4-20250514` for fluency scoring against Anthropic's 4D AI Fluency Framework
+4. If a `CLAUDE.md` exists in the workspace, it's scored separately against the same 11 behaviors — effective behavior = session OR config
+5. The Prompt Optimizer analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config (scoring on demand if not cached), then generates an optimized version that incorporates only the missing behaviors not already covered by project conventions
+6. Results are cached locally in VS Code's extension storage (by session ID and CLAUDE.md content hash) to avoid re-scoring
+7. Quick Wins uses the `gh` CLI to pull repo context and open issues, scoped to the current workspace
+
+Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
+
+## Security
+
+| Layer | Mechanism | Protects Against |
+|-------|-----------|------------------|
+| XSS | `escapeHtml()` on all user-controlled output | Script injection |
+| CSP | Nonce-based `script-src` in webview | Inline script execution |
+| Shell injection | `execFileSync` with arg arrays + GitHub name validation | Command injection |
+| API key secrets | VS Code SecretStorage / env var / `.env` | Credential leakage |
+| Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
+| Rate limiting | 10 req/min sliding window (webapp) | API abuse |
+| CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
+| Automated testing | 465 tests including security-focused suites | Regressions |
+| CI security review | Claude security review on PRs | New vulnerabilities |
+
+All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
 
 ## Troubleshooting
 
@@ -201,12 +227,14 @@ codefluent/
 ├── vscode-extension/          # VS Code extension (primary)
 │   ├── src/
 │   │   ├── extension.ts       # Activation, status bar, command registration
-│   │   ├── webviewProvider.ts  # WebviewViewProvider, IPC, terminal launch
+│   │   ├── webviewProvider.ts # WebviewViewProvider, IPC, terminal launch
 │   │   ├── parser.ts          # JSONL session file parsing
 │   │   ├── scoring.ts         # Fluency scoring via Anthropic API
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub integration + task suggestions
+│   │   ├── prompts.ts         # Prompt loader + template filler
 │   │   ├── cache.ts           # Persistent score caching
+│   │   ├── dataCache.ts       # Session/usage data caching
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
 │   ├── media/
 │   │   ├── index.html         # Webview UI
@@ -214,7 +242,7 @@ codefluent/
 │   │   ├── style.css          # VS Code theme-aware design system
 │   │   └── icon.svg           # Activity bar icon
 │   ├── test/
-│   │   ├── unit/              # Unit tests (scoring)
+│   │   ├── unit/              # Unit tests (scoring, parsing, caching, XSS, platform)
 │   │   └── integration/       # Integration tests (extension, webview)
 │   ├── package.json
 │   └── tsconfig.json
@@ -222,6 +250,14 @@ codefluent/
 │   ├── main.py                # FastAPI backend
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
 │   └── static/                # Web frontend (HTML/CSS/JS)
+├── shared/                    # Shared resources (both interfaces)
+│   ├── benchmarks.json        # Population benchmark data
+│   └── prompts/               # Versioned prompt templates
+│       ├── registry.json      # Active version pointers
+│       ├── scoring/v1.0.md        # Session scoring prompt
+│       ├── config/v1.0.md         # CLAUDE.md scoring prompt
+│       ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
+│       └── single_scoring/v1.0.md # Single-prompt verification scorer
 ├── docs/                      # Design docs and specs
 │   ├── PROJECT_PLAN.md
 │   ├── TECHNICAL_SPEC.md
@@ -241,10 +277,25 @@ npm run watch          # Continuous TypeScript compilation
 # Press F5 in VS Code to launch Extension Development Host
 ```
 
+### Branching Strategy
+
+- **`main`** — Always releasable. Protected by CI, requires a PR to merge.
+- **`feature/<issue>-desc`** — New features (e.g., `feature/44-remaining-recommendations`)
+- **`fix/<issue>-desc`** — Bug fixes (e.g., `fix/46-cache-unbounded`)
+
+### CI/CD
+
+Four GitHub Actions workflows run automatically:
+
+- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 465 tests. Must pass to merge.
+- **Claude Code Review** (`claude-review.yml`) — AI-powered PR review on all PRs, responds to `@claude` mentions.
+- **Security Review** (`security-review.yml`) — Claude-based security scan on PRs, checks for XSS/injection vectors.
+- **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
+
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (416 tests across 12 suites)
+npm test               # Run all Jest tests (465 tests across 12 suites)
 ```
 
 ### Packaging
