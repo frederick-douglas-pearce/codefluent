@@ -514,14 +514,39 @@ def _save_optimizer_cache(cache: dict) -> None:
         json.dump(cache, f, indent=2)
 
 
-def _get_cached_config_behaviors(project_encoded: str) -> dict:
-    """Get cached CLAUDE.md config behavior scores for a project."""
+def _get_or_score_config_behaviors(project_encoded: str) -> dict:
+    """Get config behavior scores, scoring CLAUDE.md if not cached."""
     if not project_encoded:
         return {}
     project_dir = _decode_project_path(project_encoded)
     config_cache = _load_config_cache()
     entry = config_cache.get(project_dir, {})
-    return entry.get("fluency_behaviors", {})
+
+    # Check if cached and current
+    claude_md_path = Path(project_dir) / "CLAUDE.md"
+    try:
+        content = claude_md_path.read_text()
+    except Exception:
+        return entry.get("fluency_behaviors", {})
+
+    content_hash = _config_content_hash(content)
+    if (entry.get("hash") == content_hash
+            and entry.get("prompt_version") == CONFIG_SCORING_PROMPT_VERSION):
+        return entry.get("fluency_behaviors", {})
+
+    # Score and cache (benefits Fluency Score tab, Quick Wins, etc.)
+    try:
+        result = score_claude_md(content)
+        config_cache[project_dir] = {
+            "hash": content_hash,
+            "prompt_version": CONFIG_SCORING_PROMPT_VERSION,
+            "fluency_behaviors": result["fluency_behaviors"],
+            "one_line_summary": result.get("one_line_summary", ""),
+        }
+        _save_config_cache(config_cache)
+        return result["fluency_behaviors"]
+    except Exception:
+        return entry.get("fluency_behaviors", {})
 
 
 def _build_config_behaviors_context(config_behaviors: dict) -> str:
@@ -556,7 +581,7 @@ async def optimize_prompt(request: OptimizeRequest):
         raise HTTPException(status_code=400, detail="Prompt is required")
 
     # Get cached config behavior scores (already computed by Fluency Score tab)
-    config_behaviors = _get_cached_config_behaviors(request.project)
+    config_behaviors = _get_or_score_config_behaviors(request.project)
 
     # Check cache (include project in cache key so different projects get different results)
     cache_key = _config_content_hash(input_prompt + request.project)

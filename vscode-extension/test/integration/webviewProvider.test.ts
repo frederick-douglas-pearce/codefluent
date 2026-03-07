@@ -1075,10 +1075,14 @@ describe('CodeFluentViewProvider', () => {
 
   describe('optimizePrompt message', () => {
     afterEach(() => {
-      // Clean up any optimizer cache files written during tests
+      // Clean up any cache files written during tests
       try {
         const fs = require('fs')
         fs.unlinkSync('/tmp/codefluent-test-storage/optimizer_cache.json')
+      } catch {}
+      try {
+        const fs = require('fs')
+        fs.unlinkSync('/tmp/codefluent-test-storage/config_scores.json')
       } catch {}
     })
 
@@ -1226,7 +1230,68 @@ describe('CodeFluentViewProvider', () => {
       expect(response![0].error).toContain('API key')
     })
 
-    it('passes cached config behaviors to optimizePrompt', async () => {
+    it('scores CLAUDE.md on demand when workspace has one', async () => {
+      ;(vscode.workspace as any).workspaceFolders = [
+        { uri: vscode.Uri.file('/home/user/my-project') },
+      ]
+
+      const configBehaviors = { setting_interaction_terms: true, checking_facts: true }
+      ;(scoreClaudeMd as jest.Mock).mockResolvedValue({
+        fluency_behaviors: configBehaviors,
+        one_line_summary: 'Good config.',
+      })
+
+      const ctx = makeContext({
+        secrets: { get: jest.fn().mockResolvedValue('sk-test-key'), store: jest.fn() },
+      })
+      const provider = new CodeFluentViewProvider(ctx)
+      const view = makeWebviewView()
+      provider.resolveWebviewView(view, {} as any, {} as any)
+      const sendMessage = view._messageHandlers[0]
+
+      ;(optimizePrompt as jest.Mock).mockResolvedValue({
+        input_behaviors: { clarifying_goals: true },
+        input_score: 9,
+        optimized_prompt: 'Better prompt',
+        behaviors_added: ['questioning_reasoning'],
+        explanation: 'Added questioning.',
+        one_line_summary: 'Basic prompt.',
+      })
+      ;(scoreSinglePrompt as jest.Mock).mockResolvedValue({
+        fluency_behaviors: { clarifying_goals: true, questioning_reasoning: true },
+        overall_score: 18,
+        one_line_summary: 'Good prompt.',
+      })
+
+      await sendMessage({
+        type: 'optimizePrompt',
+        requestId: 'req-opt-config',
+        payload: { prompt: 'Fix the bug in auth' },
+      })
+
+      // scoreClaudeMd should have been called to score the config
+      expect(scoreClaudeMd).toHaveBeenCalled()
+
+      // optimizePrompt should receive config behaviors
+      expect(optimizePrompt).toHaveBeenCalledWith(
+        'Fix the bug in auth',
+        expect.anything(),
+        configBehaviors,
+      )
+
+      const response = view.webview.postMessage.mock.calls.find(
+        (c: any) => c[0].requestId === 'req-opt-config'
+      )
+      expect(response).toBeTruthy()
+      // Input: clarifying_goals (prompt) + setting_interaction_terms + checking_facts (config) = 3/11 = 27
+      expect(response[0].data.input_score).toBe(27)
+      // Output: clarifying_goals + questioning_reasoning (prompt) + config behaviors = 4/11 = 36
+      expect(response[0].data.output_score).toBe(36)
+
+      ;(vscode.workspace as any).workspaceFolders = undefined
+    })
+
+    it('passes undefined config when no workspace is open', async () => {
       ;(vscode.workspace as any).workspaceFolders = undefined
 
       const ctx = makeContext({
@@ -1239,35 +1304,28 @@ describe('CodeFluentViewProvider', () => {
 
       ;(optimizePrompt as jest.Mock).mockResolvedValue({
         input_behaviors: { clarifying_goals: true },
-        input_score: 18,
+        input_score: 9,
         optimized_prompt: 'Better prompt',
-        behaviors_added: ['checking_facts'],
-        explanation: 'Added checking.',
-        one_line_summary: 'Basic prompt.',
+        behaviors_added: [],
+        one_line_summary: 'Basic.',
       })
       ;(scoreSinglePrompt as jest.Mock).mockResolvedValue({
-        fluency_behaviors: { clarifying_goals: true, checking_facts: true },
-        overall_score: 82,
-        one_line_summary: 'Good prompt.',
+        fluency_behaviors: { clarifying_goals: true },
+        overall_score: 9,
+        one_line_summary: 'OK.',
       })
 
       await sendMessage({
         type: 'optimizePrompt',
-        requestId: 'req-opt-no-config',
-        payload: { prompt: 'Fix the bug in auth' },
+        requestId: 'req-opt-no-ws',
+        payload: { prompt: 'Test prompt' },
       })
 
-      // Without config cache, optimizePrompt receives undefined for config behaviors
+      // Without workspace, no config behaviors
       expect(optimizePrompt).toHaveBeenCalledWith(
-        'Fix the bug in auth',
+        'Test prompt',
         expect.anything(),
         undefined,
-      )
-
-      // scoreSinglePrompt should NOT receive config behaviors (scores standalone)
-      expect(scoreSinglePrompt).toHaveBeenCalledWith(
-        'Better prompt',
-        expect.anything(),
       )
     })
 

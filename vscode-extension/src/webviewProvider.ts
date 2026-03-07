@@ -304,9 +304,6 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       throw new Error('Prompt must be 10,000 characters or less')
     }
 
-    // Get cached config behaviors from CLAUDE.md scoring (already computed by Fluency Score tab)
-    const configBehaviors = this.getCachedConfigBehaviors()
-
     // Check cache (include workspace path so different projects get separate entries)
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ''
     const cacheKey = ScoreCache.contentHash(inputPrompt + workspacePath)
@@ -320,6 +317,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       throw new Error('Anthropic API key is required for prompt optimization')
     }
     const client = new Anthropic({ apiKey })
+
+    // Score CLAUDE.md if not cached (result benefits Fluency Score tab, Quick Wins, etc.)
+    const configBehaviors = await this.scoreWorkspaceClaudeMd(client, false)
 
     // Call 1: Optimize (pass config behavior flags so it avoids redundant behaviors)
     const optimizerResult = await optimizePrompt(inputPrompt, client, configBehaviors)
