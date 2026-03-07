@@ -647,13 +647,19 @@ async def optimize_prompt(request: OptimizeRequest):
     effective_output = _merge_with_config(single_score["fluency_behaviors"], config_behaviors)
     effective_output_score = round(sum(1 for v in effective_output.values() if v) / 11 * 100)
 
+    # Compute behaviors_added from actual score difference (not optimizer self-report)
+    behaviors_added = [
+        k for k, v in effective_output.items()
+        if v and not effective_input.get(k)
+    ]
+
     result = {
         "input_score": effective_input_score,
         "input_behaviors": effective_input,
         "optimized_prompt": optimizer_result["optimized_prompt"],
         "output_score": effective_output_score,
         "output_behaviors": effective_output,
-        "behaviors_added": optimizer_result["behaviors_added"],
+        "behaviors_added": behaviors_added,
         "explanation": optimizer_result["explanation"],
         "one_line_summary": optimizer_result["one_line_summary"],
         "prompt_version": OPTIMIZER_PROMPT_VERSION,

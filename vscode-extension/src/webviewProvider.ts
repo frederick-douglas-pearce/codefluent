@@ -353,13 +353,17 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       (Object.values(effectiveOutputBehaviors).filter(Boolean).length / 11) * 100
     )
 
+    // Compute behaviors_added from actual score difference (not optimizer self-report)
+    const behaviorsAdded = Object.keys(effectiveOutputBehaviors)
+      .filter(k => effectiveOutputBehaviors[k] && !effectiveInputBehaviors[k])
+
     const response: OptimizeResponse = {
       input_score: effectiveInputScore,
       input_behaviors: effectiveInputBehaviors,
       optimized_prompt: optimizerResult.optimized_prompt,
       output_score: effectiveOutputScore,
       output_behaviors: effectiveOutputBehaviors,
-      behaviors_added: optimizerResult.behaviors_added,
+      behaviors_added: behaviorsAdded,
       explanation: optimizerResult.explanation,
       one_line_summary: optimizerResult.one_line_summary,
       prompt_version: OPTIMIZER_PROMPT_VERSION,
