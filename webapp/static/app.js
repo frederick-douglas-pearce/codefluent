@@ -214,8 +214,8 @@ function switchTab(tabName) {
   const dataPathGroup = document.getElementById('data-path-group')
   const projectGroup = document.getElementById('project-filter-group')
   const settingsBar = document.querySelector('.settings-bar')
-  const showDataPath = ['fluency', 'recommendations'].includes(tabName)
-  const showProject = ['fluency', 'recommendations', 'optimizer'].includes(tabName)
+  const showDataPath = ['fluency'].includes(tabName)
+  const showProject = ['fluency', 'optimizer', 'quickwins'].includes(tabName)
   if (dataPathGroup) dataPathGroup.style.display = showDataPath ? '' : 'none'
   if (projectGroup) projectGroup.style.display = showProject ? '' : 'none'
   if (settingsBar) settingsBar.style.display = (showDataPath || showProject) ? '' : 'none'
@@ -1028,7 +1028,9 @@ async function loadQuickWins() {
   showLoader('quickwins-results')
 
   try {
-    const res = await fetch('/api/quickwins')
+    const projectParam = getSelectedProjectEncoded()
+    const url = projectParam ? `/api/quickwins?project=${encodeURIComponent(projectParam)}` : '/api/quickwins'
+    const res = await fetch(url)
     state.quickwins = await res.json()
     renderQuickWins()
   } catch (e) {
