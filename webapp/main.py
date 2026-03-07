@@ -427,6 +427,7 @@ async def score_sessions(request: ScoreRequest):
 
 class OptimizeRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=10000)
+    project: str = Field(default="", max_length=500)
 
 
 def validate_optimizer_result(raw) -> dict:
@@ -513,6 +514,39 @@ def _save_optimizer_cache(cache: dict) -> None:
         json.dump(cache, f, indent=2)
 
 
+def _get_cached_config_behaviors(project_encoded: str) -> dict:
+    """Get cached CLAUDE.md config behavior scores for a project."""
+    if not project_encoded:
+        return {}
+    project_dir = _decode_project_path(project_encoded)
+    config_cache = _load_config_cache()
+    entry = config_cache.get(project_dir, {})
+    return entry.get("fluency_behaviors", {})
+
+
+def _build_config_behaviors_context(config_behaviors: dict) -> str:
+    """Build the config behaviors section for the optimizer prompt template."""
+    covered = [k for k, v in config_behaviors.items() if v]
+    if not covered:
+        return ""
+    lines = "\n".join(f"- {b}" for b in covered)
+    return (
+        "\n\n## Behaviors Already Covered by Project Config (CLAUDE.md)\n\n"
+        "The following behaviors are already active via the project's CLAUDE.md file. "
+        "Do NOT add these to the optimized prompt — they apply automatically:\n"
+        + lines
+    )
+
+
+def _merge_with_config(prompt_behaviors: dict, config_behaviors: dict) -> dict:
+    """Merge prompt behaviors with config behaviors: effective = prompt OR config."""
+    merged = dict(prompt_behaviors)
+    for key, value in config_behaviors.items():
+        if value:
+            merged[key] = True
+    return merged
+
+
 @app.post("/api/optimize")
 async def optimize_prompt(request: OptimizeRequest):
     """Optimize a prompt for AI fluency behaviors."""
@@ -521,17 +555,21 @@ async def optimize_prompt(request: OptimizeRequest):
     if not input_prompt:
         raise HTTPException(status_code=400, detail="Prompt is required")
 
-    # Check cache
-    cache_key = _config_content_hash(input_prompt)
+    # Get cached config behavior scores (already computed by Fluency Score tab)
+    config_behaviors = _get_cached_config_behaviors(request.project)
+
+    # Check cache (include project in cache key so different projects get different results)
+    cache_key = _config_content_hash(input_prompt + request.project)
     opt_cache = _load_optimizer_cache()
     if opt_cache.get(cache_key, {}).get("prompt_version") == OPTIMIZER_PROMPT_VERSION:
         return opt_cache[cache_key]
 
-    # Call 1: Optimize
+    # Call 1: Optimize (pass config behavior flags so it avoids redundant behaviors)
     max_length = min(len(input_prompt) * 3, 4000)
     prompt = _fill_template(OPTIMIZER_PROMPT_TEMPLATE, {
         "PROMPT": input_prompt,
         "MAX_LENGTH": str(max_length),
+        "CONFIG_BEHAVIORS": _build_config_behaviors_context(config_behaviors),
     })
     response = with_retry(
         lambda: client.messages.create(
@@ -546,12 +584,16 @@ async def optimize_prompt(request: OptimizeRequest):
         text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
     optimizer_result = validate_optimizer_result(json.loads(text))
 
-    # No-op: already good
-    if optimizer_result["input_score"] >= 90 or not optimizer_result["optimized_prompt"]:
+    # Merge input behaviors with config: effective = prompt OR config
+    effective_input = _merge_with_config(optimizer_result["input_behaviors"], config_behaviors)
+    effective_input_score = round(sum(1 for v in effective_input.values() if v) / 11 * 100)
+
+    # No-op: already good (check effective score including config)
+    if effective_input_score >= 90 or not optimizer_result["optimized_prompt"]:
         result = {
             "already_good": True,
-            "input_score": optimizer_result["input_score"],
-            "input_behaviors": optimizer_result["input_behaviors"],
+            "input_score": effective_input_score,
+            "input_behaviors": effective_input,
             "one_line_summary": optimizer_result["one_line_summary"],
             "prompt_version": OPTIMIZER_PROMPT_VERSION,
         }
@@ -559,7 +601,7 @@ async def optimize_prompt(request: OptimizeRequest):
         _save_optimizer_cache(opt_cache)
         return result
 
-    # Call 2: Independently score the optimized prompt
+    # Call 2: Score the optimized prompt standalone (no config context needed)
     single_prompt = _fill_template(SINGLE_SCORING_PROMPT_TEMPLATE, {
         "PROMPT": optimizer_result["optimized_prompt"],
     })
@@ -576,12 +618,16 @@ async def optimize_prompt(request: OptimizeRequest):
         single_text = single_text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
     single_score = validate_single_score_result(json.loads(single_text))
 
+    # Merge output behaviors with config: effective = prompt OR config
+    effective_output = _merge_with_config(single_score["fluency_behaviors"], config_behaviors)
+    effective_output_score = round(sum(1 for v in effective_output.values() if v) / 11 * 100)
+
     result = {
-        "input_score": optimizer_result["input_score"],
-        "input_behaviors": optimizer_result["input_behaviors"],
+        "input_score": effective_input_score,
+        "input_behaviors": effective_input,
         "optimized_prompt": optimizer_result["optimized_prompt"],
-        "output_score": single_score["overall_score"],
-        "output_behaviors": single_score["fluency_behaviors"],
+        "output_score": effective_output_score,
+        "output_behaviors": effective_output,
         "behaviors_added": optimizer_result["behaviors_added"],
         "explanation": optimizer_result["explanation"],
         "one_line_summary": optimizer_result["one_line_summary"],

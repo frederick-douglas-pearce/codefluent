@@ -1,4 +1,4 @@
-import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions, SCORING_PROMPT_VERSION, CONFIG_SCORING_PROMPT_VERSION, validateOptimizerResult, validateSingleScoreResult, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION } from '../../src/scoring'
+import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions, SCORING_PROMPT_VERSION, CONFIG_SCORING_PROMPT_VERSION, validateOptimizerResult, validateSingleScoreResult, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, buildConfigBehaviorsContext } from '../../src/scoring'
 import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
@@ -1880,6 +1880,54 @@ describe('optimizePrompt', () => {
       expect.objectContaining({ max_tokens: 2048 }),
     )
   })
+
+  it('includes config behaviors in API call when provided', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          input_behaviors: {},
+          input_score: 50,
+          optimized_prompt: 'Better',
+          behaviors_added: [],
+          one_line_summary: 'Test.',
+        }),
+      }],
+    }
+    const createFn = jest.fn().mockResolvedValue(mockResponse)
+    const client = { messages: { create: createFn } }
+    await optimizePrompt('Test', client as any, {
+      setting_interaction_terms: true,
+      checking_facts: true,
+      clarifying_goals: false,
+    })
+    const sentContent = createFn.mock.calls[0][0].messages[0].content
+    expect(sentContent).toContain('- setting_interaction_terms')
+    expect(sentContent).toContain('- checking_facts')
+    expect(sentContent).toContain('Already Covered by Project Config')
+    // clarifying_goals is false, so it should not appear in the covered list
+    expect(sentContent).not.toContain('- clarifying_goals')
+  })
+
+  it('omits config behaviors section when not provided', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          input_behaviors: {},
+          input_score: 50,
+          optimized_prompt: 'Better',
+          behaviors_added: [],
+          one_line_summary: 'Test.',
+        }),
+      }],
+    }
+    const createFn = jest.fn().mockResolvedValue(mockResponse)
+    const client = { messages: { create: createFn } }
+    await optimizePrompt('Test', client as any)
+    const sentContent = createFn.mock.calls[0][0].messages[0].content
+    expect(sentContent).not.toContain('Already Covered by Project Config')
+  })
 })
 
 // ========================================
@@ -1921,6 +1969,41 @@ describe('scoreSinglePrompt', () => {
     expect(createFn).toHaveBeenCalledWith(
       expect.objectContaining({ max_tokens: 1024 }),
     )
+  })
+
+})
+
+// ========================================
+// buildConfigBehaviorsContext
+// ========================================
+
+describe('buildConfigBehaviorsContext', () => {
+  it('returns empty string when no behaviors provided', () => {
+    expect(buildConfigBehaviorsContext()).toBe('')
+    expect(buildConfigBehaviorsContext(undefined)).toBe('')
+  })
+
+  it('returns empty string when no behaviors are true', () => {
+    expect(buildConfigBehaviorsContext({
+      clarifying_goals: false,
+      checking_facts: false,
+    })).toBe('')
+  })
+
+  it('lists only true behaviors with context header', () => {
+    const result = buildConfigBehaviorsContext({
+      setting_interaction_terms: true,
+      checking_facts: true,
+      clarifying_goals: false,
+    })
+    expect(result).toContain('Already Covered by Project Config')
+    expect(result).toContain('- setting_interaction_terms')
+    expect(result).toContain('- checking_facts')
+    expect(result).not.toContain('clarifying_goals')
+  })
+
+  it('returns empty string for empty object', () => {
+    expect(buildConfigBehaviorsContext({})).toBe('')
   })
 })
 

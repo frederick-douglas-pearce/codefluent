@@ -916,7 +916,7 @@ async function runOptimizer() {
     const resp = await fetch('/api/optimize', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, project: getSelectedProject() }),
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}))

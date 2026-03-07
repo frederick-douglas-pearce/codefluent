@@ -536,15 +536,26 @@ export function validateSingleScoreResult(raw: unknown): SingleScoreResult {
   return { fluency_behaviors, overall_score, one_line_summary }
 }
 
+export function buildConfigBehaviorsContext(configBehaviors?: Record<string, boolean>): string {
+  if (!configBehaviors) return ''
+  const covered = Object.entries(configBehaviors)
+    .filter(([, v]) => v)
+    .map(([k]) => k)
+  if (covered.length === 0) return ''
+  return `\n\n## Behaviors Already Covered by Project Config (CLAUDE.md)\n\nThe following behaviors are already active via the project's CLAUDE.md file. Do NOT add these to the optimized prompt — they apply automatically:\n${covered.map(b => `- ${b}`).join('\n')}`
+}
+
 export async function optimizePrompt(
   inputPrompt: string,
   client: Anthropic,
+  configBehaviors?: Record<string, boolean>,
   retryOptions?: RetryOptions,
 ): Promise<OptimizerResult> {
   const maxLength = Math.min(inputPrompt.length * 3, 4000)
   const prompt = fillTemplate(OPTIMIZER_PROMPT_TEMPLATE, {
     PROMPT: inputPrompt,
     MAX_LENGTH: String(maxLength),
+    CONFIG_BEHAVIORS: buildConfigBehaviorsContext(configBehaviors),
   })
 
   const response = await withRetry(

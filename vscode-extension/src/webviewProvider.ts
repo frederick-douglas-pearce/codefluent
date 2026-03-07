@@ -304,8 +304,12 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       throw new Error('Prompt must be 10,000 characters or less')
     }
 
-    // Check cache
-    const cacheKey = ScoreCache.contentHash(inputPrompt)
+    // Get cached config behaviors from CLAUDE.md scoring (already computed by Fluency Score tab)
+    const configBehaviors = this.getCachedConfigBehaviors()
+
+    // Check cache (include workspace path so different projects get separate entries)
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ''
+    const cacheKey = ScoreCache.contentHash(inputPrompt + workspacePath)
     const optimizerCache = this.cache.readOptimizer()
     if (optimizerCache[cacheKey]?.prompt_version === OPTIMIZER_PROMPT_VERSION) {
       return optimizerCache[cacheKey]
@@ -317,15 +321,21 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     }
     const client = new Anthropic({ apiKey })
 
-    // Call 1: Optimize
-    const optimizerResult = await optimizePrompt(inputPrompt, client)
+    // Call 1: Optimize (pass config behavior flags so it avoids redundant behaviors)
+    const optimizerResult = await optimizePrompt(inputPrompt, client, configBehaviors)
 
-    // No-op: already good
-    if (optimizerResult.input_score >= 90 || !optimizerResult.optimized_prompt) {
+    // Merge input behaviors with config: effective = prompt OR config
+    const effectiveInputBehaviors = this.mergeWithConfig(optimizerResult.input_behaviors, configBehaviors)
+    const effectiveInputScore = Math.round(
+      (Object.values(effectiveInputBehaviors).filter(Boolean).length / 11) * 100
+    )
+
+    // No-op: already good (check effective score including config)
+    if (effectiveInputScore >= 90 || !optimizerResult.optimized_prompt) {
       const response: OptimizeResponse = {
         already_good: true,
-        input_score: optimizerResult.input_score,
-        input_behaviors: optimizerResult.input_behaviors,
+        input_score: effectiveInputScore,
+        input_behaviors: effectiveInputBehaviors,
         one_line_summary: optimizerResult.one_line_summary,
         prompt_version: OPTIMIZER_PROMPT_VERSION,
       }
@@ -334,15 +344,21 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       return response
     }
 
-    // Call 2: Independently score the optimized prompt
+    // Call 2: Score the optimized prompt standalone (no config context needed)
     const singleScore = await scoreSinglePrompt(optimizerResult.optimized_prompt, client)
 
+    // Merge output behaviors with config: effective = prompt OR config
+    const effectiveOutputBehaviors = this.mergeWithConfig(singleScore.fluency_behaviors, configBehaviors)
+    const effectiveOutputScore = Math.round(
+      (Object.values(effectiveOutputBehaviors).filter(Boolean).length / 11) * 100
+    )
+
     const response: OptimizeResponse = {
-      input_score: optimizerResult.input_score,
-      input_behaviors: optimizerResult.input_behaviors,
+      input_score: effectiveInputScore,
+      input_behaviors: effectiveInputBehaviors,
       optimized_prompt: optimizerResult.optimized_prompt,
-      output_score: singleScore.overall_score,
-      output_behaviors: singleScore.fluency_behaviors,
+      output_score: effectiveOutputScore,
+      output_behaviors: effectiveOutputBehaviors,
       behaviors_added: optimizerResult.behaviors_added,
       explanation: optimizerResult.explanation,
       one_line_summary: optimizerResult.one_line_summary,
@@ -352,6 +368,18 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     optimizerCache[cacheKey] = response
     this.cache.writeOptimizer(optimizerCache)
     return response
+  }
+
+  private mergeWithConfig(
+    promptBehaviors: Record<string, boolean>,
+    configBehaviors?: Record<string, boolean>,
+  ): Record<string, boolean> {
+    if (!configBehaviors) return { ...promptBehaviors }
+    const merged: Record<string, boolean> = { ...promptBehaviors }
+    for (const [key, value] of Object.entries(configBehaviors)) {
+      if (value) merged[key] = true
+    }
+    return merged
   }
 
   private async handleGetCachedScores() {

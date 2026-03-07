@@ -1,6 +1,6 @@
 {
   "scoring": { "version": "scoring-v1.0", "file": "scoring/v1.0.md" },
   "config": { "version": "config-v1.0", "file": "config/v1.0.md" },
-  "optimizer": { "version": "optimizer-v1.0", "file": "optimizer/v1.0.md" },
+  "optimizer": { "version": "optimizer-v1.1", "file": "optimizer/v1.1.md" },
   "single_scoring": { "version": "single_scoring-v1.0", "file": "single_scoring/v1.0.md" }
 }
