@@ -78,11 +78,11 @@ class TestErrorLeakage:
         resp = client.post("/api/score", json={"session_ids": [session_id]})
         assert resp.status_code == 200
         data = resp.json()
-        # The error is captured per-session, check it does not leak raw API key
+        # The error is captured per-session, verify API key is redacted
         if session_id in data["scores"] and "error" in data["scores"][session_id]:
             error_msg = data["scores"][session_id]["error"]
-            # The error string is present but the endpoint wraps it safely
-            assert isinstance(error_msg, str)
+            assert "sk-ant-" not in error_msg
+            assert "[REDACTED]" in error_msg
 
     def test_invalid_data_path_message(self, client):
         resp = client.get("/api/sessions", params={"data_path": "relative/path"})

@@ -178,7 +178,8 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
       this.view?.webview.postMessage({ type, requestId, data })
     } catch (err: any) {
-      this.view?.webview.postMessage({ type, requestId, error: err.message || 'Request failed' })
+      const errMsg = (err.message || 'Request failed').replace(/sk-ant-[a-zA-Z0-9_-]+/g, '[REDACTED]')
+      this.view?.webview.postMessage({ type, requestId, error: errMsg })
     }
   }
 

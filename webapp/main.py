@@ -128,9 +128,14 @@ def _check_rate_limit():
     _score_timestamps.append(now)
 
 
+def _sanitize_error(msg: str) -> str:
+    """Remove API keys and sensitive tokens from error messages."""
+    return re.sub(r'sk-ant-[a-zA-Z0-9_-]+', '[REDACTED]', msg)
+
+
 def classify_error(e: Exception) -> dict:
     """Classify an API error for retry decisions."""
-    msg = str(e)
+    msg = _sanitize_error(str(e))
     status_code = getattr(e, "status_code", None)
 
     if status_code == 429:
@@ -384,7 +389,7 @@ async def score_sessions(request: ScoreRequest):
             results[sid] = score
             cached[sid] = score
         except Exception as e:
-            results[sid] = {"error": str(e), "session_id": sid}
+            results[sid] = {"error": _sanitize_error(str(e)), "session_id": sid}
 
     with open(scores_path, "w") as f:
         json.dump(cached, f, indent=2)
@@ -1092,4 +1097,4 @@ async def get_quickwins(project: str = Query(default="", max_length=500)):
         return {"suggestions": json.loads(text)}
 
     except Exception as e:
-        return {"suggestions": [], "error": str(e)}
+        return {"suggestions": [], "error": _sanitize_error(str(e))}

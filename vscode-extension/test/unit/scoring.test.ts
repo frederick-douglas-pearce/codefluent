@@ -975,6 +975,13 @@ describe('classifyError', () => {
     expect(result.type).toBe('rate_limit')
     expect(result.retryable).toBe(true)
   })
+
+  it('redacts API keys from error messages', () => {
+    const err = new Error('Error with key sk-ant-api03-ABCDEF123456 in request')
+    const result = classifyError(err)
+    expect(result.message).not.toContain('sk-ant-')
+    expect(result.message).toContain('[REDACTED]')
+  })
 })
 
 // --- withRetry ---

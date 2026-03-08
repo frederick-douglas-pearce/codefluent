@@ -172,6 +172,7 @@ export async function getQuickWins(client: Anthropic, workspacePath?: string, cl
 
     return { suggestions: JSON.parse(text) }
   } catch (e: any) {
-    return { suggestions: [], error: e.message || String(e) }
+    const msg = (e.message || String(e)).replace(/sk-ant-[a-zA-Z0-9_-]+/g, '[REDACTED]')
+    return { suggestions: [], error: msg }
   }
 }

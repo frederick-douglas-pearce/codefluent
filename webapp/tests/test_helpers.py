@@ -12,6 +12,7 @@ from main import (
     _config_content_hash,
     _decode_project_path,
     _detect_project_repo,
+    _sanitize_error,
     classify_error,
     compute_aggregate,
     validate_config_score_result,
@@ -19,6 +20,26 @@ from main import (
     validate_score_result,
 )
 from unittest.mock import MagicMock, patch
+
+
+# --- _sanitize_error ---
+
+class TestSanitizeError:
+    def test_redacts_api_key(self):
+        msg = "Error with key sk-ant-api03-ABCDEF123456 in request"
+        result = _sanitize_error(msg)
+        assert "sk-ant-" not in result
+        assert "[REDACTED]" in result
+
+    def test_preserves_message_without_key(self):
+        msg = "Connection refused"
+        assert _sanitize_error(msg) == msg
+
+    def test_redacts_multiple_keys(self):
+        msg = "Keys: sk-ant-abc123 and sk-ant-def456"
+        result = _sanitize_error(msg)
+        assert result.count("[REDACTED]") == 2
+        assert "sk-ant-" not in result
 
 
 # --- _decode_project_path ---
