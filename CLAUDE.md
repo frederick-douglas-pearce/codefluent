@@ -38,6 +38,7 @@ codefluent/
 │   ├── TECHNICAL_SPEC.md      # Detailed implementation spec
 │   ├── UI_SPEC.md             # Frontend design spec
 │   ├── REFERENCES.md          # Research papers and docs links
+│   ├── SESSION_DATA.md        # Session data format, availability, scope
 │   └── DEMO_SCRIPT.md         # 3-minute demo script
 ├── vscode-extension/          # VS Code extension (PRIMARY)
 │   ├── package.json           # Extension manifest + dependencies
@@ -62,13 +63,16 @@ codefluent/
 │   │   ├── icon.svg           # Activity bar icon (amber brackets)
 │   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
 │   ├── test/
-│   │   ├── unit/{scoring,quickwins,xss,platform}.test.ts
+│   │   ├── unit/{scoring,quickwins,xss,platform,prompts,cache,dataCache,parser,recommendations,usage}.test.ts
 │   │   └── integration/{extension,webviewProvider}.test.ts
 │   └── out/                   # Compiled JS (gitignored)
 ├── webapp/                    # FastAPI web app
-│   ├── main.py                # FastAPI backend
+│   ├── main.py                # FastAPI backend (scoring, optimizer, quickwins, usage)
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
-│   ├── static/                # Web frontend (HTML/CSS/JS)
+│   ├── static/
+│   │   ├── index.html         # Web frontend HTML
+│   │   ├── app.js             # Frontend logic, charts, project scoping
+│   │   └── style.css          # Styles (Inter font, amber accent)
 │   ├── pyproject.toml         # Python dependencies
 │   └── uv.lock
 ├── shared/
@@ -79,6 +83,11 @@ codefluent/
 │       ├── config/v1.0.md         # CLAUDE.md scoring prompt
 │       ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
 │       └── single_scoring/v1.0.md # Single-prompt verification scorer
+├── .github/workflows/         # CI/CD
+│   ├── ci.yml                 # Tests + lint on PR
+│   ├── claude-review.yml      # AI code review (needs-review label)
+│   ├── security-review.yml    # Security-focused review
+│   └── release.yml            # Release workflow
 ├── data/                      # Generated data (gitignored)
 └── images/                    # Demo screenshots
 ```
@@ -154,6 +163,13 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 ### Quick Wins Repo Scoping
 `quickwins.ts` detects the current workspace's GitHub repo via `git remote get-url origin` and scopes both repo context and issue fetching to that repo. Falls back to listing all user repos if no workspace or git remote is found.
 
+### Webapp Project Scoping
+The webapp uses a project dropdown (populated from session data) to scope features to a specific project:
+- **Quick Wins:** Sends `project_path_encoded` to `/api/quickwins?project=...`, backend detects GitHub repo via `git remote get-url origin` in the decoded project directory
+- **Prompt Optimizer:** Sends `project_path_encoded` so the backend can find and score the project's `CLAUDE.md`
+- **Settings bar visibility per tab:** Data path shown only on Fluency Score; project dropdown on Fluency Score, Prompt Optimizer, and Quick Wins; neither on Recommendations or Usage
+- Frontend resolves `project_path_encoded` from session data via `getSelectedProjectEncoded()` (short name → encoded path lookup)
+
 ### Terminal Launch
 "Run" buttons create terminals with `shellPath: '/bin/bash'` and `shellArgs: ['--norc', '--noprofile']` to bypass shell init scripts (venv activation, etc.), while preserving `PATH` from the extension host process.
 
@@ -171,6 +187,12 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 - **Bug fix branches** — `fix/<issue-number>-short-description` (e.g., `fix/46-cache-unbounded`)
 - **PR required to merge to main** — CI runs automatically on the PR. All tests must pass before merge.
 - **Commit to feature/fix branches freely** — push often, squash or merge to main via PR.
+
+### CI Workflows
+- **`ci.yml`** — Runs on every PR: `npm test` (465 tests) in `vscode-extension/`
+- **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
+- **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
+- **`release.yml`** — Release workflow for publishing
 
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
@@ -360,7 +382,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 465 Jest tests
+npm test                   # Runs all 465 Jest tests (12 suites)
 
 # Test structure:
 # test/unit/prompts.test.ts                    — prompt loader + template filler (all prompt types)
@@ -368,6 +390,11 @@ npm test                   # Runs all 465 Jest tests
 # test/unit/quickwins.test.ts                  — GitHub name validation, repo detection, arg safety
 # test/unit/xss.test.ts                        — escapeHtml payloads + source-level XSS vector coverage
 # test/unit/platform.test.ts                   — cross-platform shell, escaping, npx helpers
+# test/unit/cache.test.ts                      — score cache persistence, content hashing, invalidation
+# test/unit/dataCache.test.ts                  — session/usage data caching, stale-while-revalidate
+# test/unit/parser.test.ts                     — JSONL parsing, content extraction, subagent filtering
+# test/unit/recommendations.test.ts            — recommendation generation, behavior categorization
+# test/unit/usage.test.ts                      — ccusage CLI bridge, data formatting
 # test/integration/extension.test.ts           — activation, status bar, commands
 # test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests, optimizer IPC
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
