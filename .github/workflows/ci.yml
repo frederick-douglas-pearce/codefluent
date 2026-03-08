@@ -31,3 +31,7 @@ jobs:
       - name: Run tests
         working-directory: vscode-extension
         run: npm test
+
+      - name: Audit dependencies
+        working-directory: vscode-extension
+        run: npm audit --audit-level=high
