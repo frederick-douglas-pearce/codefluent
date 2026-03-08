@@ -196,9 +196,10 @@ The webapp uses a project dropdown (populated from session data) to scope featur
 
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
-- **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 465 tests) before any commit to main.
+- **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
+- **No regressions:** `npm test` must pass (currently 466 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
+- **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
 ## JSONL Data Format (VERIFIED against real data)
 
@@ -382,7 +383,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 465 Jest tests (12 suites)
+npm test                   # Runs all 466 Jest tests (12 suites)
 
 # Test structure:
 # test/unit/prompts.test.ts                    — prompt loader + template filler (all prompt types)
@@ -398,4 +399,26 @@ npm test                   # Runs all 465 Jest tests (12 suites)
 # test/integration/extension.test.ts           — activation, status bar, commands
 # test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests, optimizer IPC
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
+
+cd ../webapp
+uv run pytest tests/ -v    # Runs all webapp tests (106 tests, 4 suites)
+
+# Test structure:
+# tests/test_api.py        — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage
+# tests/test_helpers.py    — _decode_project_path, _detect_project_repo, validators, compute_aggregate, classify_error
+# tests/test_security.py   — rate limiting, CORS, error leakage, path traversal, security headers
+# tests/conftest.py        — shared fixtures (TestClient, mock Anthropic, mock sessions)
 ```
+
+### E2E Smoke Test Checklist (Playwright MCP)
+
+Run before merging PRs that touch webapp UI or API. Start the server with `uv run uvicorn main:app --port 8001`, then verify:
+
+1. **Tab navigation** — all 5 tabs switch correctly, correct panel is visible
+2. **Settings bar visibility** — data path input shows only on Fluency Score; project dropdown shows on Fluency Score, Optimizer, Quick Wins; settings bar hidden on Recommendations, Usage
+3. **Project dropdown** — populates from session data when data path is set
+4. **Fluency scoring** — Run Scoring button triggers analysis, results display with score ring and behavior bars
+5. **Prompt Optimizer** — paste prompt, click Optimize, input/output scores and optimized prompt appear
+6. **Quick Wins** — Generate button works; project-scoped mode uses selected project
+7. **Usage tab** — data renders with pace cards and chart (if ccusage data exists)
+8. **Health endpoint** — `GET /health` returns status, version, and dependency checks

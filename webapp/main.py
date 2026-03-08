@@ -197,6 +197,41 @@ DATA_DIR = Path(__file__).parent.parent / "data"
 CCUSAGE_DIR = DATA_DIR / "ccusage"
 
 
+def _get_version() -> str:
+    """Read version from pyproject.toml."""
+    pyproject = Path(__file__).parent / "pyproject.toml"
+    if pyproject.exists():
+        for line in pyproject.read_text().splitlines():
+            if line.strip().startswith("version"):
+                return line.split("=")[1].strip().strip('"')
+    return "unknown"
+
+
+APP_VERSION = _get_version()
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint for monitoring."""
+    checks = {}
+
+    # Check Anthropic API key is configured
+    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    checks["anthropic_api_key"] = "configured" if api_key else "missing"
+
+    # Check default data directory is accessible
+    default_data_dir = Path.home() / ".claude" / "projects"
+    checks["data_directory"] = "accessible" if default_data_dir.is_dir() else "not_found"
+
+    status = "ok" if checks["anthropic_api_key"] == "configured" else "degraded"
+
+    return {
+        "status": status,
+        "version": APP_VERSION,
+        "checks": checks,
+    }
+
+
 @app.get("/api/usage")
 async def get_usage():
     """Serve ccusage JSON data directly."""
