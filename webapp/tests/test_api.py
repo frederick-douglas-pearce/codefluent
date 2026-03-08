@@ -10,6 +10,33 @@ import main
 from tests.conftest import make_anthropic_response, _mock_project_encoded
 
 
+class TestHealth:
+    def test_returns_status_and_version(self, client):
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "status" in data
+        assert "version" in data
+        assert "checks" in data
+        assert data["status"] in ("ok", "degraded")
+
+    def test_reports_api_key_status(self, client, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test-key")
+        resp = client.get("/health")
+        assert resp.json()["checks"]["anthropic_api_key"] == "configured"
+
+    def test_reports_missing_api_key(self, client, monkeypatch):
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        resp = client.get("/health")
+        data = resp.json()
+        assert data["checks"]["anthropic_api_key"] == "missing"
+        assert data["status"] == "degraded"
+
+    def test_includes_data_directory_check(self, client):
+        resp = client.get("/health")
+        assert resp.json()["checks"]["data_directory"] in ("accessible", "not_found")
+
+
 class TestGetBenchmarks:
     def test_returns_benchmark_data(self, client):
         resp = client.get("/api/benchmarks")
