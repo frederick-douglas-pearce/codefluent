@@ -33,6 +33,17 @@ jobs:
         working-directory: vscode-extension
         run: npm test
 
+      - name: Verify version matches tag
+        working-directory: vscode-extension
+        run: |
+          TAG="${{ github.ref_name }}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "Tag: $TAG, package.json version: $PKG_VERSION"
+          if [ "v$PKG_VERSION" != "$TAG" ]; then
+            echo "ERROR: package.json version ($PKG_VERSION) does not match tag ($TAG)"
+            exit 1
+          fi
+
       - name: Package VSIX
         working-directory: vscode-extension
         run: npx @vscode/vsce package --allow-missing-repository
@@ -49,6 +60,12 @@ jobs:
           fi
           echo "vsix_path=vscode-extension/$VSIX" >> "$GITHUB_ENV"
           echo "vsix_name=$VSIX" >> "$GITHUB_ENV"
+
+      - name: Publish to VS Code Marketplace
+        working-directory: vscode-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish --pat "$VSCE_PAT"
 
       - name: Create GitHub Release
         env:
