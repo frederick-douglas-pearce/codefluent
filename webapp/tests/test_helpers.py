@@ -53,8 +53,10 @@ class TestDecodeProjectPath:
         assert _decode_project_path(encoded) == f"/home/{user}/project"
 
     def test_handles_leading_dash(self):
-        result = _decode_project_path("-home-fdpearce-Documents-Projects")
-        assert result == "/home/fdpearce/Documents/Projects"
+        user = os.path.basename(Path.home())
+        encoded = f"-home-{user}-Documents-Projects"
+        result = _decode_project_path(encoded)
+        assert result == f"/home/{user}/Documents/Projects"
 
     def test_rejects_path_outside_home(self):
         with pytest.raises(ValueError, match="home directory"):
