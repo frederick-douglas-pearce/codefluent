@@ -170,3 +170,77 @@ class TestSecurityHeaders:
     def test_referrer_policy(self, client):
         resp = client.get("/api/benchmarks")
         assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+
+
+class TestWebappXSSVectors:
+    """Source-level verification that webapp/static/app.js escapes all user-controlled data.
+
+    Mirrors vscode-extension/test/unit/xss.test.ts source-level checks.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _load_source(self):
+        app_js = Path(__file__).parent.parent / "static" / "app.js"
+        self.src = app_js.read_text()
+
+    def test_escapeHtml_function_exists(self):
+        assert "function escapeHtml(str)" in self.src
+
+    def test_escapes_project_name(self):
+        assert "escapeHtml(project)" in self.src
+
+    def test_escapes_one_line_summary(self):
+        assert "escapeHtml(scoreData.one_line_summary" in self.src
+
+    def test_escapes_coding_pattern(self):
+        assert "escapeHtml(PATTERN_LABELS[scoreData.coding_pattern]" in self.src
+
+    def test_escapes_quickwins_task_title(self):
+        assert "escapeHtml(s.task)" in self.src
+
+    def test_escapes_quickwins_repo(self):
+        assert "escapeHtml(s.repo)" in self.src
+
+    def test_escapes_quickwins_category(self):
+        assert "escapeHtml(s.category)" in self.src
+
+    def test_escapes_quickwins_estimated_minutes(self):
+        assert "escapeHtml(s.estimated_minutes)" in self.src
+
+    def test_escapes_quickwins_prompt(self):
+        assert "escapeHtml(s.prompt)" in self.src
+
+    def test_escapes_recommendation_title(self):
+        assert "escapeHtml(rec.title)" in self.src
+
+    def test_escapes_recommendation_advice(self):
+        assert "escapeHtml(rec.advice)" in self.src
+
+    def test_escapes_recommendation_prompt(self):
+        assert "escapeHtml(rec.prompt)" in self.src
+
+    def test_escapes_recommendation_source(self):
+        assert "escapeHtml(rec.source)" in self.src
+
+    def test_escapes_error_messages(self):
+        assert "escapeHtml(e.message)" in self.src
+
+    def test_escapes_optimizer_input_prompt(self):
+        assert "escapeHtml(inputPrompt)" in self.src
+
+    def test_escapes_optimizer_optimized_prompt(self):
+        assert "escapeHtml(data.optimized_prompt)" in self.src
+
+    def test_escapes_optimizer_explanation(self):
+        assert "escapeHtml(data.explanation)" in self.src
+
+    def test_escapes_optimizer_one_line_summary(self):
+        assert "escapeHtml(data.one_line_summary)" in self.src
+
+    def test_escapes_behavior_labels(self):
+        import re
+        assert re.search(r'escapeHtml\(BEHAVIOR_LABELS\[key\]\s*\|\|\s*key\)', self.src)
+
+    def test_no_inline_onclick_handlers(self):
+        import re
+        assert not re.search(r'onclick\s*=\s*"', self.src)
