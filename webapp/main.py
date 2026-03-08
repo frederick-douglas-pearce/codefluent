@@ -817,7 +817,7 @@ def _decode_project_path(encoded: str) -> str:
     # Resolve symlinks and normalize to prevent traversal via ../ or symlinks
     resolved = Path(decoded).resolve()
     home = Path.home().resolve()
-    if not str(resolved).startswith(str(home)):
+    if not resolved.is_relative_to(home):
         raise ValueError(f"Project path must be within home directory: {decoded}")
     return str(resolved)
 
