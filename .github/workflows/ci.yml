@@ -52,3 +52,7 @@ jobs:
       - name: Run tests
         working-directory: webapp
         run: uv run pytest tests/ -v
+
+      - name: Audit dependencies
+        working-directory: webapp
+        run: uv export --no-hashes > /tmp/requirements.txt && uvx pip-audit -r /tmp/requirements.txt

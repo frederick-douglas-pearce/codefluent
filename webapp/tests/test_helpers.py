@@ -1,6 +1,8 @@
 """Tests for helper functions in main.py."""
 
+import os
 import re
+from pathlib import Path
 
 import pytest
 
@@ -23,14 +25,23 @@ from unittest.mock import MagicMock, patch
 
 class TestDecodeProjectPath:
     def test_decodes_standard_path(self):
-        assert _decode_project_path("-home-user-project") == "/home/user/project"
+        # Path must be within home directory
+        import os
+        user = os.path.basename(Path.home())
+        encoded = f"-home-{user}-project"
+        assert _decode_project_path(encoded) == f"/home/{user}/project"
 
     def test_handles_leading_dash(self):
         result = _decode_project_path("-home-fdpearce-Documents-Projects")
         assert result == "/home/fdpearce/Documents/Projects"
 
-    def test_single_segment(self):
-        assert _decode_project_path("-tmp") == "/tmp"
+    def test_rejects_path_outside_home(self):
+        with pytest.raises(ValueError, match="home directory"):
+            _decode_project_path("-etc-passwd")
+
+    def test_rejects_tmp_path(self):
+        with pytest.raises(ValueError, match="home directory"):
+            _decode_project_path("-tmp")
 
 
 # --- _detect_project_repo ---

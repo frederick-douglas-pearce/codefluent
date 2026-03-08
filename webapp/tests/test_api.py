@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import main
-from tests.conftest import make_anthropic_response
+from tests.conftest import make_anthropic_response, _mock_project_encoded
 
 
 class TestGetBenchmarks:
@@ -46,11 +46,12 @@ class TestGetSessions:
 
     def test_respects_limit_parameter(self, client, mock_sessions_dir, tmp_path):
         # Create a second session
-        project = mock_sessions_dir / "-home-user-myproject"
+        project = mock_sessions_dir / _mock_project_encoded()
+        home = str(Path.home())
         session2 = {
             "type": "user",
             "sessionId": "11111111-2222-3333-4444-555555555555",
-            "cwd": "/home/user/myproject",
+            "cwd": f"{home}/testproject",
             "message": {"role": "user", "content": "Second session prompt"},
             "timestamp": "2026-03-02T10:00:00.000Z",
         }
@@ -67,12 +68,12 @@ class TestGetSessions:
     def test_respects_project_filter(self, client, mock_sessions_dir):
         resp = client.get("/api/sessions", params={
             "data_path": str(mock_sessions_dir),
-            "project": "myproject",
+            "project": "testproject",
         })
         assert resp.status_code == 200
         sessions = resp.json()["sessions"]
         assert len(sessions) == 1
-        assert sessions[0]["project"] == "myproject"
+        assert sessions[0]["project"] == "testproject"
 
     def test_project_filter_no_match(self, client, mock_sessions_dir):
         resp = client.get("/api/sessions", params={

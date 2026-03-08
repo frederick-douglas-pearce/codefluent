@@ -1,7 +1,8 @@
-"""Tests for security concerns: rate limiting, CORS, error leakage."""
+"""Tests for security concerns: rate limiting, CORS, error leakage, path traversal, security headers."""
 
 import json
 import os
+from pathlib import Path
 from time import time
 from unittest.mock import MagicMock, patch
 
@@ -10,6 +11,7 @@ import pytest
 from starlette.testclient import TestClient
 
 import main
+from main import _decode_project_path
 from tests.conftest import make_anthropic_response
 
 
@@ -128,3 +130,43 @@ class TestErrorLeakage:
         detail = resp.json()["detail"]
         # Should be structured validation errors, not raw tracebacks
         assert isinstance(detail, list)
+
+    def test_data_path_error_does_not_leak_path(self, client):
+        resp = client.get("/api/sessions", params={"data_path": "/nonexistent/dir"})
+        assert resp.status_code == 400
+        detail = resp.json()["detail"]
+        # Error should not echo back the raw user-supplied path
+        assert "/nonexistent/dir" not in detail
+
+
+class TestPathTraversal:
+    def test_decode_rejects_etc_passwd(self):
+        with pytest.raises(ValueError, match="home directory"):
+            _decode_project_path("-etc-passwd")
+
+    def test_decode_rejects_root_path(self):
+        with pytest.raises(ValueError, match="home directory"):
+            _decode_project_path("-var-log-syslog")
+
+    def test_decode_allows_home_path(self):
+        user = os.path.basename(Path.home())
+        result = _decode_project_path(f"-home-{user}-projects-myapp")
+        assert result.startswith(str(Path.home()))
+
+
+class TestSecurityHeaders:
+    def test_x_content_type_options(self, client):
+        resp = client.get("/api/benchmarks")
+        assert resp.headers.get("X-Content-Type-Options") == "nosniff"
+
+    def test_x_frame_options(self, client):
+        resp = client.get("/api/benchmarks")
+        assert resp.headers.get("X-Frame-Options") == "DENY"
+
+    def test_x_xss_protection(self, client):
+        resp = client.get("/api/benchmarks")
+        assert resp.headers.get("X-XSS-Protection") == "1; mode=block"
+
+    def test_referrer_policy(self, client):
+        resp = client.get("/api/benchmarks")
+        assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"

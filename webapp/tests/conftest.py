@@ -47,12 +47,22 @@ def mock_anthropic(monkeypatch):
     return mock
 
 
+def _mock_project_encoded() -> str:
+    """Return an encoded project path within the user's home directory for tests."""
+    home = str(Path.home())  # e.g., /home/fdpearce
+    return home.replace("/", "-") + "-testproject"  # e.g., -home-fdpearce-testproject
+
+
 @pytest.fixture()
 def mock_sessions_dir(tmp_path):
     """Create a temp directory with mock JSONL session files."""
     projects_dir = tmp_path / "projects"
-    project = projects_dir / "-home-user-myproject"
+    project_encoded = _mock_project_encoded()
+    project = projects_dir / project_encoded
     project.mkdir(parents=True)
+
+    home = str(Path.home())
+    mock_cwd = f"{home}/testproject"
 
     session_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
     lines = [
@@ -60,7 +70,7 @@ def mock_sessions_dir(tmp_path):
             "type": "user",
             "sessionId": session_id,
             "version": "2.1.44",
-            "cwd": "/home/user/myproject",
+            "cwd": mock_cwd,
             "message": {"role": "user", "content": "Implement a hello world function"},
             "uuid": "msg-1",
             "timestamp": "2026-03-01T10:00:00.000Z",
@@ -78,7 +88,7 @@ def mock_sessions_dir(tmp_path):
         {
             "type": "user",
             "sessionId": session_id,
-            "cwd": "/home/user/myproject",
+            "cwd": mock_cwd,
             "message": {"role": "user", "content": "Add error handling to the function"},
             "uuid": "msg-2",
             "timestamp": "2026-03-01T10:01:00.000Z",
