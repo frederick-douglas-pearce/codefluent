@@ -1,6 +1,8 @@
 """Tests for helper functions in main.py."""
 
+import os
 import re
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +12,7 @@ from main import (
     _config_content_hash,
     _decode_project_path,
     _detect_project_repo,
+    _sanitize_error,
     classify_error,
     compute_aggregate,
     validate_config_score_result,
@@ -19,18 +22,49 @@ from main import (
 from unittest.mock import MagicMock, patch
 
 
+# --- _sanitize_error ---
+
+class TestSanitizeError:
+    def test_redacts_api_key(self):
+        msg = "Error with key sk-ant-api03-ABCDEF123456 in request"
+        result = _sanitize_error(msg)
+        assert "sk-ant-" not in result
+        assert "[REDACTED]" in result
+
+    def test_preserves_message_without_key(self):
+        msg = "Connection refused"
+        assert _sanitize_error(msg) == msg
+
+    def test_redacts_multiple_keys(self):
+        msg = "Keys: sk-ant-abc123 and sk-ant-def456"
+        result = _sanitize_error(msg)
+        assert result.count("[REDACTED]") == 2
+        assert "sk-ant-" not in result
+
+
 # --- _decode_project_path ---
 
 class TestDecodeProjectPath:
     def test_decodes_standard_path(self):
-        assert _decode_project_path("-home-user-project") == "/home/user/project"
+        # Path must be within home directory
+        import os
+        user = os.path.basename(Path.home())
+        encoded = f"-home-{user}-project"
+        assert _decode_project_path(encoded) == f"/home/{user}/project"
 
     def test_handles_leading_dash(self):
-        result = _decode_project_path("-home-fdpearce-Documents-Projects")
-        assert result == "/home/fdpearce/Documents/Projects"
+        user = os.path.basename(Path.home())
+        encoded = f"-home-{user}-Documents-Projects"
+        result = _decode_project_path(encoded)
+        assert result == f"/home/{user}/Documents/Projects"
 
-    def test_single_segment(self):
-        assert _decode_project_path("-tmp") == "/tmp"
+    def test_rejects_path_outside_home(self):
+        with pytest.raises(ValueError, match="home directory"):
+            _decode_project_path("-etc-passwd")
+
+    def test_rejects_tmp_path(self):
+        with pytest.raises(ValueError, match="home directory"):
+            _decode_project_path("-tmp")
 
 
 # --- _detect_project_repo ---

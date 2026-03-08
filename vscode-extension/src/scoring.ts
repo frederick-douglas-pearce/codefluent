@@ -108,8 +108,13 @@ const LOW_QUALITY_PATTERNS = [
   'ai_delegation', 'progressive_ai_reliance', 'iterative_ai_debugging',
 ]
 
+/** Remove API keys and sensitive tokens from error messages. */
+function sanitizeError(msg: string): string {
+  return msg.replace(/sk-ant-[a-zA-Z0-9_-]+/g, '[REDACTED]')
+}
+
 export function classifyError(e: unknown): { type: ScoringErrorType; retryable: boolean; message: string } {
-  const msg = e instanceof Error ? e.message : String(e)
+  const msg = sanitizeError(e instanceof Error ? e.message : String(e))
   const statusCode = (e as any)?.status ?? (e as any)?.statusCode
 
   if (statusCode === 429) {
@@ -321,8 +326,8 @@ export async function scoreSessions(
       results[sid] = score
       cached[sid] = score
     } catch (e: any) {
-      console.error(`[CodeFluent] Failed to score session ${sid}: ${e.message || String(e)}`)
-      results[sid] = { error: e.message || String(e), session_id: sid }
+      console.error(`[CodeFluent] Failed to score session ${sid}: ${sanitizeError(e.message || String(e))}`)
+      results[sid] = { error: sanitizeError(e.message || String(e)), session_id: sid }
     }
   }
 
