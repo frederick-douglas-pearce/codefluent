@@ -9,6 +9,8 @@ permissions:
 
 jobs:
   security:
+    # Skip for Dependabot PRs (no access to secrets)
+    if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
