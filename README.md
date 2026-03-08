@@ -61,7 +61,7 @@ cd codefluent/vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.1.0.vsix
+code --install-extension codefluent-0.2.0.vsix
 ```
 
 **Windows (PowerShell):**
@@ -72,7 +72,7 @@ cd codefluent\vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.1.0.vsix
+code --install-extension codefluent-0.2.0.vsix
 ```
 
 Then reload VS Code. The CodeFluent icon appears in the activity bar.
@@ -194,7 +194,7 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 465 tests including security-focused suites | Regressions |
+| Automated testing | 659 tests (466 extension + 193 webapp) including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -287,7 +287,7 @@ npm run watch          # Continuous TypeScript compilation
 
 Four GitHub Actions workflows run automatically:
 
-- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 465 tests. Must pass to merge.
+- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 466 extension tests + 193 webapp tests. Must pass to merge.
 - **Claude Code Review** (`claude-review.yml`) — AI-powered PR review on all PRs, responds to `@claude` mentions.
 - **Security Review** (`security-review.yml`) — Claude-based security scan on PRs, checks for XSS/injection vectors.
 - **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
@@ -295,7 +295,7 @@ Four GitHub Actions workflows run automatically:
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (465 tests across 12 suites)
+npm test               # Run all Jest tests (466 tests across 12 suites)
 ```
 
 ### Packaging
