@@ -105,7 +105,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 466 tests)
+npm test                   # Jest (unit + integration, 468 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -189,7 +189,7 @@ The webapp uses a project dropdown (populated from session data) to scope featur
 - **Commit to feature/fix branches freely** — push often, squash or merge to main via PR.
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (466 tests) in `vscode-extension/`, `pytest` (193 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (468 tests) in `vscode-extension/`, `pytest` (194 tests) in `webapp/`
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
 - **`release.yml`** — Release workflow for publishing
@@ -197,7 +197,7 @@ The webapp uses a project dropdown (populated from session data) to scope featur
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 466 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 468 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -401,7 +401,7 @@ npm test                   # Runs all 466 Jest tests (12 suites)
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (193 tests, 5 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (194 tests, 5 suites)
 
 # Test structure:
 # tests/test_api.py              — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage

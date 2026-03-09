@@ -33,7 +33,7 @@ For the web app, see [`webapp/README.md`](webapp/README.md).
 
 ```bash
 cd vscode-extension
-npm test                        # Run all 313 tests across 10 suites
+npm test                        # Run all 468 tests across 12 suites
 npx jest --coverage             # Run with coverage report
 npx jest test/unit/scoring      # Run a specific test file
 ```

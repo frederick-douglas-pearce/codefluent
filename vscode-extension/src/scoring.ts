@@ -556,7 +556,7 @@ export async function optimizePrompt(
   configBehaviors?: Record<string, boolean>,
   retryOptions?: RetryOptions,
 ): Promise<OptimizerResult> {
-  const maxLength = Math.min(inputPrompt.length * 3, 4000)
+  const maxLength = Math.min(Math.max(inputPrompt.length * 3, 200), 4000)
   const prompt = fillTemplate(OPTIMIZER_PROMPT_TEMPLATE, {
     PROMPT: inputPrompt,
     MAX_LENGTH: String(maxLength),

@@ -311,6 +311,34 @@ class TestPostOptimize:
         data = resp.json()
         assert data["already_good"] is True
 
+    def test_enforces_min_max_length_for_short_prompts(self, client, mock_anthropic, monkeypatch):
+        monkeypatch.setattr(main, "_get_or_score_config_behaviors", lambda p: {})
+
+        optimizer_response = {
+            "input_behaviors": {b: False for b in main.BEHAVIORS},
+            "input_score": 9,
+            "optimized_prompt": "Better prompt",
+            "behaviors_added": ["clarifying_goals"],
+            "explanation": "Added clarity",
+            "one_line_summary": "Basic",
+        }
+        single_score_response = {
+            "fluency_behaviors": {b: (b == "clarifying_goals") for b in main.BEHAVIORS},
+            "overall_score": 18,
+            "one_line_summary": "Improved",
+        }
+        mock_anthropic.messages.create.side_effect = [
+            make_anthropic_response(json.dumps(optimizer_response)),
+            make_anthropic_response(json.dumps(single_score_response)),
+        ]
+
+        resp = client.post("/api/optimize", json={"prompt": "fix bug"})
+        assert resp.status_code == 200
+        # Verify the API was called with 200 (min floor), not 21 (7*3)
+        call_args = mock_anthropic.messages.create.call_args_list[0]
+        sent_content = call_args[1]["messages"][0]["content"]
+        assert "200" in sent_content
+
     def test_rate_limiter_applies(self, client):
         for _ in range(main.RATE_LIMIT):
             main._score_timestamps.append(main.time())
