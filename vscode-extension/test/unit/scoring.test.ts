@@ -1916,6 +1916,50 @@ describe('optimizePrompt', () => {
     expect(sentContent).not.toContain('- clarifying_goals')
   })
 
+  it('enforces minimum max_length of 200 characters for short prompts', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          input_behaviors: {},
+          input_score: 9,
+          optimized_prompt: 'Better',
+          behaviors_added: [],
+          one_line_summary: 'Test.',
+        }),
+      }],
+    }
+    const createFn = jest.fn().mockResolvedValue(mockResponse)
+    const client = { messages: { create: createFn } }
+    // "fix bug" is 7 chars, so 7*3=21 would be too small without the floor
+    await optimizePrompt('fix bug', client as any)
+    const sentContent = createFn.mock.calls[0][0].messages[0].content
+    expect(sentContent).toContain('200')
+    expect(sentContent).not.toContain('21')
+  })
+
+  it('uses 3x input length when above minimum floor', async () => {
+    const mockResponse = {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          input_behaviors: {},
+          input_score: 50,
+          optimized_prompt: 'Better',
+          behaviors_added: [],
+          one_line_summary: 'Test.',
+        }),
+      }],
+    }
+    const createFn = jest.fn().mockResolvedValue(mockResponse)
+    const client = { messages: { create: createFn } }
+    // 100 chars * 3 = 300, which is above the 200 floor
+    const longPrompt = 'a'.repeat(100)
+    await optimizePrompt(longPrompt, client as any)
+    const sentContent = createFn.mock.calls[0][0].messages[0].content
+    expect(sentContent).toContain('300')
+  })
+
   it('omits config behaviors section when not provided', async () => {
     const mockResponse = {
       content: [{
