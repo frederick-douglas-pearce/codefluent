@@ -650,7 +650,7 @@ async def optimize_prompt(request: OptimizeRequest):
         return opt_cache[cache_key]
 
     # Call 1: Optimize (pass config behavior flags so it avoids redundant behaviors)
-    max_length = min(len(input_prompt) * 3, 4000)
+    max_length = min(max(len(input_prompt) * 3, 200), 4000)
     prompt = _fill_template(OPTIMIZER_PROMPT_TEMPLATE, {
         "PROMPT": input_prompt,
         "MAX_LENGTH": str(max_length),
