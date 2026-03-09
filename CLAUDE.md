@@ -109,7 +109,7 @@ npm test                   # Jest (unit + integration, 468 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.1.0.vsix
+code --install-extension codefluent-0.2.0.vsix
 
 # Debug: press F5 in VS Code with vscode-extension/ open
 
@@ -404,10 +404,12 @@ cd ../webapp
 uv run pytest tests/ -v    # Runs all webapp tests (194 tests, 5 suites)
 
 # Test structure:
-# tests/test_api.py        — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage
-# tests/test_helpers.py    — _decode_project_path, _detect_project_repo, validators, compute_aggregate, classify_error
-# tests/test_security.py   — rate limiting, CORS, error leakage, path traversal, security headers
-# tests/conftest.py        — shared fixtures (TestClient, mock Anthropic, mock sessions)
+# tests/test_api.py              — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage
+# tests/test_helpers.py          — _decode_project_path, _detect_project_repo, validators, compute_aggregate, classify_error
+# tests/test_security.py         — rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification
+# tests/test_extract_prompts.py  — JSONL parsing, content extraction, session filtering, metadata
+# tests/test_prompts.py          — prompt loading, template filling, registry consistency
+# tests/conftest.py              — shared fixtures (TestClient, mock Anthropic, mock sessions)
 ```
 
 ### E2E Smoke Test Checklist (Playwright MCP)
