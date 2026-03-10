@@ -95,6 +95,24 @@ class TestDetectProjectRepo:
         with patch("main.subprocess.run", return_value=mock_result):
             assert _detect_project_repo("/nonexistent") is None
 
+    def test_detects_dotted_repo_name(self):
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "https://github.com/owner/owner.github.io.git"
+
+        with patch("main.subprocess.run", return_value=mock_result):
+            result = _detect_project_repo("/home/user/project")
+            assert result == {"owner": "owner", "name": "owner.github.io"}
+
+    def test_detects_https_without_git_suffix(self):
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "https://github.com/owner/repo-name"
+
+        with patch("main.subprocess.run", return_value=mock_result):
+            result = _detect_project_repo("/home/user/project")
+            assert result == {"owner": "owner", "name": "repo-name"}
+
     def test_returns_none_for_non_github(self):
         mock_result = MagicMock()
         mock_result.returncode = 0

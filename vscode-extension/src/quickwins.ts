@@ -93,7 +93,7 @@ export function detectWorkspaceRepo(workspacePath?: string): { owner: string; na
       stdio: ['pipe', 'pipe', 'pipe'],
     }).trim()
     // Handle both HTTPS (https://github.com/owner/repo.git) and SSH (git@github.com:owner/repo.git)
-    const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/.]+)/)
+    const match = remoteUrl.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/)
     if (match) {
       return { owner: validateGitHubName(match[1]), name: validateGitHubName(match[2]) }
     }

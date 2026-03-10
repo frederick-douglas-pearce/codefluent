@@ -1042,7 +1042,7 @@ def _detect_project_repo(project_dir: str) -> dict | None:
         )
         if result.returncode != 0:
             return None
-        match = re.match(r".*github\.com[:/]([^/]+)/([^/.]+)", result.stdout.strip())
+        match = re.match(r".*github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$", result.stdout.strip())
         if match:
             return {"owner": match.group(1), "name": match.group(2)}
     except Exception:
