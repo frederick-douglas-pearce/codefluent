@@ -536,6 +536,36 @@ describe('CodeFluentViewProvider', () => {
         true,
       )
     })
+
+    it('scopes score_history to workspace project sessions only', async () => {
+      ;(vscode.workspace as any).workspaceFolders = [
+        { uri: vscode.Uri.file('/home/user/my-project') },
+      ]
+      const sessions = [
+        { id: 'sess-1', project: 'my-project', user_prompts: ['hi'], started_at: '2026-03-01T00:00:00Z' },
+        { id: 'sess-2', project: 'other-project', user_prompts: ['bye'], started_at: '2026-02-15T00:00:00Z' },
+      ]
+      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions })
+      ;(scoreSessions as jest.Mock).mockResolvedValue({
+        'sess-1': { session_id: 'sess-1', fluency_behaviors: { clarifying_goals: true } },
+      })
+      ;(computeAggregate as jest.Mock).mockReturnValue({ average_score: 80, sessions_scored: 1 })
+      ;(computeScoreHistory as jest.Mock).mockReturnValue([])
+
+      await sendMessage({
+        type: 'runScoring',
+        requestId: 'req-history',
+        payload: { session_ids: ['sess-1'] },
+      })
+
+      // computeScoreHistory should only receive my-project sessions, not other-project
+      expect(computeScoreHistory).toHaveBeenCalledWith(
+        expect.any(Object),
+        [expect.objectContaining({ id: 'sess-1', project: 'my-project' })],
+        undefined,
+      )
+      ;(vscode.workspace as any).workspaceFolders = undefined
+    })
   })
 
   describe('message handling: getQuickwins', () => {

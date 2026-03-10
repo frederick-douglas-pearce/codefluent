@@ -104,6 +104,7 @@ SINGLE_SCORING_PROMPT_VERSION = _single_scoring_prompt["version"]
 class ScoreRequest(BaseModel):
     session_ids: list[str] = Field(..., min_length=1, max_length=500)
     force_rescore: bool = False
+    project: str = Field(default="", max_length=500)
 
     @field_validator("session_ids", mode="before")
     @classmethod
@@ -321,7 +322,7 @@ async def get_sessions(
 
 
 @app.get("/api/scores")
-async def get_scores():
+async def get_scores(project: str = Query(default=None, max_length=500)):
     """Return cached fluency scores scoped to last-scored sessions."""
     scores_path = DATA_DIR / "scores.json"
     if not scores_path.exists():
@@ -357,10 +358,12 @@ async def get_scores():
         aggregate["sessions_requested"] = len(last_ids)
         aggregate["sessions_skipped"] = len(last_ids) - len(scored)
 
-    # Attach score history from all cached scores + sessions
+    # Attach score history scoped to project
     data_dir = _resolve_data_dir()
     session_data = get_all_sessions(data_dir)
     sessions_list = session_data.get("sessions", [])
+    if project:
+        sessions_list = [s for s in sessions_list if s.get("project") == project]
     aggregate["score_history"] = compute_score_history(cached, sessions_list, config_behaviors)
 
     return {"scores": scoped, "aggregate": aggregate}
@@ -475,8 +478,11 @@ async def score_sessions(request: ScoreRequest):
     aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
     aggregate["sessions_requested"] = len(session_ids)
     aggregate["sessions_skipped"] = len(session_ids) - len(scored)
+    history_sessions = list(all_sessions.values())
+    if request.project:
+        history_sessions = [s for s in history_sessions if s.get("project") == request.project]
     aggregate["score_history"] = compute_score_history(
-        cached, list(all_sessions.values()), config_behaviors
+        cached, history_sessions, config_behaviors
     )
 
     return {"scores": results, "aggregate": aggregate}

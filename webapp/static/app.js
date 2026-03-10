@@ -698,7 +698,7 @@ async function runScoring(scopeValue) {
     const res = await fetch('/api/score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_ids: ids, force_rescore: forceRescore })
+      body: JSON.stringify({ session_ids: ids, force_rescore: forceRescore, project: getSelectedProject() })
     })
     state.scores = await res.json()
     renderFluencyScore()
@@ -1176,7 +1176,9 @@ function renderRecCard(rec) {
 // --- Load cached scores ---
 async function loadCachedScores() {
   try {
-    const res = await fetch('/api/scores')
+    const project = getSelectedProject()
+    const url = project ? `/api/scores?project=${encodeURIComponent(project)}` : '/api/scores'
+    const res = await fetch(url)
     const data = await res.json()
     if (data.aggregate?.average_score) {
       state.scores = data

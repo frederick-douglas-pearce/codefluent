@@ -168,6 +168,52 @@ class TestGetScores:
         data = resp.json()
         assert "session-1" in data["scores"]
 
+    def test_score_history_scoped_to_project(self, client, tmp_path, monkeypatch):
+        """Score history should only include sessions from the requested project."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(main, "DATA_DIR", data_dir)
+
+        scores = {
+            "sess-a": {
+                "session_id": "sess-a",
+                "fluency_behaviors": {b: True for b in main.BEHAVIORS},
+                "overall_score": 90,
+                "prompt_version": main.SCORING_PROMPT_VERSION,
+            },
+            "sess-b": {
+                "session_id": "sess-b",
+                "fluency_behaviors": {b: False for b in main.BEHAVIORS},
+                "overall_score": 10,
+                "prompt_version": main.SCORING_PROMPT_VERSION,
+            },
+        }
+        (data_dir / "scores.json").write_text(json.dumps(scores))
+        (data_dir / "last_scored_ids.json").write_text(json.dumps(["sess-a", "sess-b"]))
+
+        # Mock sessions: two projects, different weeks
+        sessions = [
+            {"id": "sess-a", "project": "my-app", "user_prompts": ["hi"], "started_at": "2026-03-01T00:00:00Z"},
+            {"id": "sess-b", "project": "other-app", "user_prompts": ["bye"], "started_at": "2026-02-15T00:00:00Z"},
+        ]
+        monkeypatch.setattr(main, "_resolve_data_dir", lambda data_path=None: tmp_path / "sessions")
+        monkeypatch.setattr(main, "get_all_sessions", lambda *a, **kw: {"sessions": sessions, "metadata": {}})
+
+        # Without project filter: both sessions contribute to history
+        resp = client.get("/api/scores")
+        assert resp.status_code == 200
+        history_all = resp.json()["aggregate"]["score_history"]
+
+        # With project filter: only my-app session contributes
+        resp = client.get("/api/scores", params={"project": "my-app"})
+        assert resp.status_code == 200
+        history_scoped = resp.json()["aggregate"]["score_history"]
+
+        assert len(history_scoped) <= len(history_all)
+        # All scoped history entries should only come from the week of sess-a
+        for entry in history_scoped:
+            assert entry["period"] == "2026-W09"  # Week of March 1, 2026
+
 
 class TestPostScore:
     def test_validates_empty_session_ids(self, client):
@@ -242,6 +288,39 @@ class TestPostScore:
         assert resp.json()["scores"]["cached-session"]["overall_score"] == 80
         # Should NOT have called the API since score was cached
         mock_anthropic.messages.create.assert_not_called()
+
+    def test_score_history_scoped_to_project(self, client, tmp_path, monkeypatch, mock_anthropic):
+        """POST /api/score should scope score_history to the requested project."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(main, "DATA_DIR", data_dir)
+
+        # Pre-cache scores for two sessions in different projects
+        cached = {
+            "sess-a": {
+                "session_id": "sess-a",
+                "fluency_behaviors": {b: True for b in main.BEHAVIORS},
+                "overall_score": 90,
+                "prompt_version": main.SCORING_PROMPT_VERSION,
+            },
+        }
+        (data_dir / "scores.json").write_text(json.dumps(cached))
+
+        sessions = [
+            {"id": "sess-a", "project": "my-app", "user_prompts": ["hi"], "started_at": "2026-03-01T00:00:00Z"},
+            {"id": "sess-b", "project": "other-app", "user_prompts": ["bye"], "started_at": "2026-02-15T00:00:00Z"},
+        ]
+        monkeypatch.setattr(main, "_resolve_data_dir", lambda data_path=None: tmp_path / "sess_dir")
+        monkeypatch.setattr(main, "get_all_sessions", lambda *a, **kw: {"sessions": sessions, "metadata": {}})
+        (tmp_path / "sess_dir").mkdir()
+
+        # Score with project filter
+        resp = client.post("/api/score", json={"session_ids": ["sess-a"], "project": "my-app"})
+        assert resp.status_code == 200
+        history = resp.json()["aggregate"]["score_history"]
+        # History should only contain weeks from my-app sessions
+        for entry in history:
+            assert entry["period"] == "2026-W09"
 
 
 class TestPostOptimize:
