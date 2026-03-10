@@ -61,6 +61,22 @@ describe('detectWorkspaceRepo', () => {
     expect(result).toEqual({ owner: 'myowner', name: 'myrepo' })
   })
 
+  it('parses GitHub Pages repo with dots in name', () => {
+    mockExecFileSync.mockReturnValue('https://github.com/myowner/myowner.github.io.git\n')
+
+    const result = detectWorkspaceRepo('/some/path')
+
+    expect(result).toEqual({ owner: 'myowner', name: 'myowner.github.io' })
+  })
+
+  it('parses HTTPS remote URL without .git suffix', () => {
+    mockExecFileSync.mockReturnValue('https://github.com/myowner/myrepo\n')
+
+    const result = detectWorkspaceRepo('/some/path')
+
+    expect(result).toEqual({ owner: 'myowner', name: 'myrepo' })
+  })
+
   it('uses execFileSync with arg array (not shell string)', () => {
     mockExecFileSync.mockReturnValue('https://github.com/owner/repo.git\n')
 

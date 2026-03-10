@@ -61,7 +61,7 @@ cd codefluent/vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.2.0.vsix
+code --install-extension codefluent-0.2.1.vsix
 ```
 
 **Windows (PowerShell):**
@@ -72,7 +72,7 @@ cd codefluent\vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.2.0.vsix
+code --install-extension codefluent-0.2.1.vsix
 ```
 
 Then reload VS Code. The CodeFluent icon appears in the activity bar.
