@@ -261,7 +261,11 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
     aggregate.sessions_requested = sessionIds.length
     aggregate.sessions_skipped = sessionIds.length - scored.length
-    aggregate.score_history = computeScoreHistory(cached, sessions, configBehaviors)
+    const projectName = this.getWorkspaceProjectName()
+    const projectSessions = projectName
+      ? sessions.filter((s: any) => s.project === projectName)
+      : sessions
+    aggregate.score_history = computeScoreHistory(cached, projectSessions, configBehaviors)
 
     this.updateStatusBar(aggregate)
 
