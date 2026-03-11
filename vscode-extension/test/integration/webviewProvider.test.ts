@@ -36,6 +36,13 @@ jest.mock('../../src/scoring', () => {
   }
 })
 jest.mock('../../src/quickwins')
+jest.mock('../../src/analytics', () => {
+  const actual = jest.requireActual('../../src/analytics')
+  return {
+    ...actual,
+    buildSessionAnalytics: jest.fn(),
+  }
+})
 jest.mock('@anthropic-ai/sdk')
 
 import { getDefaultShell, getShellArgs, getClaudeCommand, escapePromptForShell } from '../../src/platform'
@@ -44,6 +51,7 @@ import { getAllSessions } from '../../src/parser'
 import { getUsageData } from '../../src/usage'
 import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt } from '../../src/scoring'
 import { getQuickWins } from '../../src/quickwins'
+import { buildSessionAnalytics } from '../../src/analytics'
 
 function makeContext(overrides: Partial<Record<string, any>> = {}): any {
   return {
@@ -1399,6 +1407,86 @@ describe('CodeFluentViewProvider', () => {
       // Without config, scores come straight from API (recomputed from behavior counts)
       expect(response[0].data.input_score).toBe(9)
       expect(response[0].data.input_behaviors.clarifying_goals).toBe(true)
+    })
+  })
+
+  describe('message handling: getSessionAnalytics', () => {
+    it('returns analytics data from buildSessionAnalytics', async () => {
+      const mockSessions = {
+        sessions: [
+          { id: 's1', project: 'proj', user_prompts: ['hi'], total_tokens: 1000 },
+        ],
+        metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
+      }
+      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+
+      const mockAnalytics = {
+        sessions: [{ id: 's1', project: 'proj', overall_score: null, total_tokens: 1000 }],
+        aggregates: { avg_tokens_per_session: 1000, avg_tokens_per_prompt: 500, avg_cache_hit_rate: 0.3, total_sessions: 1 },
+        weekly: [{ week: '2026-W02', total_tokens: 1000, avg_tokens_per_session: 1000, avg_cache_hit_rate: 0.3, session_count: 1 }],
+      }
+      ;(buildSessionAnalytics as jest.Mock).mockReturnValue(mockAnalytics)
+
+      await sendMessage({ type: 'getSessionAnalytics', requestId: 'req-analytics-1' })
+
+      expect(buildSessionAnalytics).toHaveBeenCalled()
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getSessionAnalytics',
+        requestId: 'req-analytics-1',
+        data: mockAnalytics,
+      })
+    })
+
+    it('filters sessions by project from payload', async () => {
+      const mockSessions = {
+        sessions: [
+          { id: 's1', project: 'proj-a', user_prompts: ['hi'], total_tokens: 1000 },
+          { id: 's2', project: 'proj-b', user_prompts: ['bye'], total_tokens: 2000 },
+        ],
+        metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
+      }
+      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(buildSessionAnalytics as jest.Mock).mockReturnValue({
+        sessions: [], aggregates: {}, weekly: [],
+      })
+
+      await sendMessage({
+        type: 'getSessionAnalytics',
+        requestId: 'req-analytics-2',
+        payload: { project: 'proj-a' },
+      })
+
+      // buildSessionAnalytics should only receive proj-a sessions
+      expect(buildSessionAnalytics).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 's1', project: 'proj-a' })],
+        expect.any(Array),
+      )
+    })
+
+    it('auto-scopes to workspace project when no project in payload', async () => {
+      ;(vscode.workspace as any).workspaceFolders = [
+        { uri: vscode.Uri.file('/home/user/my-project') },
+      ]
+      const mockSessions = {
+        sessions: [
+          { id: 's1', project: 'my-project', user_prompts: ['hi'] },
+          { id: 's2', project: 'other', user_prompts: ['bye'] },
+        ],
+        metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
+      }
+      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(buildSessionAnalytics as jest.Mock).mockReturnValue({
+        sessions: [], aggregates: {}, weekly: [],
+      })
+
+      await sendMessage({ type: 'getSessionAnalytics', requestId: 'req-analytics-3' })
+
+      expect(buildSessionAnalytics).toHaveBeenCalledWith(
+        [expect.objectContaining({ id: 's1', project: 'my-project' })],
+        expect.any(Array),
+      )
+
+      ;(vscode.workspace as any).workspaceFolders = undefined
     })
   })
 })

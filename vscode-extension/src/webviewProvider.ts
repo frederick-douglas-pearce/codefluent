@@ -9,6 +9,7 @@ import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 import { DataCache } from './dataCache'
 import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
+import { buildSessionAnalytics } from './analytics'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codefluent.dashboard'
@@ -171,6 +172,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
           break
         case 'optimizePrompt':
           data = await this.handleOptimizePrompt(payload)
+          break
+        case 'getSessionAnalytics':
+          data = await this.handleGetSessionAnalytics(payload)
           break
         default:
           return
@@ -377,6 +381,20 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     optimizerCache[cacheKey] = response
     this.cache.writeOptimizer(optimizerCache)
     return response
+  }
+
+  private async handleGetSessionAnalytics(payload?: { project?: string }) {
+    const project = payload?.project ?? this.getWorkspaceProjectName()
+    const sessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
+    let sessions = sessionData.sessions || []
+    if (project) {
+      sessions = sessions.filter((s: any) => s.project === project)
+    }
+
+    const cached = this.cache.read()
+    const scores = Object.values(cached).filter((r: any) => r.fluency_behaviors)
+
+    return buildSessionAnalytics(sessions, scores as any[])
   }
 
   private mergeWithConfig(
