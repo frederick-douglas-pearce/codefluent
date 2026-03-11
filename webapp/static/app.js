@@ -7,6 +7,7 @@ let state = {
   scores: null,
   quickwins: null,
   optimizer: null,
+  sessionAnalytics: null,
   activeTab: 'fluency'
 }
 
@@ -215,13 +216,16 @@ function switchTab(tabName) {
   const projectGroup = document.getElementById('project-filter-group')
   const settingsBar = document.querySelector('.settings-bar')
   const showDataPath = ['fluency'].includes(tabName)
-  const showProject = ['fluency', 'optimizer', 'quickwins'].includes(tabName)
+  const showProject = ['fluency', 'optimizer', 'quickwins', 'usage'].includes(tabName)
   if (dataPathGroup) dataPathGroup.style.display = showDataPath ? '' : 'none'
   if (projectGroup) projectGroup.style.display = showProject ? '' : 'none'
   if (settingsBar) settingsBar.style.display = (showDataPath || showProject) ? '' : 'none'
 
   if (tabName === 'recommendations' && state.scores) {
     renderRecommendations()
+  }
+  if (tabName === 'usage') {
+    loadSessionAnalytics()
   }
 }
 
@@ -416,6 +420,9 @@ document.getElementById('project-filter').addEventListener('change', (e) => {
     localStorage.removeItem('codefluent-project')
   }
   updateTimeScopeCounts()
+  if (state.activeTab === 'usage') {
+    loadSessionAnalytics()
+  }
 })
 
 // --- Event Delegation (replaces inline onclick handlers) ---
@@ -490,6 +497,31 @@ document.addEventListener('click', (e) => {
     } else {
       btn.textContent = `Show ${remaining} more session${remaining !== 1 ? 's' : ''}`
     }
+    return
+  }
+
+  // Session analytics table: show more
+  if (target.classList.contains('session-table-show-more')) {
+    sessionTableShowAll = true
+    renderSessionTokenTable()
+    return
+  }
+
+  // Session analytics table: sort by column
+  const sortHeader = target.closest('.session-table-sortable')
+  if (sortHeader) {
+    const container = document.getElementById('session-token-table-container')
+    const key = sortHeader.dataset.sortKey
+    const currentKey = container.dataset.sortKey || 'started_at'
+    const currentDir = container.dataset.sortDir || 'desc'
+    if (key === currentKey) {
+      container.dataset.sortDir = currentDir === 'asc' ? 'desc' : 'asc'
+    } else {
+      container.dataset.sortKey = key
+      container.dataset.sortDir = 'desc'
+    }
+    sessionTableShowAll = false
+    renderSessionTokenTable()
     return
   }
 
@@ -663,6 +695,239 @@ function renderUsagePace(daily) {
         <div class="pace-card-detail">Based on last 7-day avg of ${formatCost(avg7)}/day</div>
       </div>
     </div>`
+}
+
+// --- Session Analytics ---
+async function loadSessionAnalytics() {
+  const dataPath = getDataPath()
+  const project = getSelectedProjectEncoded()
+  let url = '/api/session-analytics'
+  const params = []
+  if (dataPath) params.push(`data_path=${encodeURIComponent(dataPath)}`)
+  if (project) params.push(`project=${encodeURIComponent(project)}`)
+  if (params.length) url += '?' + params.join('&')
+
+  // Update heading with project name
+  const heading = document.getElementById('session-analytics-heading')
+  const selectedProject = getSelectedProject()
+  if (heading) {
+    heading.textContent = selectedProject
+      ? `Session Analytics — ${selectedProject}`
+      : 'Session Analytics — All Projects'
+  }
+
+  try {
+    const resp = await fetch(url)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    state.sessionAnalytics = await resp.json()
+    renderSessionEfficiencyCards()
+    renderWeeklyTokenChart()
+    renderSessionTokenTable()
+  } catch (e) {
+    console.error('Failed to load session analytics:', e)
+    state.sessionAnalytics = null
+    const cards = document.getElementById('session-efficiency-cards')
+    if (cards) cards.innerHTML = '<div class="empty-state-box"><div class="empty-state-icon">📊</div><p class="empty-state">No session data available.</p></div>'
+    const chartContainer = document.getElementById('weekly-token-chart-container')
+    if (chartContainer) chartContainer.style.display = 'none'
+    const table = document.getElementById('session-token-table-container')
+    if (table) table.innerHTML = ''
+  }
+}
+
+function renderSessionEfficiencyCards() {
+  const container = document.getElementById('session-efficiency-cards')
+  if (!container) return
+
+  const data = state.sessionAnalytics
+  if (!data || !data.sessions || data.sessions.length === 0) {
+    container.innerHTML = '<div class="empty-state-box"><div class="empty-state-icon">📊</div><p class="empty-state">No session data available.</p></div>'
+    return
+  }
+
+  const agg = data.aggregates
+  const sessions = data.sessions
+
+  // Find most efficient session (lowest tokens_per_prompt with at least 1 prompt)
+  const sessionsWithPrompts = sessions.filter(s => s.prompt_count > 0 && s.tokens_per_prompt > 0)
+  let mostEfficientLabel = '—'
+  let mostEfficientValue = '—'
+  if (sessionsWithPrompts.length > 0) {
+    const best = sessionsWithPrompts.reduce((a, b) => a.tokens_per_prompt < b.tokens_per_prompt ? a : b)
+    const date = best.started_at ? new Date(best.started_at).toLocaleDateString() : 'Unknown'
+    mostEfficientLabel = escapeHtml(date)
+    mostEfficientValue = formatTokens(Math.round(best.tokens_per_prompt))
+  }
+
+  const totalTokens = sessions.reduce((sum, s) => sum + (s.total_tokens || 0), 0)
+
+  container.innerHTML = `
+    <div class="pace-grid">
+      <div class="pace-card">
+        <div class="pace-card-title">Avg Tokens/Prompt</div>
+        <div class="pace-card-value">${formatTokens(agg.avg_tokens_per_prompt)}</div>
+        <div class="pace-card-detail">Across ${escapeHtml(String(agg.total_sessions))} sessions</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Avg Cache Hit Rate</div>
+        <div class="pace-card-value">${Math.round(agg.avg_cache_hit_rate * 100)}%</div>
+        <div class="pace-card-detail">Higher is more cost-efficient</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Most Efficient Session</div>
+        <div class="pace-card-value">${mostEfficientValue}</div>
+        <div class="pace-card-detail">${mostEfficientLabel} tokens/prompt</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Total Tokens</div>
+        <div class="pace-card-value">${formatTokens(totalTokens)}</div>
+        <div class="pace-card-detail">All sessions combined</div>
+      </div>
+    </div>`
+}
+
+function renderWeeklyTokenChart() {
+  const chartContainer = document.getElementById('weekly-token-chart-container')
+  if (!chartContainer) return
+
+  destroyChart('weeklyTokens')
+
+  const data = state.sessionAnalytics
+  if (!data || !data.weekly || data.weekly.length === 0) {
+    chartContainer.style.display = 'none'
+    return
+  }
+
+  chartContainer.style.display = ''
+  const weekly = data.weekly
+  const labels = weekly.map(w => {
+    // Convert "2026-W10" to "W10"
+    const parts = w.week.split('-')
+    return parts.length > 1 ? parts[1] : w.week
+  })
+  const values = weekly.map(w => w.avg_tokens_per_session)
+
+  const canvas = document.getElementById('weekly-tokens-chart')
+  charts.weeklyTokens = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg Tokens/Session',
+        data: values,
+        borderColor: '#D97706',
+        backgroundColor: 'rgba(217, 119, 6, 0.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `Avg: ${formatTokens(ctx.raw)} tokens (${weekly[ctx.dataIndex].session_count} sessions)`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: v => formatTokens(v) }
+        }
+      }
+    }
+  })
+}
+
+// Session table state
+let sessionTableShowAll = false
+
+function renderSessionTokenTable() {
+  const container = document.getElementById('session-token-table-container')
+  if (!container) return
+
+  const data = state.sessionAnalytics
+  if (!data || !data.sessions || data.sessions.length === 0) {
+    container.innerHTML = ''
+    return
+  }
+
+  // Clone and sort sessions — default: most recent first
+  let sessions = [...data.sessions]
+  const sortKey = container.dataset.sortKey || 'started_at'
+  const sortDir = container.dataset.sortDir || 'desc'
+  sessions.sort((a, b) => {
+    let va = a[sortKey], vb = b[sortKey]
+    if (sortKey === 'started_at') {
+      va = va || ''
+      vb = vb || ''
+    }
+    if (typeof va === 'string') return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+    return sortDir === 'asc' ? (va || 0) - (vb || 0) : (vb || 0) - (va || 0)
+  })
+
+  const maxRows = sessionTableShowAll ? sessions.length : 50
+  const visible = sessions.slice(0, maxRows)
+  const remaining = sessions.length - maxRows
+
+  function sortIcon(key) {
+    if (sortKey !== key) return ''
+    return sortDir === 'asc' ? ' &#x25B2;' : ' &#x25BC;'
+  }
+
+  let html = `
+    <div class="session-table-wrapper">
+      <table class="session-token-table">
+        <thead>
+          <tr>
+            <th class="session-table-sortable" data-sort-key="started_at">Date${sortIcon('started_at')}</th>
+            <th class="session-table-sortable" data-sort-key="project">Project${sortIcon('project')}</th>
+            <th class="session-table-sortable" data-sort-key="prompt_count">Prompts${sortIcon('prompt_count')}</th>
+            <th class="session-table-sortable" data-sort-key="total_tokens">Total Tokens${sortIcon('total_tokens')}</th>
+            <th class="session-table-sortable" data-sort-key="tokens_per_prompt">Tokens/Prompt${sortIcon('tokens_per_prompt')}</th>
+            <th class="session-table-sortable" data-sort-key="cache_hit_rate">Cache Hit Rate${sortIcon('cache_hit_rate')}</th>
+            <th class="session-table-sortable" data-sort-key="overall_score">Score${sortIcon('overall_score')}</th>
+          </tr>
+        </thead>
+        <tbody>`
+
+  for (const s of visible) {
+    const date = s.started_at ? escapeHtml(new Date(s.started_at).toLocaleDateString()) : '—'
+    const project = escapeHtml(s.project || '—')
+    const prompts = s.prompt_count
+    const totalTok = formatTokens(s.total_tokens || 0)
+    const tokPerPrompt = s.prompt_count > 0 ? formatTokens(Math.round(s.tokens_per_prompt || 0)) : '—'
+    const cacheRate = s.cache_hit_rate > 0 ? Math.round(s.cache_hit_rate * 100) + '%' : '—'
+    const score = s.overall_score != null ? s.overall_score + '%' : '—'
+
+    html += `
+          <tr>
+            <td>${date}</td>
+            <td>${project}</td>
+            <td>${prompts}</td>
+            <td>${totalTok}</td>
+            <td>${tokPerPrompt}</td>
+            <td>${cacheRate}</td>
+            <td>${score}</td>
+          </tr>`
+  }
+
+  html += `
+        </tbody>
+      </table>`
+
+  if (remaining > 0) {
+    html += `<button class="show-more-btn session-table-show-more">Show ${remaining} more session${remaining !== 1 ? 's' : ''}</button>`
+  }
+
+  html += '</div>'
+  container.innerHTML = html
 }
 
 // --- Fluency Scoring ---

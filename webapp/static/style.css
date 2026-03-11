@@ -903,10 +903,73 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .footer a { color: var(--accent); text-decoration: none; }
 .footer a:hover { text-decoration: underline; }
 
+/* Usage Scope Labels */
+.usage-scope-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+/* Session Analytics Heading */
+.session-analytics-heading {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 32px 0 16px;
+  padding-top: 24px;
+  border-top: 2px solid var(--border);
+}
+
+/* Session Token Table */
+.session-table-wrapper {
+  margin-top: 24px;
+}
+.session-token-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.session-token-table thead {
+  background: var(--bg-hover);
+}
+.session-token-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  border-bottom: 2px solid var(--border);
+  white-space: nowrap;
+}
+.session-table-sortable {
+  cursor: pointer;
+  user-select: none;
+}
+.session-table-sortable:hover {
+  color: var(--accent);
+}
+.session-token-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.session-token-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .pattern-layout { flex-direction: column; }
   .tabs { overflow-x: auto; }
   .optimizer-comparison { grid-template-columns: 1fr; }
   .optimizer-arrow { display: none; }
+  .session-table-wrapper { overflow-x: auto; }
+  .pace-grid { grid-template-columns: repeat(2, 1fr); }
 }
