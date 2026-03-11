@@ -48,6 +48,7 @@ let state = {
   scores: null,
   quickwins: null,
   optimizer: null,
+  sessionAnalytics: null,
   activeTab: 'fluency'
 }
 
@@ -251,6 +252,10 @@ function switchTab(tabName) {
 
   if (tabName === 'recommendations' && state.scores) {
     renderRecommendations()
+  }
+
+  if (tabName === 'usage') {
+    loadSessionAnalytics()
   }
 }
 
@@ -461,6 +466,27 @@ document.addEventListener('click', (e) => {
     return
   }
 
+  // Session table sort headers
+  const sortTh = target.closest('#session-token-table th.sortable')
+  if (sortTh) {
+    const col = sortTh.dataset.sort
+    if (sessionTableSort.column === col) {
+      sessionTableSort.direction = sessionTableSort.direction === 'asc' ? 'desc' : 'asc'
+    } else {
+      sessionTableSort.column = col
+      sessionTableSort.direction = col === 'date' ? 'desc' : 'desc'
+    }
+    if (state.sessionAnalytics) renderSessionTokenTable(state.sessionAnalytics.sessions)
+    return
+  }
+
+  // Session table show more
+  if (target.id === 'session-table-show-more') {
+    sessionTableShowCount += 50
+    if (state.sessionAnalytics) renderSessionTokenTable(state.sessionAnalytics.sessions)
+    return
+  }
+
   // Session item expand/collapse
   const sessionItem = target.closest('.session-item')
   if (sessionItem) {
@@ -564,6 +590,10 @@ function renderUsageDashboard() {
 
   // Usage pace
   renderUsagePace(daily)
+
+  // Show ccusage scope label when we have data
+  const scopeLabel = document.getElementById('ccusage-scope-label')
+  if (scopeLabel) scopeLabel.style.display = daily.length ? '' : 'none'
 }
 
 // --- Usage Pace ---
@@ -1128,6 +1158,232 @@ function renderRecCard(rec) {
         </div>` : ''}
       <div class="rec-source">${escapeHtml(rec.source)}</div>
     </div>`
+}
+
+// --- Session Analytics ---
+let sessionTableSort = { column: 'date', direction: 'desc' }
+let sessionTableShowCount = 50
+
+async function loadSessionAnalytics() {
+  if (state.sessionAnalytics) {
+    renderSessionAnalytics()
+    return
+  }
+  try {
+    state.sessionAnalytics = await postMessageRequest('getSessionAnalytics', {})
+    renderSessionAnalytics()
+  } catch (e) {
+    console.error('Failed to load session analytics:', e)
+  }
+}
+
+function renderSessionAnalytics() {
+  const analytics = state.sessionAnalytics
+  if (!analytics || !analytics.sessions || analytics.sessions.length === 0) {
+    document.getElementById('session-analytics-header').style.display = 'none'
+    document.getElementById('session-efficiency-cards').innerHTML = ''
+    document.getElementById('weekly-tokens-container').style.display = 'none'
+    document.getElementById('session-token-table-container').style.display = 'none'
+    return
+  }
+
+  // Show header
+  const header = document.getElementById('session-analytics-header')
+  header.style.display = ''
+  header.textContent = 'Session Analytics'
+
+  renderSessionEfficiencyCards(analytics)
+  renderWeeklyTokenChart(analytics.weekly)
+  renderSessionTokenTable(analytics.sessions)
+}
+
+function renderSessionEfficiencyCards(analytics) {
+  const container = document.getElementById('session-efficiency-cards')
+  const agg = analytics.aggregates
+  const sessions = analytics.sessions
+
+  // Find most efficient session (lowest tokens_per_prompt among sessions with prompts)
+  let mostEfficient = null
+  for (const s of sessions) {
+    if (s.user_message_count > 0 && s.total_tokens > 0) {
+      if (!mostEfficient || s.tokens_per_prompt < mostEfficient.tokens_per_prompt) {
+        mostEfficient = s
+      }
+    }
+  }
+
+  const mostEffDate = mostEfficient && mostEfficient.started_at
+    ? new Date(mostEfficient.started_at).toLocaleDateString()
+    : ''
+  const mostEffValue = mostEfficient
+    ? formatTokens(Math.round(mostEfficient.tokens_per_prompt))
+    : '-'
+
+  const cacheHitPct = Math.round(agg.avg_cache_hit_rate * 100)
+
+  container.innerHTML = `
+    <div class="pace-grid">
+      <div class="pace-card">
+        <div class="pace-card-title">Avg Tokens/Prompt</div>
+        <div class="pace-card-value">${escapeHtml(formatTokens(agg.avg_tokens_per_prompt))}</div>
+        <div class="pace-card-detail">${escapeHtml(String(agg.total_sessions))} sessions analyzed</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Avg Cache Hit Rate</div>
+        <div class="pace-card-value">${escapeHtml(String(cacheHitPct))}%</div>
+        <div class="pace-card-detail">Higher is more efficient</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Most Efficient Session</div>
+        <div class="pace-card-value">${escapeHtml(mostEffValue)}</div>
+        <div class="pace-card-detail">${escapeHtml(mostEffDate)} tokens/prompt</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Total Tokens</div>
+        <div class="pace-card-value">${escapeHtml(formatTokens(sessions.reduce((s, sess) => s + sess.total_tokens, 0)))}</div>
+        <div class="pace-card-detail">Across ${escapeHtml(String(sessions.length))} sessions</div>
+      </div>
+    </div>`
+}
+
+function renderWeeklyTokenChart(weekly) {
+  const container = document.getElementById('weekly-tokens-container')
+  if (!weekly || weekly.length === 0) {
+    container.style.display = 'none'
+    return
+  }
+
+  container.style.display = ''
+  destroyChart('weeklyTokens')
+
+  const labels = weekly.map(w => {
+    const parts = w.week.split('-W')
+    return parts.length === 2 ? 'W' + parts[1] : w.week
+  })
+  const data = weekly.map(w => w.avg_tokens_per_session)
+
+  charts.weeklyTokens = new Chart(document.getElementById('weekly-tokens-chart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg Tokens/Session',
+        data,
+        borderColor: '#D97706',
+        backgroundColor: 'rgba(217, 119, 6, 0.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `Avg: ${formatTokens(ctx.raw)} tokens/session`
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { callback: v => formatTokens(v) }
+        }
+      }
+    }
+  })
+}
+
+function renderSessionTokenTable(sessions) {
+  const container = document.getElementById('session-token-table-container')
+  const tbody = document.getElementById('session-token-tbody')
+  if (!sessions || sessions.length === 0) {
+    container.style.display = 'none'
+    return
+  }
+
+  container.style.display = ''
+
+  // Sort sessions
+  const sorted = [...sessions].sort((a, b) => {
+    const col = sessionTableSort.column
+    const dir = sessionTableSort.direction === 'asc' ? 1 : -1
+    let va, vb
+    switch (col) {
+      case 'date':
+        va = a.started_at || ''
+        vb = b.started_at || ''
+        return va < vb ? -dir : va > vb ? dir : 0
+      case 'project':
+        va = (a.project || '').toLowerCase()
+        vb = (b.project || '').toLowerCase()
+        return va < vb ? -dir : va > vb ? dir : 0
+      case 'prompts':
+        return (a.user_message_count - b.user_message_count) * dir
+      case 'total_tokens':
+        return (a.total_tokens - b.total_tokens) * dir
+      case 'tokens_per_prompt':
+        return (a.tokens_per_prompt - b.tokens_per_prompt) * dir
+      case 'cache_hit_rate':
+        return (a.cache_hit_rate - b.cache_hit_rate) * dir
+      case 'score':
+        va = a.overall_score ?? -1
+        vb = b.overall_score ?? -1
+        return (va - vb) * dir
+      default:
+        return 0
+    }
+  })
+
+  // Build rows
+  const rows = sorted.map((s, i) => {
+    const date = s.started_at ? new Date(s.started_at).toLocaleDateString() : '-'
+    const project = s.project || '-'
+    const prompts = s.user_message_count || 0
+    const totalTokens = formatTokens(s.total_tokens || 0)
+    const tokensPerPrompt = s.user_message_count > 0 ? formatTokens(Math.round(s.tokens_per_prompt)) : '-'
+    const cacheHit = Math.round((s.cache_hit_rate || 0) * 100) + '%'
+    const score = s.overall_score != null ? Math.round(s.overall_score) : null
+    const scoreHtml = score != null
+      ? escapeHtml(String(score))
+      : '<span class="score-cell-na">\u2014</span>'
+    const hidden = i >= sessionTableShowCount ? ' style="display:none"' : ''
+    return `<tr${hidden}>
+      <td>${escapeHtml(date)}</td>
+      <td>${escapeHtml(project)}</td>
+      <td>${escapeHtml(String(prompts))}</td>
+      <td>${escapeHtml(totalTokens)}</td>
+      <td>${escapeHtml(tokensPerPrompt)}</td>
+      <td>${escapeHtml(cacheHit)}</td>
+      <td>${scoreHtml}</td>
+    </tr>`
+  })
+
+  tbody.innerHTML = rows.join('')
+
+  // Update sort header indicators
+  const ths = document.querySelectorAll('#session-token-table th')
+  ths.forEach(th => {
+    th.classList.remove('sorted-asc', 'sorted-desc')
+    if (th.dataset.sort === sessionTableSort.column) {
+      th.classList.add(sessionTableSort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc')
+    }
+  })
+
+  // Show more button
+  const showMoreBtn = document.getElementById('session-table-show-more')
+  const remaining = sorted.length - sessionTableShowCount
+  if (remaining > 0) {
+    showMoreBtn.style.display = ''
+    showMoreBtn.textContent = `Show ${remaining} more session${remaining !== 1 ? 's' : ''}`
+  } else {
+    showMoreBtn.style.display = 'none'
+  }
 }
 
 // --- Load cached scores ---
