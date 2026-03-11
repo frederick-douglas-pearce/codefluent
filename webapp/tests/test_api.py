@@ -534,6 +534,237 @@ class TestGetQuickwins:
             assert "error" in data
 
 
+class TestSessionAnalytics:
+    def test_returns_sessions_with_token_data(self, client, mock_sessions_dir):
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "sessions" in data
+        assert "aggregates" in data
+        assert "weekly" in data
+        assert len(data["sessions"]) == 1
+        session = data["sessions"][0]
+        assert session["session_id"] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        assert session["project"] == "testproject"
+        assert session["prompt_count"] == 2
+        assert "total_tokens" in session
+        assert "total_input_tokens" in session
+        assert "total_output_tokens" in session
+        assert "total_cache_creation_tokens" in session
+        assert "total_cache_read_tokens" in session
+        assert "tokens_per_prompt" in session
+        assert "cache_hit_rate" in session
+
+    def test_overall_score_null_when_not_scored(self, client, mock_sessions_dir):
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        session = resp.json()["sessions"][0]
+        assert session["overall_score"] is None
+
+    def test_joins_cached_scores(self, client, mock_sessions_dir, tmp_path, monkeypatch):
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(main, "DATA_DIR", data_dir)
+
+        session_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        scores = {
+            session_id: {
+                "session_id": session_id,
+                "fluency_behaviors": {b: False for b in main.BEHAVIORS},
+                "overall_score": 65,
+                "coding_pattern": "conceptual_inquiry",
+                "prompt_version": main.SCORING_PROMPT_VERSION,
+            }
+        }
+        (data_dir / "scores.json").write_text(json.dumps(scores))
+
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        session = resp.json()["sessions"][0]
+        assert session["overall_score"] == 65
+
+    def test_ignores_stale_scores(self, client, mock_sessions_dir, tmp_path, monkeypatch):
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(main, "DATA_DIR", data_dir)
+
+        session_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        scores = {
+            session_id: {
+                "session_id": session_id,
+                "fluency_behaviors": {b: False for b in main.BEHAVIORS},
+                "overall_score": 65,
+                "coding_pattern": "conceptual_inquiry",
+                "prompt_version": "stale-version-v0.0",
+            }
+        }
+        (data_dir / "scores.json").write_text(json.dumps(scores))
+
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        session = resp.json()["sessions"][0]
+        assert session["overall_score"] is None
+
+    def test_respects_project_filter(self, client, mock_sessions_dir):
+        resp = client.get("/api/session-analytics", params={
+            "data_path": str(mock_sessions_dir),
+            "project": "testproject",
+        })
+        assert resp.status_code == 200
+        sessions = resp.json()["sessions"]
+        assert len(sessions) == 1
+        assert sessions[0]["project"] == "testproject"
+
+    def test_project_filter_no_match(self, client, mock_sessions_dir):
+        resp = client.get("/api/session-analytics", params={
+            "data_path": str(mock_sessions_dir),
+            "project": "nonexistent",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["sessions"] == []
+        assert resp.json()["aggregates"]["total_sessions"] == 0
+
+    def test_aggregates_computed(self, client, mock_sessions_dir):
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        agg = resp.json()["aggregates"]
+        assert agg["total_sessions"] == 1
+        assert "avg_tokens_per_session" in agg
+        assert "avg_tokens_per_prompt" in agg
+        assert "avg_cache_hit_rate" in agg
+
+    def test_weekly_breakdown_computed(self, client, mock_sessions_dir):
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        weekly = resp.json()["weekly"]
+        assert len(weekly) >= 1
+        entry = weekly[0]
+        assert "week" in entry
+        assert "total_tokens" in entry
+        assert "avg_tokens_per_session" in entry
+        assert "avg_cache_hit_rate" in entry
+        assert "session_count" in entry
+
+    def test_sessions_sorted_by_started_at_descending(self, client, mock_sessions_dir, tmp_path):
+        # Create a second session with an earlier date
+        project = mock_sessions_dir / _mock_project_encoded()
+        home = str(Path.home())
+        session2_lines = [
+            {
+                "type": "user",
+                "sessionId": "11111111-2222-3333-4444-555555555555",
+                "cwd": f"{home}/testproject",
+                "message": {"role": "user", "content": "Earlier session"},
+                "timestamp": "2026-02-15T10:00:00.000Z",
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-4-20250514",
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Response"}],
+                    "usage": {"input_tokens": 200, "output_tokens": 100,
+                              "cache_creation_input_tokens": 500, "cache_read_input_tokens": 300},
+                },
+                "timestamp": "2026-02-15T10:00:05.000Z",
+            },
+        ]
+        with open(project / "11111111-2222-3333-4444-555555555555.jsonl", "w") as f:
+            for line in session2_lines:
+                f.write(json.dumps(line) + "\n")
+
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        sessions = resp.json()["sessions"]
+        assert len(sessions) == 2
+        # First session should be more recent (March > February)
+        assert sessions[0]["started_at"] > sessions[1]["started_at"]
+
+    def test_rejects_relative_data_path(self, client):
+        resp = client.get("/api/session-analytics", params={"data_path": "relative/path"})
+        assert resp.status_code == 400
+        assert "absolute" in resp.json()["detail"].lower()
+
+    def test_rejects_nonexistent_data_path(self, client, tmp_path):
+        nonexistent = tmp_path / "does_not_exist"
+        resp = client.get("/api/session-analytics", params={"data_path": str(nonexistent)})
+        assert resp.status_code == 400
+
+    def test_returns_empty_for_empty_dir(self, client, tmp_path):
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        resp = client.get("/api/session-analytics", params={"data_path": str(empty_dir)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sessions"] == []
+        assert data["aggregates"]["total_sessions"] == 0
+        assert data["weekly"] == []
+
+    def test_weekly_sorted_chronologically(self, client, mock_sessions_dir, tmp_path):
+        # Add a session in a different week
+        project = mock_sessions_dir / _mock_project_encoded()
+        home = str(Path.home())
+        session2_lines = [
+            {
+                "type": "user",
+                "sessionId": "22222222-3333-4444-5555-666666666666",
+                "cwd": f"{home}/testproject",
+                "message": {"role": "user", "content": "Older session"},
+                "timestamp": "2026-02-01T10:00:00.000Z",
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "model": "claude-sonnet-4-20250514",
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Response"}],
+                    "usage": {"input_tokens": 50, "output_tokens": 25},
+                },
+                "timestamp": "2026-02-01T10:00:05.000Z",
+            },
+        ]
+        with open(project / "22222222-3333-4444-5555-666666666666.jsonl", "w") as f:
+            for line in session2_lines:
+                f.write(json.dumps(line) + "\n")
+
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        weekly = resp.json()["weekly"]
+        assert len(weekly) == 2
+        # Should be sorted chronologically (earlier week first)
+        assert weekly[0]["week"] < weekly[1]["week"]
+
+    def test_token_data_from_session(self, client, mock_sessions_dir):
+        """Token fields should reflect actual parsed data from JSONL."""
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        session = resp.json()["sessions"][0]
+        # The mock session has input_tokens=100, output_tokens=50
+        assert session["total_input_tokens"] == 100
+        assert session["total_output_tokens"] == 50
+        assert session["total_tokens"] == 150  # 100 + 50 + 0 + 0
+
+    def test_aggregates_empty_sessions(self, client, tmp_path):
+        """Empty session list should return zero aggregates."""
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        resp = client.get("/api/session-analytics", params={"data_path": str(empty_dir)})
+        assert resp.status_code == 200
+        agg = resp.json()["aggregates"]
+        assert agg["avg_tokens_per_session"] == 0
+        assert agg["avg_tokens_per_prompt"] == 0
+        assert agg["avg_cache_hit_rate"] == 0
+        assert agg["total_sessions"] == 0
+
+    def test_default_data_path(self, client, monkeypatch):
+        """Without data_path param, uses default resolution."""
+        monkeypatch.setattr(main, "_resolve_data_dir", lambda data_path=None: Path("/tmp/nonexistent"))
+        monkeypatch.setattr(main, "get_all_sessions", lambda *a, **kw: {"sessions": [], "metadata": {}})
+        resp = client.get("/api/session-analytics")
+        assert resp.status_code == 200
+        assert resp.json()["sessions"] == []
+
+
 class TestGetUsage:
     def test_returns_empty_when_no_data(self, client):
         resp = client.get("/api/usage")

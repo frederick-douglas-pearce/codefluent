@@ -321,6 +321,124 @@ async def get_sessions(
     return get_all_sessions(data_dir, limit, project)
 
 
+@app.get("/api/session-analytics")
+async def get_session_analytics(
+    data_path: str = Query(default=None, max_length=1000),
+    project: str = Query(default=None, max_length=500),
+):
+    """Return sessions with token analytics and optional cached fluency scores."""
+    try:
+        data_dir = _resolve_data_dir(data_path)
+        session_data = get_all_sessions(data_dir, project=project)
+        sessions_list = session_data.get("sessions", [])
+
+        # Load cached scores
+        scores_path = DATA_DIR / "scores.json"
+        cached_scores = {}
+        if scores_path.exists():
+            try:
+                with open(scores_path) as f:
+                    cached_scores = json.load(f)
+            except Exception:
+                pass
+
+        # Build session analytics with token data + optional score
+        analytics_sessions = []
+        for s in sessions_list:
+            score_entry = cached_scores.get(s["id"], {})
+            overall_score = None
+            if "overall_score" in score_entry and score_entry.get("prompt_version") == SCORING_PROMPT_VERSION:
+                overall_score = score_entry["overall_score"]
+
+            analytics_sessions.append({
+                "session_id": s["id"],
+                "project": s.get("project", ""),
+                "started_at": s.get("started_at"),
+                "prompt_count": len(s.get("user_prompts", [])),
+                "total_tokens": s.get("total_tokens", 0),
+                "total_input_tokens": s.get("total_input_tokens", 0),
+                "total_output_tokens": s.get("total_output_tokens", 0),
+                "total_cache_creation_tokens": s.get("total_cache_creation_tokens", 0),
+                "total_cache_read_tokens": s.get("total_cache_read_tokens", 0),
+                "tokens_per_prompt": s.get("tokens_per_prompt", 0),
+                "cache_hit_rate": s.get("cache_hit_rate", 0),
+                "overall_score": overall_score,
+            })
+
+        # Compute aggregates
+        aggregates = _compute_session_aggregates(analytics_sessions)
+
+        # Compute weekly breakdown
+        weekly = _compute_weekly_analytics(analytics_sessions)
+
+        return {
+            "sessions": analytics_sessions,
+            "aggregates": aggregates,
+            "weekly": weekly,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
+
+
+def _compute_session_aggregates(sessions: list) -> dict:
+    """Compute aggregate token metrics across sessions."""
+    n = len(sessions)
+    if n == 0:
+        return {
+            "avg_tokens_per_session": 0,
+            "avg_tokens_per_prompt": 0,
+            "avg_cache_hit_rate": 0,
+            "total_sessions": 0,
+        }
+
+    total_tokens_sum = sum(s["total_tokens"] for s in sessions)
+    tokens_per_prompt_values = [s["tokens_per_prompt"] for s in sessions if s["tokens_per_prompt"] > 0]
+    cache_hit_values = [s["cache_hit_rate"] for s in sessions if s["cache_hit_rate"] > 0]
+
+    return {
+        "avg_tokens_per_session": round(total_tokens_sum / n),
+        "avg_tokens_per_prompt": round(sum(tokens_per_prompt_values) / len(tokens_per_prompt_values)) if tokens_per_prompt_values else 0,
+        "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
+        "total_sessions": n,
+    }
+
+
+def _compute_weekly_analytics(sessions: list) -> list:
+    """Compute weekly token analytics breakdown."""
+    week_groups: dict[str, dict] = {}
+
+    for s in sessions:
+        if not s.get("started_at"):
+            continue
+        week_info = _get_iso_week_key(s["started_at"])
+        if not week_info:
+            continue
+        week_key, _ = week_info
+        if week_key not in week_groups:
+            week_groups[week_key] = {"sessions": []}
+        week_groups[week_key]["sessions"].append(s)
+
+    weekly = []
+    for week_key, group in week_groups.items():
+        week_sessions = group["sessions"]
+        n = len(week_sessions)
+        total_tokens = sum(s["total_tokens"] for s in week_sessions)
+        cache_hit_values = [s["cache_hit_rate"] for s in week_sessions if s["cache_hit_rate"] > 0]
+
+        weekly.append({
+            "week": week_key,
+            "total_tokens": total_tokens,
+            "avg_tokens_per_session": round(total_tokens / n) if n else 0,
+            "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
+            "session_count": n,
+        })
+
+    weekly.sort(key=lambda w: w["week"])
+    return weekly
+
+
 @app.get("/api/scores")
 async def get_scores(project: str = Query(default=None, max_length=500)):
     """Return cached fluency scores scoped to last-scored sessions."""
