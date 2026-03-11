@@ -20,6 +20,13 @@ function makeSession(overrides: Partial<ParsedSession> = {}): ParsedSession {
     model: 'claude-sonnet-4-20250514',
     claude_code_version: '2.1.44',
     git_branch: 'main',
+    total_input_tokens: 0,
+    total_output_tokens: 0,
+    total_cache_creation_tokens: 0,
+    total_cache_read_tokens: 0,
+    total_tokens: 0,
+    tokens_per_prompt: 0,
+    cache_hit_rate: 0,
     ...overrides,
   }
 }
