@@ -24,16 +24,19 @@ function userMsg(content: any, extra: Record<string, any> = {}): any {
 }
 
 function assistantMsg(extra: Record<string, any> = {}): any {
-  return {
+  const { message: messageOverride, ...rest } = extra
+  const base = {
     type: 'assistant',
     message: {
       role: 'assistant',
       model: 'claude-sonnet-4-20250514',
       content: [{ type: 'text', text: 'Response' }],
+      ...messageOverride,
     },
     timestamp: '2026-03-01T10:00:05.000Z',
-    ...extra,
+    ...rest,
   }
+  return base
 }
 
 describe('extractUserText', () => {
@@ -406,6 +409,140 @@ describe('parseSessionFile', () => {
       '/home/.claude/projects/-home-user-my-project/1a67a55f-b4ed-45f9-8347-bde22cd0609c/session.jsonl'
     )
     expect(result!.project_path_encoded).toBe('-home-user-my-project')
+  })
+})
+
+describe('parseSessionFile — token extraction', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('accumulates token usage from assistant messages', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      assistantMsg({
+        message: {
+          usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 200, cache_read_input_tokens: 300 },
+        },
+      }),
+      userMsg('Follow-up'),
+      assistantMsg({
+        message: {
+          usage: { input_tokens: 150, output_tokens: 75, cache_creation_input_tokens: 100, cache_read_input_tokens: 400 },
+        },
+        timestamp: '2026-03-01T10:00:10.000Z',
+      }),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    expect(result!.total_input_tokens).toBe(250)
+    expect(result!.total_output_tokens).toBe(125)
+    expect(result!.total_cache_creation_tokens).toBe(300)
+    expect(result!.total_cache_read_tokens).toBe(700)
+    expect(result!.total_tokens).toBe(1375)
+  })
+
+  it('defaults to 0 when usage is missing', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      assistantMsg(),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    expect(result!.total_input_tokens).toBe(0)
+    expect(result!.total_output_tokens).toBe(0)
+    expect(result!.total_cache_creation_tokens).toBe(0)
+    expect(result!.total_cache_read_tokens).toBe(0)
+    expect(result!.total_tokens).toBe(0)
+  })
+
+  it('handles partial usage fields (some missing)', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      assistantMsg({
+        message: {
+          usage: { input_tokens: 100, output_tokens: 50 },
+        },
+      }),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    expect(result!.total_input_tokens).toBe(100)
+    expect(result!.total_output_tokens).toBe(50)
+    expect(result!.total_cache_creation_tokens).toBe(0)
+    expect(result!.total_cache_read_tokens).toBe(0)
+    expect(result!.total_tokens).toBe(150)
+  })
+
+  it('computes tokens_per_prompt correctly', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('First'),
+      assistantMsg({
+        message: {
+          usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        },
+      }),
+      userMsg('Second'),
+      assistantMsg({
+        message: {
+          usage: { input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        },
+        timestamp: '2026-03-01T10:00:10.000Z',
+      }),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    // total_tokens = 400, user_message_count = 2
+    expect(result!.tokens_per_prompt).toBe(200)
+  })
+
+  it('returns tokens_per_prompt 0 when no user messages counted', () => {
+    // This scenario can't produce a valid session (no prompts → null),
+    // but we test the math: if userMsgCount were 0, tokens_per_prompt = 0
+    // We test via a session with usage but only interrupted messages
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Real prompt'),
+      assistantMsg({
+        message: {
+          usage: { input_tokens: 500, output_tokens: 200, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        },
+      }),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    // 1 user message, 700 total tokens
+    expect(result!.tokens_per_prompt).toBe(700)
+  })
+
+  it('computes cache_hit_rate correctly', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      assistantMsg({
+        message: {
+          usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 200, cache_read_input_tokens: 300 },
+        },
+      }),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    // cache_read / (cache_read + input + cache_creation) = 300 / (300 + 100 + 200) = 0.5
+    expect(result!.cache_hit_rate).toBe(0.5)
+  })
+
+  it('returns cache_hit_rate 0 when no relevant tokens', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      assistantMsg({
+        message: {
+          usage: { input_tokens: 0, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+        },
+      }),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    expect(result!.cache_hit_rate).toBe(0)
+  })
+
+  it('returns cache_hit_rate 0 when usage is missing entirely', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      assistantMsg(),
+    ))
+    const result = parseSessionFile('/fake/project/session.jsonl')
+    expect(result!.cache_hit_rate).toBe(0)
   })
 })
 

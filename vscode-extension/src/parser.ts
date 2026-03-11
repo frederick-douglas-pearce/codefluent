@@ -18,6 +18,13 @@ export interface ParsedSession {
   model: string | null
   claude_code_version: string | null
   git_branch: string | null
+  total_input_tokens: number
+  total_output_tokens: number
+  total_cache_creation_tokens: number
+  total_cache_read_tokens: number
+  total_tokens: number
+  tokens_per_prompt: number
+  cache_hit_rate: number
 }
 
 export interface SessionsResult {
@@ -87,6 +94,10 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
   let version: string | null = null
   let gitBranch: string | null = null
   let isSidechain = false
+  let totalInputTokens = 0
+  let totalOutputTokens = 0
+  let totalCacheCreationTokens = 0
+  let totalCacheReadTokens = 0
 
   for (const msg of lines) {
     const msgType = msg.type || ''
@@ -113,6 +124,13 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
       assistantMsgCount++
       const msgModel = msg.message?.model
       if (msgModel && !model) model = msgModel
+      const usage = msg.message?.usage
+      if (usage) {
+        totalInputTokens += usage.input_tokens || 0
+        totalOutputTokens += usage.output_tokens || 0
+        totalCacheCreationTokens += usage.cache_creation_input_tokens || 0
+        totalCacheReadTokens += usage.cache_read_input_tokens || 0
+      }
       const content = msg.message?.content
       if (Array.isArray(content)) {
         for (const block of content) {
@@ -160,6 +178,11 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     ? path.basename(path.dirname(path.dirname(filepath)))
     : parentDirName
 
+  const totalTokens = totalInputTokens + totalOutputTokens + totalCacheCreationTokens + totalCacheReadTokens
+  const tokensPerPrompt = userMsgCount > 0 ? totalTokens / userMsgCount : 0
+  const cacheHitDenom = totalCacheReadTokens + totalInputTokens + totalCacheCreationTokens
+  const cacheHitRate = cacheHitDenom > 0 ? totalCacheReadTokens / cacheHitDenom : 0
+
   return {
     id: sessionId,
     project: projectName,
@@ -176,6 +199,13 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     model,
     claude_code_version: version,
     git_branch: gitBranch,
+    total_input_tokens: totalInputTokens,
+    total_output_tokens: totalOutputTokens,
+    total_cache_creation_tokens: totalCacheCreationTokens,
+    total_cache_read_tokens: totalCacheReadTokens,
+    total_tokens: totalTokens,
+    tokens_per_prompt: tokensPerPrompt,
+    cache_hit_rate: cacheHitRate,
   }
 }
 

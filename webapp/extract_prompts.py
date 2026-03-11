@@ -74,6 +74,10 @@ def parse_session_file(filepath: Path) -> dict | None:
     version = None
     git_branch = None
     is_sidechain = False
+    total_input_tokens = 0
+    total_output_tokens = 0
+    total_cache_creation_tokens = 0
+    total_cache_read_tokens = 0
 
     for msg in lines:
         msg_type = msg.get("type", "")
@@ -110,6 +114,12 @@ def parse_session_file(filepath: Path) -> dict | None:
             msg_model = msg.get("message", {}).get("model")
             if msg_model and not model:
                 model = msg_model
+            usage = msg.get("message", {}).get("usage", {})
+            if usage:
+                total_input_tokens += usage.get("input_tokens", 0)
+                total_output_tokens += usage.get("output_tokens", 0)
+                total_cache_creation_tokens += usage.get("cache_creation_input_tokens", 0)
+                total_cache_read_tokens += usage.get("cache_read_input_tokens", 0)
             content = msg.get("message", {}).get("content", [])
             if isinstance(content, list):
                 for block in content:
@@ -145,6 +155,11 @@ def parse_session_file(filepath: Path) -> dict | None:
     project_name = project_cwd.rstrip("/").split("/")[-1] if project_cwd else filepath.parent.name
     timestamps.sort()
 
+    total_tokens = total_input_tokens + total_output_tokens + total_cache_creation_tokens + total_cache_read_tokens
+    tokens_per_prompt = total_tokens / user_msg_count if user_msg_count > 0 else 0
+    cache_hit_denom = total_cache_read_tokens + total_input_tokens + total_cache_creation_tokens
+    cache_hit_rate = total_cache_read_tokens / cache_hit_denom if cache_hit_denom > 0 else 0
+
     return {
         "id": session_id,
         "project": project_name,
@@ -161,6 +176,13 @@ def parse_session_file(filepath: Path) -> dict | None:
         "model": model,
         "claude_code_version": version,
         "git_branch": git_branch,
+        "total_input_tokens": total_input_tokens,
+        "total_output_tokens": total_output_tokens,
+        "total_cache_creation_tokens": total_cache_creation_tokens,
+        "total_cache_read_tokens": total_cache_read_tokens,
+        "total_tokens": total_tokens,
+        "tokens_per_prompt": tokens_per_prompt,
+        "cache_hit_rate": cache_hit_rate,
     }
 
 

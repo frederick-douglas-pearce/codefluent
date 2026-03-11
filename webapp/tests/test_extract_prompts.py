@@ -588,6 +588,156 @@ class TestParseSessionFile:
         assert result["project"] == "fallback-project"
 
 
+# --- parse_session_file — token extraction ---
+
+class TestParseSessionFileTokenExtraction:
+    def _write_jsonl(self, path: Path, lines: list[dict]):
+        with open(path, "w") as f:
+            for line in lines:
+                f.write(json.dumps(line) + "\n")
+
+    def _user_msg(self, content="Prompt", **kwargs):
+        return {
+            "type": "user",
+            "sessionId": "sid-1",
+            "cwd": "/home/user/project",
+            "message": {"role": "user", "content": content},
+            "timestamp": "2026-03-01T10:00:00.000Z",
+            **kwargs,
+        }
+
+    def _assistant_msg(self, usage=None, **kwargs):
+        msg = {
+            "type": "assistant",
+            "message": {
+                "model": "claude-sonnet-4-20250514",
+                "role": "assistant",
+                "content": [{"type": "text", "text": "Response"}],
+            },
+            "timestamp": "2026-03-01T10:00:05.000Z",
+            **kwargs,
+        }
+        if usage is not None:
+            msg["message"]["usage"] = usage
+        return msg
+
+    def test_accumulates_token_usage(self, tmp_path):
+        f = tmp_path / "project" / "session.jsonl"
+        f.parent.mkdir()
+        self._write_jsonl(f, [
+            self._user_msg("First"),
+            self._assistant_msg(usage={
+                "input_tokens": 100, "output_tokens": 50,
+                "cache_creation_input_tokens": 200, "cache_read_input_tokens": 300,
+            }),
+            self._user_msg("Second", timestamp="2026-03-01T10:01:00.000Z"),
+            self._assistant_msg(usage={
+                "input_tokens": 150, "output_tokens": 75,
+                "cache_creation_input_tokens": 100, "cache_read_input_tokens": 400,
+            }, timestamp="2026-03-01T10:01:05.000Z"),
+        ])
+        result = parse_session_file(f)
+        assert result["total_input_tokens"] == 250
+        assert result["total_output_tokens"] == 125
+        assert result["total_cache_creation_tokens"] == 300
+        assert result["total_cache_read_tokens"] == 700
+        assert result["total_tokens"] == 1375
+
+    def test_defaults_to_zero_when_no_usage(self, tmp_path):
+        f = tmp_path / "project" / "session.jsonl"
+        f.parent.mkdir()
+        self._write_jsonl(f, [
+            self._user_msg(),
+            self._assistant_msg(),
+        ])
+        result = parse_session_file(f)
+        assert result["total_input_tokens"] == 0
+        assert result["total_output_tokens"] == 0
+        assert result["total_cache_creation_tokens"] == 0
+        assert result["total_cache_read_tokens"] == 0
+        assert result["total_tokens"] == 0
+
+    def test_handles_partial_usage_fields(self, tmp_path):
+        f = tmp_path / "project" / "session.jsonl"
+        f.parent.mkdir()
+        self._write_jsonl(f, [
+            self._user_msg(),
+            self._assistant_msg(usage={"input_tokens": 100, "output_tokens": 50}),
+        ])
+        result = parse_session_file(f)
+        assert result["total_input_tokens"] == 100
+        assert result["total_output_tokens"] == 50
+        assert result["total_cache_creation_tokens"] == 0
+        assert result["total_cache_read_tokens"] == 0
+        assert result["total_tokens"] == 150
+
+    def test_computes_tokens_per_prompt(self, tmp_path):
+        f = tmp_path / "project" / "session.jsonl"
+        f.parent.mkdir()
+        self._write_jsonl(f, [
+            self._user_msg("First"),
+            self._assistant_msg(usage={"input_tokens": 100, "output_tokens": 100,
+                                       "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}),
+            self._user_msg("Second", timestamp="2026-03-01T10:01:00.000Z"),
+            self._assistant_msg(usage={"input_tokens": 100, "output_tokens": 100,
+                                       "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+                                timestamp="2026-03-01T10:01:05.000Z"),
+        ])
+        result = parse_session_file(f)
+        # total_tokens = 400, user_message_count = 2
+        assert result["tokens_per_prompt"] == 200
+
+    def test_computes_cache_hit_rate(self, tmp_path):
+        f = tmp_path / "project" / "session.jsonl"
+        f.parent.mkdir()
+        self._write_jsonl(f, [
+            self._user_msg(),
+            self._assistant_msg(usage={
+                "input_tokens": 100, "output_tokens": 50,
+                "cache_creation_input_tokens": 200, "cache_read_input_tokens": 300,
+            }),
+        ])
+        result = parse_session_file(f)
+        # 300 / (300 + 100 + 200) = 0.5
+        assert result["cache_hit_rate"] == 0.5
+
+    def test_cache_hit_rate_zero_when_no_relevant_tokens(self, tmp_path):
+        f = tmp_path / "project" / "session.jsonl"
+        f.parent.mkdir()
+        self._write_jsonl(f, [
+            self._user_msg(),
+            self._assistant_msg(usage={
+                "input_tokens": 0, "output_tokens": 100,
+                "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+            }),
+        ])
+        result = parse_session_file(f)
+        assert result["cache_hit_rate"] == 0
+
+    def test_cache_hit_rate_zero_when_no_usage(self, tmp_path):
+        f = tmp_path / "project" / "session.jsonl"
+        f.parent.mkdir()
+        self._write_jsonl(f, [
+            self._user_msg(),
+            self._assistant_msg(),
+        ])
+        result = parse_session_file(f)
+        assert result["cache_hit_rate"] == 0
+
+    def test_tokens_per_prompt_zero_when_no_user_messages(self, tmp_path):
+        """Edge case: if somehow user_msg_count is 0 (shouldn't happen in practice)."""
+        f = tmp_path / "project" / "session.jsonl"
+        f.parent.mkdir()
+        # Single prompt with usage
+        self._write_jsonl(f, [
+            self._user_msg("Single"),
+            self._assistant_msg(usage={"input_tokens": 500, "output_tokens": 200,
+                                       "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}),
+        ])
+        result = parse_session_file(f)
+        assert result["tokens_per_prompt"] == 700
+
+
 # --- get_all_sessions ---
 
 class TestGetAllSessions:
