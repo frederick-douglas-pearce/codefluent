@@ -137,10 +137,35 @@
           <button class="btn btn-secondary btn-small" id="refresh-data-btn">&#x21BB; Refresh</button>
           <span id="cache-status" class="cache-status"></span>
         </div>
+        <p class="data-scope-label" id="ccusage-scope-label" style="display:none;">All Projects (via ccusage)</p>
         <div id="usage-pace" class="pace-section"></div>
         <div class="chart-container">
           <h3>Daily Token Usage <span class="info-icon" tabindex="0" aria-describedby="tooltip-token-usage">i<span class="info-tooltip" id="tooltip-token-usage" role="tooltip"><strong>Output</strong> — Tokens Claude generates in responses.<br><strong>Input</strong> — Fresh tokens sent with each prompt (new text, not cached).<br><strong>Cache Creation</strong> — Tokens cached for the first time (e.g. CLAUDE.md, large files). Costs more upfront but saves on future reads.<br><strong>Cache Read</strong> — Previously cached tokens reused at ~90% discount. This is usually the largest category.</span></span></h3>
           <canvas id="usage-chart"></canvas>
+        </div>
+
+        <!-- Session Analytics (from parsed JSONL data) -->
+        <h3 class="session-analytics-header" id="session-analytics-header" style="display:none;">Session Analytics</h3>
+        <div id="session-efficiency-cards" class="pace-section"></div>
+        <div id="session-token-table-container" style="display:none;">
+          <h3>Session Token Details</h3>
+          <div class="table-wrapper">
+            <table class="session-table" id="session-token-table">
+              <thead>
+                <tr>
+                  <th data-sort="date" class="sortable sorted-desc">Date</th>
+                  <th data-sort="project" class="sortable">Project</th>
+                  <th data-sort="prompts" class="sortable">Prompts</th>
+                  <th data-sort="total_tokens" class="sortable">Total Tokens</th>
+                  <th data-sort="tokens_per_prompt" class="sortable">Tokens/Prompt</th>
+                  <th data-sort="cache_hit_rate" class="sortable">Cache Hit</th>
+                  <th data-sort="score" class="sortable">Score</th>
+                </tr>
+              </thead>
+              <tbody id="session-token-tbody"></tbody>
+            </table>
+          </div>
+          <button class="session-show-more-btn" id="session-table-show-more" style="display:none;">Show more</button>
         </div>
       </div>
     </main>

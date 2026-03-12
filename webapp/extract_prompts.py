@@ -186,7 +186,7 @@ def parse_session_file(filepath: Path) -> dict | None:
     }
 
 
-def get_all_sessions(data_dir: Path = None, limit: int = None, project: str = None) -> dict:
+def get_all_sessions(data_dir: Path = None, limit: int = None, project: str = None, max_files: int = None) -> dict:
     """Parse all sessions from JSONL files. Used by both CLI and API."""
     if data_dir is None:
         data_dir = CLAUDE_DATA_DIR
@@ -202,7 +202,8 @@ def get_all_sessions(data_dir: Path = None, limit: int = None, project: str = No
             },
         }
 
-    sessions = []
+    # Collect all JSONL file paths first
+    file_paths: list[Path] = []
     for project_dir in sorted(data_dir.iterdir()):
         if not project_dir.is_dir():
             continue
@@ -210,19 +211,24 @@ def get_all_sessions(data_dir: Path = None, limit: int = None, project: str = No
         # Parse flat .jsonl files
         flat_files = sorted(project_dir.glob("*.jsonl"))
         seen_ids = {f.stem for f in flat_files}
-        for jsonl_file in flat_files:
-            session = parse_session_file(jsonl_file)
-            if session:
-                sessions.append(session)
+        file_paths.extend(flat_files)
 
         # Also check UUID subdirectories for main session files (future-proofing)
         for subdir in sorted(project_dir.iterdir()):
             if not subdir.is_dir() or subdir.name in seen_ids:
                 continue
-            for jsonl_file in sorted(subdir.glob("*.jsonl")):
-                session = parse_session_file(jsonl_file)
-                if session:
-                    sessions.append(session)
+            file_paths.extend(sorted(subdir.glob("*.jsonl")))
+
+    # When max_files is set, sort by mtime descending and take only the newest files
+    if max_files and max_files < len(file_paths):
+        file_paths.sort(key=lambda fp: fp.stat().st_mtime, reverse=True)
+        file_paths = file_paths[:max_files]
+
+    sessions = []
+    for jsonl_file in file_paths:
+        session = parse_session_file(jsonl_file)
+        if session:
+            sessions.append(session)
 
     sessions.sort(key=lambda s: s.get("started_at") or "", reverse=True)
 

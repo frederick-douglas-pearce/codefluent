@@ -97,7 +97,7 @@ describe('scoreSessions', () => {
     const client = makeMockClient(makeApiResponse(scoreJson))
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(client.messages.create).toHaveBeenCalledTimes(1)
     expect(results['sess-1']).toMatchObject({
@@ -156,7 +156,7 @@ describe('scoreSessions', () => {
     const client = makeMockClient(makeApiResponse({ overall_score: 99 }))
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(
+    const { results } = await scoreSessions(
       ['sess-1'], sessions, { 'sess-1': cachedScore }, client
     )
 
@@ -170,7 +170,7 @@ describe('scoreSessions', () => {
     const client = makeMockClient(makeApiResponse(newScore))
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(
+    const { results } = await scoreSessions(
       ['sess-1'], sessions, { 'sess-1': cachedScore }, client, true
     )
 
@@ -199,7 +199,7 @@ describe('scoreSessions', () => {
       'sess-2': makeSession({ id: 'sess-2' }),
     }
 
-    const results = await scoreSessions(
+    const { results } = await scoreSessions(
       ['sess-1', 'sess-2'], sessions, { 'sess-1': cachedScore }, client
     )
 
@@ -213,20 +213,50 @@ describe('scoreSessions', () => {
   it('skips sessions not present in allSessions', async () => {
     const client = makeMockClient(makeApiResponse({ overall_score: 50 }))
 
-    const results = await scoreSessions(['missing-id'], {}, {}, client)
+    const { results, stats } = await scoreSessions(['missing-id'], {}, {}, client)
 
     expect(client.messages.create).not.toHaveBeenCalled()
     expect(results['missing-id']).toBeUndefined()
+    expect(stats.skipped_no_prompts).toBe(1)
   })
 
   it('skips sessions with no user prompts', async () => {
     const client = makeMockClient(makeApiResponse({ overall_score: 50 }))
     const sessions = { 'sess-1': makeSession({ user_prompts: [] }) }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results, stats } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(client.messages.create).not.toHaveBeenCalled()
     expect(results['sess-1']).toBeUndefined()
+    expect(stats.skipped_no_prompts).toBe(1)
+  })
+
+  it('returns accurate stats across scored, cached, skipped, and errored sessions', async () => {
+    const client = {
+      messages: {
+        create: jest.fn()
+          .mockResolvedValueOnce(makeApiResponse({ overall_score: 70, fluency_behaviors: { clarifying_goals: true }, coding_pattern: 'hybrid_code_explanation', one_line_summary: 'ok' }))
+          .mockRejectedValueOnce(new Error('API error')),
+      },
+    } as any
+    const sessions: Record<string, any> = {
+      'sess-score': makeSession(),
+      'sess-error': makeSession(),
+      'sess-empty': makeSession({ user_prompts: [] }),
+    }
+    const cached: Record<string, any> = {
+      'sess-cached': { session_id: 'sess-cached', fluency_behaviors: {}, prompt_version: SCORING_PROMPT_VERSION },
+    }
+
+    const { stats } = await scoreSessions(
+      ['sess-score', 'sess-error', 'sess-empty', 'sess-cached', 'sess-missing'],
+      sessions, cached, client,
+    )
+
+    expect(stats.scored).toBe(1)
+    expect(stats.errored).toBe(1)
+    expect(stats.skipped_no_prompts).toBe(2) // sess-empty + sess-missing
+    expect(stats.cached).toBe(1)
   })
 
   // --- Error handling ---
@@ -239,7 +269,7 @@ describe('scoreSessions', () => {
     } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(results['sess-1'].error).toBe('API rate limit exceeded')
     expect(results['sess-1'].session_id).toBe('sess-1')
@@ -254,7 +284,7 @@ describe('scoreSessions', () => {
     } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(results['sess-1'].error).toBe('string error')
   })
@@ -269,7 +299,7 @@ describe('scoreSessions', () => {
     } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(results['sess-1'].error).toBeDefined()
     expect(results['sess-1'].session_id).toBe('sess-1')
@@ -286,7 +316,7 @@ describe('scoreSessions', () => {
     } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(results['sess-1'].overall_score).toBe(77)
     expect(results['sess-1'].coding_pattern).toBe('conceptual_inquiry')
@@ -310,7 +340,7 @@ describe('scoreSessions', () => {
       'sess-2': makeSession({ id: 'sess-2' }),
     }
 
-    const results = await scoreSessions(['sess-1', 'sess-2'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1', 'sess-2'], sessions, {}, client)
 
     expect(results['sess-1'].error).toBe('Timeout')
     expect(results['sess-2'].overall_score).toBe(88)
@@ -878,7 +908,7 @@ describe('scoreSessions with validation', () => {
     const client = { messages: { create: jest.fn().mockResolvedValue(apiResponse) } } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(results['sess-1'].overall_score).toBe(100)
     expect(results['sess-1'].coding_pattern).toBe('conceptual_inquiry')
@@ -1078,7 +1108,7 @@ describe('scoreSessions retry behavior', () => {
     const client = { messages: { create: fn } } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client, false, noDelay)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client, false, noDelay)
 
     expect(fn).toHaveBeenCalledTimes(2)
     expect(results['sess-1'].overall_score).toBe(75)
@@ -1091,7 +1121,7 @@ describe('scoreSessions retry behavior', () => {
     const client = { messages: { create: fn } } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(
+    const { results } = await scoreSessions(
       ['sess-1'], sessions, {}, client, false,
       { maxAttempts: 3, delayFn: noDelay.delayFn }
     )
@@ -1107,7 +1137,7 @@ describe('scoreSessions retry behavior', () => {
     const client = { messages: { create: fn } } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client, false, noDelay)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client, false, noDelay)
 
     expect(fn).toHaveBeenCalledTimes(1)
     expect(results['sess-1'].error).toBe('Invalid API key')
@@ -1131,7 +1161,7 @@ describe('scoreSessions retry behavior', () => {
     } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(results['sess-1'].error).toContain('empty response content')
     expect(results['sess-1'].session_id).toBe('sess-1')
@@ -1143,7 +1173,7 @@ describe('scoreSessions retry behavior', () => {
     } as any
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(results['sess-1'].error).toContain('unexpected content type')
   })
@@ -1164,7 +1194,7 @@ describe('scoreSessions retry behavior', () => {
       'sess-2': makeSession({ id: 'sess-2' }),
     }
 
-    const results = await scoreSessions(
+    const { results } = await scoreSessions(
       ['sess-1', 'sess-2'], sessions, {}, client, false,
       { maxAttempts: 2, delayFn: noDelay.delayFn }
     )
@@ -1428,7 +1458,7 @@ describe('prompt versioning', () => {
     const client = makeMockClient(makeApiResponse(scoreJson))
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(['sess-1'], sessions, {}, client)
+    const { results } = await scoreSessions(['sess-1'], sessions, {}, client)
 
     expect(results['sess-1'].prompt_version).toBe(SCORING_PROMPT_VERSION)
   })
@@ -1438,7 +1468,7 @@ describe('prompt versioning', () => {
     const client = makeMockClient(makeApiResponse({ overall_score: 99 }))
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(
+    const { results } = await scoreSessions(
       ['sess-1'], sessions, { 'sess-1': cachedScore }, client
     )
 
@@ -1451,7 +1481,7 @@ describe('prompt versioning', () => {
     const client = makeMockClient(makeApiResponse({ overall_score: 80 }))
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(
+    const { results } = await scoreSessions(
       ['sess-1'], sessions, { 'sess-1': cachedScore }, client
     )
 
@@ -1464,7 +1494,7 @@ describe('prompt versioning', () => {
     const client = makeMockClient(makeApiResponse({ overall_score: 75 }))
     const sessions = { 'sess-1': makeSession() }
 
-    const results = await scoreSessions(
+    const { results } = await scoreSessions(
       ['sess-1'], sessions, { 'sess-1': cachedScore }, client
     )
 

@@ -253,7 +253,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const { sessions } = sessionData as { sessions: any[] }
     const allSessions = Object.fromEntries(sessions.map((s: any) => [s.id, s]))
 
-    const results = await scoreSessions(sessionIds, allSessions, cached, client, force)
+    const { results, stats } = await scoreSessions(sessionIds, allSessions, cached, client, force)
 
     this.cache.write(cached)
     this.cache.writeLastScoredIds(sessionIds)
@@ -264,7 +264,10 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const scored = Object.values(results).filter((r: any) => r.fluency_behaviors)
     const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
     aggregate.sessions_requested = sessionIds.length
-    aggregate.sessions_skipped = sessionIds.length - scored.length
+    aggregate.sessions_scored = scored.length
+    aggregate.sessions_skipped = stats.skipped_no_prompts
+    aggregate.sessions_errored = stats.errored
+    aggregate.sessions_cached = stats.cached
     const projectName = this.getWorkspaceProjectName()
     const projectSessions = projectName
       ? sessions.filter((s: any) => s.project === projectName)
@@ -437,7 +440,11 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         ? lastScoredIds.filter(id => workspaceSessionIds.has(id))
         : lastScoredIds
       aggregate.sessions_requested = workspaceLastScoredIds.length
-      aggregate.sessions_skipped = workspaceLastScoredIds.length - scored.length
+      aggregate.sessions_scored = scored.length
+      // For cached display, we can't distinguish skip reasons, so just show the gap
+      const gap = workspaceLastScoredIds.length - scored.length
+      aggregate.sessions_skipped = gap > 0 ? gap : 0
+      aggregate.sessions_errored = 0
     }
     aggregate.score_history = computeScoreHistory(cached, sessionData.sessions.filter((s: any) => !projectName || s.project === projectName), configBehaviors)
 

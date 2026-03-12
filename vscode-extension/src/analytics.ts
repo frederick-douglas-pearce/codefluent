@@ -17,7 +17,7 @@ export interface SessionEfficiency {
   most_efficient_session: { id: string; tokens_per_prompt: number } | null
 }
 
-export interface EnrichedSession extends ParsedSession {
+export interface EnrichedSession extends Omit<ParsedSession, 'user_prompts' | 'tools_used'> {
   overall_score: number | null
 }
 
@@ -113,10 +113,14 @@ export function joinSessionsWithScores(
     scoreMap.set(score.session_id, score.overall_score ?? null)
   }
 
-  return sessions.map(session => ({
-    ...session,
-    overall_score: scoreMap.get(session.id) ?? null,
-  }))
+  return sessions.map(session => {
+    // Strip large fields not needed for analytics UI to avoid OOM on IPC
+    const { user_prompts, tools_used, ...rest } = session
+    return {
+      ...rest,
+      overall_score: scoreMap.get(session.id) ?? null,
+    }
+  })
 }
 
 export function buildSessionAnalytics(

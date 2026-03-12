@@ -277,6 +277,13 @@ export async function scoreClaudeMd(
   return validateConfigScoreResult(JSON.parse(text))
 }
 
+export interface ScoringStats {
+  scored: number
+  cached: number
+  skipped_no_prompts: number
+  errored: number
+}
+
 export async function scoreSessions(
   sessionIds: string[],
   allSessions: Record<string, ParsedSession>,
@@ -284,17 +291,22 @@ export async function scoreSessions(
   client: Anthropic,
   forceRescore = false,
   retryOptions?: RetryOptions,
-): Promise<Record<string, ScoreResult>> {
+): Promise<{ results: Record<string, ScoreResult>; stats: ScoringStats }> {
   const results: Record<string, ScoreResult> = {}
+  const stats: ScoringStats = { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 }
 
   for (const sid of sessionIds) {
     if (cached[sid] && !forceRescore && cached[sid].prompt_version === SCORING_PROMPT_VERSION) {
       results[sid] = cached[sid]
+      stats.cached++
       continue
     }
 
     const session = allSessions[sid]
-    if (!session || !session.user_prompts.length) continue
+    if (!session || !session.user_prompts.length) {
+      stats.skipped_no_prompts++
+      continue
+    }
 
     const promptsText = session.user_prompts.slice(0, 20)
       .map((p, i) => `<user_prompt index="${i + 1}">${p}</user_prompt>`)
@@ -325,13 +337,15 @@ export async function scoreSessions(
       score.prompt_version = SCORING_PROMPT_VERSION
       results[sid] = score
       cached[sid] = score
+      stats.scored++
     } catch (e: any) {
       console.error(`[CodeFluent] Failed to score session ${sid}: ${sanitizeError(e.message || String(e))}`)
       results[sid] = { error: sanitizeError(e.message || String(e)), session_id: sid }
+      stats.errored++
     }
   }
 
-  return results
+  return { results, stats }
 }
 
 export function computeAggregate(
