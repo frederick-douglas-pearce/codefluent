@@ -474,13 +474,13 @@ def _compute_session_aggregates(sessions: list) -> dict:
         }
 
     total_tokens_sum = sum(s["total_tokens"] for s in sessions)
-    tokens_per_prompt_values = [s["tokens_per_prompt"] for s in sessions if s["tokens_per_prompt"] > 0]
+    total_prompts = sum(s.get("prompt_count", 0) for s in sessions)
     cache_hit_values = [s["cache_hit_rate"] for s in sessions if s["cache_hit_rate"] > 0]
     total_cost = sum(s.get("estimated_cost", 0) for s in sessions)
 
     return {
         "avg_tokens_per_session": round(total_tokens_sum / n),
-        "avg_tokens_per_prompt": round(sum(tokens_per_prompt_values) / len(tokens_per_prompt_values)) if tokens_per_prompt_values else 0,
+        "avg_tokens_per_prompt": round(total_tokens_sum / total_prompts) if total_prompts > 0 else 0,
         "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
         "total_sessions": n,
         "total_estimated_cost": round(total_cost, 2),

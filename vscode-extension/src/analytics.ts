@@ -85,7 +85,8 @@ export function computeSessionEfficiency(sessions: ParsedSession[]): SessionEffi
   }
 
   const totalTokens = sessions.reduce((sum, s) => sum + s.total_tokens, 0)
-  const avgTokensPerPrompt = sessions.reduce((sum, s) => sum + s.tokens_per_prompt, 0) / sessions.length
+  const totalPrompts = sessions.reduce((sum, s) => sum + s.user_message_count, 0)
+  const avgTokensPerPrompt = totalPrompts > 0 ? totalTokens / totalPrompts : 0
   const avgCacheHitRate = sessions.reduce((sum, s) => sum + s.cache_hit_rate, 0) / sessions.length
 
   // Most efficient = lowest tokens_per_prompt among sessions that have prompts
