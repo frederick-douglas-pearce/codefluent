@@ -65,6 +65,75 @@ client = Anthropic()
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+# --- Pricing / Cost Estimation ---
+
+_pricing_cache: dict | None = None
+
+
+def _load_pricing() -> dict:
+    """Load pricing data from shared/pricing.json."""
+    global _pricing_cache
+    if _pricing_cache is not None:
+        return _pricing_cache
+    pricing_path = Path(__file__).parent.parent / "shared" / "pricing.json"
+    with open(pricing_path) as f:
+        _pricing_cache = json.load(f)
+    return _pricing_cache
+
+
+def _resolve_model_key(model_id: str | None, pricing: dict) -> str:
+    """Resolve a model ID to a canonical key. Order: exact → alias → prefix → default."""
+    if not model_id:
+        return pricing["default_model"]
+    models = pricing["models"]
+    if model_id in models:
+        return model_id
+    alias_key = model_id.lower()
+    if alias_key in pricing.get("aliases", {}):
+        resolved = pricing["aliases"][alias_key]
+        if resolved in models:
+            return resolved
+    best = ""
+    for key in models:
+        if model_id.startswith(key) and len(key) > len(best):
+            best = key
+    if best:
+        return best
+    return pricing["default_model"]
+
+
+def _get_pricing_for_date(entries: list, session_date: str | None) -> dict:
+    """Get the pricing entry active on a given date."""
+    if len(entries) == 1:
+        return entries[0]
+    sorted_entries = sorted(entries, key=lambda e: e["effective_date"])
+    if not session_date:
+        return sorted_entries[-1]
+    date_str = session_date[:10]
+    active = sorted_entries[0]
+    for entry in sorted_entries:
+        if entry["effective_date"] <= date_str:
+            active = entry
+        else:
+            break
+    return active
+
+
+def _estimate_session_cost(session: dict, pricing: dict | None = None) -> float:
+    """Estimate USD cost for a session based on its token usage and model."""
+    if pricing is None:
+        pricing = _load_pricing()
+    model_key = _resolve_model_key(session.get("model"), pricing)
+    entries = pricing["models"][model_key]
+    rate = _get_pricing_for_date(entries, session.get("started_at"))
+    M = 1_000_000
+    input_cost = session.get("total_input_tokens", 0) * rate["input"] / M
+    output_cost = session.get("total_output_tokens", 0) * rate["output"] / M
+    cache_creation_cost = session.get("total_cache_creation_tokens", 0) * rate["cache_creation"] / M
+    cache_read_cost = session.get("total_cache_read_tokens", 0) * rate["cache_read"] / M
+    return input_cost + output_cost + cache_creation_cost + cache_read_cost
+
+
 def _load_prompt(prompt_type: str) -> dict:
     """Load a prompt template and version from the shared prompts registry."""
     prompts_dir = Path(__file__).parent.parent / "shared" / "prompts"
@@ -342,7 +411,13 @@ async def get_session_analytics(
             except Exception:
                 pass
 
-        # Build session analytics with token data + optional score
+        # Load pricing data
+        try:
+            pricing = _load_pricing()
+        except Exception:
+            pricing = None
+
+        # Build session analytics with token data + optional score + cost
         analytics_sessions = []
         for s in sessions_list:
             score_entry = cached_scores.get(s["id"], {})
@@ -350,10 +425,13 @@ async def get_session_analytics(
             if "overall_score" in score_entry and score_entry.get("prompt_version") == SCORING_PROMPT_VERSION:
                 overall_score = score_entry["overall_score"]
 
+            estimated_cost = _estimate_session_cost(s, pricing) if pricing else 0
+
             analytics_sessions.append({
                 "session_id": s["id"],
                 "project": s.get("project", ""),
                 "started_at": s.get("started_at"),
+                "model": s.get("model"),
                 "prompt_count": len(s.get("user_prompts", [])),
                 "total_tokens": s.get("total_tokens", 0),
                 "total_input_tokens": s.get("total_input_tokens", 0),
@@ -363,6 +441,7 @@ async def get_session_analytics(
                 "tokens_per_prompt": s.get("tokens_per_prompt", 0),
                 "cache_hit_rate": s.get("cache_hit_rate", 0),
                 "overall_score": overall_score,
+                "estimated_cost": round(estimated_cost, 4),
             })
 
         # Compute aggregates
@@ -391,17 +470,20 @@ def _compute_session_aggregates(sessions: list) -> dict:
             "avg_tokens_per_prompt": 0,
             "avg_cache_hit_rate": 0,
             "total_sessions": 0,
+            "total_estimated_cost": 0,
         }
 
     total_tokens_sum = sum(s["total_tokens"] for s in sessions)
     tokens_per_prompt_values = [s["tokens_per_prompt"] for s in sessions if s["tokens_per_prompt"] > 0]
     cache_hit_values = [s["cache_hit_rate"] for s in sessions if s["cache_hit_rate"] > 0]
+    total_cost = sum(s.get("estimated_cost", 0) for s in sessions)
 
     return {
         "avg_tokens_per_session": round(total_tokens_sum / n),
         "avg_tokens_per_prompt": round(sum(tokens_per_prompt_values) / len(tokens_per_prompt_values)) if tokens_per_prompt_values else 0,
         "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
         "total_sessions": n,
+        "total_estimated_cost": round(total_cost, 2),
     }
 
 

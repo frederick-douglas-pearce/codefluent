@@ -1,0 +1,65 @@
+{
+  "models": {
+    "claude-opus-4-6": [
+      {
+        "effective_date": "2025-11-01",
+        "input": 15.0,
+        "output": 75.0,
+        "cache_creation": 18.75,
+        "cache_read": 1.875
+      }
+    ],
+    "claude-opus-4-5-20251101": [
+      {
+        "effective_date": "2025-11-01",
+        "input": 15.0,
+        "output": 75.0,
+        "cache_creation": 18.75,
+        "cache_read": 1.875
+      }
+    ],
+    "claude-sonnet-4-6": [
+      {
+        "effective_date": "2025-05-14",
+        "input": 3.0,
+        "output": 15.0,
+        "cache_creation": 3.75,
+        "cache_read": 0.30
+      }
+    ],
+    "claude-sonnet-4-5-20250929": [
+      {
+        "effective_date": "2025-09-29",
+        "input": 3.0,
+        "output": 15.0,
+        "cache_creation": 3.75,
+        "cache_read": 0.30
+      }
+    ],
+    "claude-sonnet-4-20250514": [
+      {
+        "effective_date": "2025-05-14",
+        "input": 3.0,
+        "output": 15.0,
+        "cache_creation": 3.75,
+        "cache_read": 0.30
+      }
+    ],
+    "claude-haiku-4-5-20251001": [
+      {
+        "effective_date": "2025-10-01",
+        "input": 0.80,
+        "output": 4.0,
+        "cache_creation": 1.0,
+        "cache_read": 0.08
+      }
+    ]
+  },
+  "aliases": {
+    "opus": "claude-opus-4-6",
+    "sonnet": "claude-sonnet-4-6",
+    "haiku": "claude-haiku-4-5-20251001"
+  },
+  "default_model": "claude-sonnet-4-6",
+  "_comment": "Prices are USD per 1M tokens. Each model has a time-series array of pricing entries sorted by effective_date ascending. Cost estimation picks the entry active on the session date."
+}

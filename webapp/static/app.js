@@ -759,6 +759,7 @@ function renderSessionEfficiencyCards() {
   }
 
   const totalTokens = sessions.reduce((sum, s) => sum + (s.total_tokens || 0), 0)
+  const totalCost = agg.total_estimated_cost != null ? agg.total_estimated_cost : sessions.reduce((sum, s) => sum + (s.estimated_cost || 0), 0)
 
   container.innerHTML = `
     <div class="pace-grid">
@@ -766,6 +767,11 @@ function renderSessionEfficiencyCards() {
         <div class="pace-card-title">Total Tokens</div>
         <div class="pace-card-value">${formatTokens(totalTokens)}</div>
         <div class="pace-card-detail">Across ${escapeHtml(String(sessions.length))} sessions</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Estimated Total Cost</div>
+        <div class="pace-card-value">${escapeHtml(formatCost(totalCost))}</div>
+        <div class="pace-card-detail">Based on model pricing</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Avg Tokens/Prompt</div>
@@ -830,6 +836,7 @@ function renderSessionTokenTable() {
             <th class="session-table-sortable" data-sort-key="project">Project${sortIcon('project')}</th>
             <th class="session-table-sortable" data-sort-key="prompt_count">Prompts${sortIcon('prompt_count')}</th>
             <th class="session-table-sortable" data-sort-key="total_tokens">Total Tokens${sortIcon('total_tokens')}</th>
+            <th class="session-table-sortable" data-sort-key="estimated_cost">Cost${sortIcon('estimated_cost')}</th>
             <th class="session-table-sortable" data-sort-key="tokens_per_prompt">Tokens/Prompt${sortIcon('tokens_per_prompt')}</th>
             <th class="session-table-sortable" data-sort-key="cache_hit_rate">Cache Hit Rate${sortIcon('cache_hit_rate')}</th>
             <th class="session-table-sortable" data-sort-key="overall_score">Score${sortIcon('overall_score')}</th>
@@ -842,6 +849,7 @@ function renderSessionTokenTable() {
     const project = escapeHtml(s.project || '—')
     const prompts = s.prompt_count
     const totalTok = formatTokens(s.total_tokens || 0)
+    const cost = s.estimated_cost > 0 ? formatCost(s.estimated_cost) : '—'
     const tokPerPrompt = s.prompt_count > 0 ? formatTokens(Math.round(s.tokens_per_prompt || 0)) : '—'
     const cacheRate = s.cache_hit_rate > 0 ? Math.round(s.cache_hit_rate * 100) + '%' : '—'
     const score = s.overall_score != null ? s.overall_score + '%' : '—'
@@ -852,6 +860,7 @@ function renderSessionTokenTable() {
             <td>${project}</td>
             <td>${prompts}</td>
             <td>${totalTok}</td>
+            <td>${escapeHtml(cost)}</td>
             <td>${tokPerPrompt}</td>
             <td>${cacheRate}</td>
             <td>${score}</td>

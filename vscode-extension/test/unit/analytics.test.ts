@@ -310,6 +310,7 @@ describe('buildSessionAnalytics', () => {
       avg_tokens_per_prompt: 0,
       avg_cache_hit_rate: 0,
       total_sessions: 0,
+      total_estimated_cost: 0,
     })
     expect(result.weekly).toEqual([])
   })

@@ -12,6 +12,10 @@ from main import (
     _config_content_hash,
     _decode_project_path,
     _detect_project_repo,
+    _estimate_session_cost,
+    _get_pricing_for_date,
+    _load_pricing,
+    _resolve_model_key,
     _sanitize_error,
     classify_error,
     compute_aggregate,
@@ -430,3 +434,130 @@ class TestConfigContentHash:
         content = "short"
         result = _config_content_hash(content)
         assert result == "short:5"
+
+
+class TestPricing:
+    """Tests for pricing / cost estimation helpers."""
+
+    def test_load_pricing(self):
+        pricing = _load_pricing()
+        assert "models" in pricing
+        assert "aliases" in pricing
+        assert "default_model" in pricing
+        assert pricing["default_model"] == "claude-sonnet-4-6"
+        assert len(pricing["models"]) >= 4
+
+    def test_load_pricing_has_required_fields(self):
+        pricing = _load_pricing()
+        for model_id, entries in pricing["models"].items():
+            assert len(entries) >= 1
+            for entry in entries:
+                assert "effective_date" in entry
+                assert "input" in entry
+                assert "output" in entry
+                assert "cache_creation" in entry
+                assert "cache_read" in entry
+
+    def test_resolve_model_key_exact(self):
+        pricing = _load_pricing()
+        assert _resolve_model_key("claude-opus-4-6", pricing) == "claude-opus-4-6"
+        assert _resolve_model_key("claude-sonnet-4-6", pricing) == "claude-sonnet-4-6"
+
+    def test_resolve_model_key_alias(self):
+        pricing = _load_pricing()
+        assert _resolve_model_key("opus", pricing) == "claude-opus-4-6"
+        assert _resolve_model_key("sonnet", pricing) == "claude-sonnet-4-6"
+        assert _resolve_model_key("haiku", pricing) == "claude-haiku-4-5-20251001"
+
+    def test_resolve_model_key_prefix(self):
+        pricing = _load_pricing()
+        result = _resolve_model_key("claude-sonnet-4-6-extended", pricing)
+        assert result == "claude-sonnet-4-6"
+
+    def test_resolve_model_key_unknown(self):
+        pricing = _load_pricing()
+        assert _resolve_model_key("unknown-model", pricing) == "claude-sonnet-4-6"
+
+    def test_resolve_model_key_none(self):
+        pricing = _load_pricing()
+        assert _resolve_model_key(None, pricing) == "claude-sonnet-4-6"
+
+    def test_resolve_model_key_synthetic(self):
+        pricing = _load_pricing()
+        assert _resolve_model_key("<synthetic>", pricing) == "claude-sonnet-4-6"
+
+    def test_get_pricing_for_date_single_entry(self):
+        entries = [{"effective_date": "2025-11-01", "input": 15.0, "output": 75.0, "cache_creation": 18.75, "cache_read": 1.875}]
+        result = _get_pricing_for_date(entries, "2024-01-01")
+        assert result["input"] == 15.0
+
+    def test_get_pricing_for_date_multiple_entries(self):
+        entries = [
+            {"effective_date": "2025-01-01", "input": 5.0, "output": 25.0, "cache_creation": 6.25, "cache_read": 0.625},
+            {"effective_date": "2025-06-01", "input": 3.0, "output": 15.0, "cache_creation": 3.75, "cache_read": 0.30},
+        ]
+        # Before second entry
+        assert _get_pricing_for_date(entries, "2025-03-15")["input"] == 5.0
+        # After second entry
+        assert _get_pricing_for_date(entries, "2025-07-01")["input"] == 3.0
+
+    def test_get_pricing_for_date_null(self):
+        entries = [
+            {"effective_date": "2025-01-01", "input": 5.0, "output": 25.0, "cache_creation": 6.25, "cache_read": 0.625},
+            {"effective_date": "2025-06-01", "input": 3.0, "output": 15.0, "cache_creation": 3.75, "cache_read": 0.30},
+        ]
+        result = _get_pricing_for_date(entries, None)
+        assert result["input"] == 3.0  # Latest entry
+
+    def test_estimate_session_cost_sonnet(self):
+        session = {
+            "model": "claude-sonnet-4-6",
+            "started_at": "2026-01-01T00:00:00Z",
+            "total_input_tokens": 10000,
+            "total_output_tokens": 5000,
+            "total_cache_creation_tokens": 2000,
+            "total_cache_read_tokens": 50000,
+        }
+        cost = _estimate_session_cost(session)
+        # input: 10000 * 3.0 / 1M = 0.03
+        # output: 5000 * 15.0 / 1M = 0.075
+        # cache_creation: 2000 * 3.75 / 1M = 0.0075
+        # cache_read: 50000 * 0.30 / 1M = 0.015
+        assert abs(cost - 0.1275) < 0.001
+
+    def test_estimate_session_cost_opus_more_expensive(self):
+        session = {
+            "model": "claude-opus-4-6",
+            "started_at": "2026-01-01T00:00:00Z",
+            "total_input_tokens": 10000,
+            "total_output_tokens": 5000,
+            "total_cache_creation_tokens": 0,
+            "total_cache_read_tokens": 0,
+        }
+        cost = _estimate_session_cost(session)
+        # input: 10000 * 15.0 / 1M = 0.15
+        # output: 5000 * 75.0 / 1M = 0.375
+        assert abs(cost - 0.525) < 0.001
+
+    def test_estimate_session_cost_zero_tokens(self):
+        session = {
+            "model": "claude-sonnet-4-6",
+            "started_at": "2026-01-01T00:00:00Z",
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_cache_creation_tokens": 0,
+            "total_cache_read_tokens": 0,
+        }
+        assert _estimate_session_cost(session) == 0
+
+    def test_estimate_session_cost_unknown_model_uses_default(self):
+        session_unknown = {
+            "model": "unknown-model",
+            "started_at": "2026-01-01T00:00:00Z",
+            "total_input_tokens": 10000,
+            "total_output_tokens": 5000,
+            "total_cache_creation_tokens": 0,
+            "total_cache_read_tokens": 0,
+        }
+        session_sonnet = {**session_unknown, "model": "claude-sonnet-4-6"}
+        assert _estimate_session_cost(session_unknown) == _estimate_session_cost(session_sonnet)

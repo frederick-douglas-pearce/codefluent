@@ -1,5 +1,6 @@
 import { ParsedSession } from './parser'
 import { ScoreResult, getISOWeekKey } from './scoring'
+import { estimateSessionCost, loadPricing, PricingData } from './pricing'
 
 export interface WeeklyTokenAggregation {
   week: string
@@ -19,6 +20,7 @@ export interface SessionEfficiency {
 
 export interface EnrichedSession extends Omit<ParsedSession, 'user_prompts' | 'tools_used'> {
   overall_score: number | null
+  estimated_cost: number
 }
 
 export interface SessionAnalyticsResult {
@@ -28,6 +30,7 @@ export interface SessionAnalyticsResult {
     avg_tokens_per_prompt: number
     avg_cache_hit_rate: number
     total_sessions: number
+    total_estimated_cost: number
   }
   weekly: WeeklyTokenAggregation[]
 }
@@ -107,18 +110,42 @@ export function computeSessionEfficiency(sessions: ParsedSession[]): SessionEffi
 export function joinSessionsWithScores(
   sessions: ParsedSession[],
   scores: ScoreResult[],
+  pricing?: PricingData,
 ): EnrichedSession[] {
   const scoreMap = new Map<string, number | null>()
   for (const score of scores) {
     scoreMap.set(score.session_id, score.overall_score ?? null)
   }
 
+  let pricingData: PricingData | undefined
+  try {
+    pricingData = pricing || loadPricing()
+  } catch {
+    // pricing.json not found — costs will be 0
+  }
+
   return sessions.map(session => {
     // Strip large fields not needed for analytics UI to avoid OOM on IPC
     const { user_prompts, tools_used, ...rest } = session
+
+    let estimated_cost = 0
+    if (pricingData) {
+      const cost = estimateSessionCost(
+        session.total_input_tokens,
+        session.total_output_tokens,
+        session.total_cache_creation_tokens,
+        session.total_cache_read_tokens,
+        session.model,
+        session.started_at,
+        pricingData,
+      )
+      estimated_cost = cost.total_cost
+    }
+
     return {
       ...rest,
       overall_score: scoreMap.get(session.id) ?? null,
+      estimated_cost,
     }
   })
 }
@@ -131,6 +158,8 @@ export function buildSessionAnalytics(
   const weekly = computeWeeklyTokenAggregation(sessions)
   const efficiency = computeSessionEfficiency(sessions)
 
+  const totalEstimatedCost = enriched.reduce((sum, s) => sum + s.estimated_cost, 0)
+
   return {
     sessions: enriched,
     aggregates: {
@@ -140,6 +169,7 @@ export function buildSessionAnalytics(
       avg_tokens_per_prompt: efficiency.avg_tokens_per_prompt,
       avg_cache_hit_rate: efficiency.avg_cache_hit_rate,
       total_sessions: efficiency.total_sessions,
+      total_estimated_cost: Math.round(totalEstimatedCost * 100) / 100,
     },
     weekly,
   }
