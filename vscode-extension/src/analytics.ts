@@ -1,5 +1,6 @@
 import { ParsedSession } from './parser'
-import { ScoreResult, getISOWeekKey } from './scoring'
+import { ScoreResult, getISOWeekKey, BEHAVIORS } from './scoring'
+import { estimateSessionCost, loadPricing, PricingData } from './pricing'
 
 export interface WeeklyTokenAggregation {
   week: string
@@ -19,6 +20,7 @@ export interface SessionEfficiency {
 
 export interface EnrichedSession extends Omit<ParsedSession, 'user_prompts' | 'tools_used'> {
   overall_score: number | null
+  estimated_cost: number
 }
 
 export interface SessionAnalyticsResult {
@@ -28,6 +30,7 @@ export interface SessionAnalyticsResult {
     avg_tokens_per_prompt: number
     avg_cache_hit_rate: number
     total_sessions: number
+    total_estimated_cost: number
   }
   weekly: WeeklyTokenAggregation[]
 }
@@ -82,7 +85,8 @@ export function computeSessionEfficiency(sessions: ParsedSession[]): SessionEffi
   }
 
   const totalTokens = sessions.reduce((sum, s) => sum + s.total_tokens, 0)
-  const avgTokensPerPrompt = sessions.reduce((sum, s) => sum + s.tokens_per_prompt, 0) / sessions.length
+  const totalPrompts = sessions.reduce((sum, s) => sum + s.user_message_count, 0)
+  const avgTokensPerPrompt = totalPrompts > 0 ? totalTokens / totalPrompts : 0
   const avgCacheHitRate = sessions.reduce((sum, s) => sum + s.cache_hit_rate, 0) / sessions.length
 
   // Most efficient = lowest tokens_per_prompt among sessions that have prompts
@@ -107,18 +111,52 @@ export function computeSessionEfficiency(sessions: ParsedSession[]): SessionEffi
 export function joinSessionsWithScores(
   sessions: ParsedSession[],
   scores: ScoreResult[],
+  pricing?: PricingData,
+  configBehaviors?: Record<string, boolean>,
 ): EnrichedSession[] {
   const scoreMap = new Map<string, number | null>()
   for (const score of scores) {
-    scoreMap.set(score.session_id, score.overall_score ?? null)
+    if (score.overall_score == null) continue
+    // Compute effective score: session behavior OR config behavior
+    if (configBehaviors && score.fluency_behaviors) {
+      const effectiveCount = BEHAVIORS.filter(b =>
+        score.fluency_behaviors![b] || configBehaviors[b]
+      ).length
+      scoreMap.set(score.session_id, Math.round((effectiveCount / BEHAVIORS.length) * 100))
+    } else {
+      scoreMap.set(score.session_id, score.overall_score ?? null)
+    }
+  }
+
+  let pricingData: PricingData | undefined
+  try {
+    pricingData = pricing || loadPricing()
+  } catch {
+    // pricing.json not found — costs will be 0
   }
 
   return sessions.map(session => {
     // Strip large fields not needed for analytics UI to avoid OOM on IPC
     const { user_prompts, tools_used, ...rest } = session
+
+    let estimated_cost = 0
+    if (pricingData) {
+      const cost = estimateSessionCost(
+        session.total_input_tokens,
+        session.total_output_tokens,
+        session.total_cache_creation_tokens,
+        session.total_cache_read_tokens,
+        session.model,
+        session.started_at,
+        pricingData,
+      )
+      estimated_cost = cost.total_cost
+    }
+
     return {
       ...rest,
       overall_score: scoreMap.get(session.id) ?? null,
+      estimated_cost,
     }
   })
 }
@@ -126,10 +164,13 @@ export function joinSessionsWithScores(
 export function buildSessionAnalytics(
   sessions: ParsedSession[],
   scores: ScoreResult[],
+  configBehaviors?: Record<string, boolean>,
 ): SessionAnalyticsResult {
-  const enriched = joinSessionsWithScores(sessions, scores)
+  const enriched = joinSessionsWithScores(sessions, scores, undefined, configBehaviors)
   const weekly = computeWeeklyTokenAggregation(sessions)
   const efficiency = computeSessionEfficiency(sessions)
+
+  const totalEstimatedCost = enriched.reduce((sum, s) => sum + s.estimated_cost, 0)
 
   return {
     sessions: enriched,
@@ -140,6 +181,7 @@ export function buildSessionAnalytics(
       avg_tokens_per_prompt: efficiency.avg_tokens_per_prompt,
       avg_cache_hit_rate: efficiency.avg_cache_hit_rate,
       total_sessions: efficiency.total_sessions,
+      total_estimated_cost: Math.round(totalEstimatedCost * 100) / 100,
     },
     weekly,
   }

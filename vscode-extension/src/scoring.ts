@@ -90,7 +90,7 @@ const _singleScoringPrompt = loadSingleScoringPrompt()
 const SINGLE_SCORING_PROMPT_TEMPLATE = _singleScoringPrompt.template
 export const SINGLE_SCORING_PROMPT_VERSION = _singleScoringPrompt.version
 
-const BEHAVIORS = [
+export const BEHAVIORS = [
   'iteration_and_refinement', 'clarifying_goals', 'specifying_format',
   'providing_examples', 'setting_interaction_terms', 'checking_facts',
   'questioning_reasoning', 'identifying_missing_context',

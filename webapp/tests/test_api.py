@@ -764,6 +764,39 @@ class TestSessionAnalytics:
         assert resp.status_code == 200
         assert resp.json()["sessions"] == []
 
+    def test_estimated_cost_present_in_sessions(self, client, mock_sessions_dir):
+        """Each session should have an estimated_cost field."""
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        session = resp.json()["sessions"][0]
+        assert "estimated_cost" in session
+        assert isinstance(session["estimated_cost"], (int, float))
+        assert session["estimated_cost"] >= 0
+
+    def test_estimated_cost_in_aggregates(self, client, mock_sessions_dir):
+        """Aggregates should include total_estimated_cost."""
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        agg = resp.json()["aggregates"]
+        assert "total_estimated_cost" in agg
+        assert isinstance(agg["total_estimated_cost"], (int, float))
+        assert agg["total_estimated_cost"] >= 0
+
+    def test_estimated_cost_zero_for_empty(self, client, tmp_path):
+        """Empty sessions should have zero total cost."""
+        empty_dir = tmp_path / "empty"
+        empty_dir.mkdir()
+        resp = client.get("/api/session-analytics", params={"data_path": str(empty_dir)})
+        assert resp.status_code == 200
+        assert resp.json()["aggregates"]["total_estimated_cost"] == 0
+
+    def test_model_field_in_session(self, client, mock_sessions_dir):
+        """Sessions should include the model field for cost context."""
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        session = resp.json()["sessions"][0]
+        assert "model" in session
+
 
 class TestGetUsage:
     def test_returns_empty_when_no_data(self, client):

@@ -1223,12 +1223,26 @@ function renderSessionEfficiencyCards(analytics) {
 
   const cacheHitPct = Math.round(agg.avg_cache_hit_rate * 100)
 
+  const totalCost = agg.total_estimated_cost != null ? agg.total_estimated_cost : sessions.reduce((s, sess) => s + (sess.estimated_cost || 0), 0)
+
+  const totalPrompts = sessions.reduce((s, sess) => s + sess.user_message_count, 0)
+
+  const scoredSessions = sessions.filter(s => s.overall_score != null)
+  const avgScore = scoredSessions.length > 0
+    ? Math.round(scoredSessions.reduce((sum, s) => sum + s.overall_score, 0) / scoredSessions.length)
+    : null
+
   container.innerHTML = `
     <div class="pace-grid">
       <div class="pace-card">
         <div class="pace-card-title">Total Tokens</div>
         <div class="pace-card-value">${escapeHtml(formatTokens(sessions.reduce((s, sess) => s + sess.total_tokens, 0)))}</div>
-        <div class="pace-card-detail">Across ${escapeHtml(String(sessions.length))} sessions</div>
+        <div class="pace-card-detail">${escapeHtml(totalPrompts.toLocaleString())} prompts across ${escapeHtml(String(sessions.length))} sessions</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Estimated Total Cost</div>
+        <div class="pace-card-value">${escapeHtml(formatCost(totalCost))}</div>
+        <div class="pace-card-detail">Based on model pricing</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Avg Tokens/Prompt</div>
@@ -1244,6 +1258,11 @@ function renderSessionEfficiencyCards(analytics) {
         <div class="pace-card-title">Avg Cache Hit Rate</div>
         <div class="pace-card-value">${escapeHtml(String(cacheHitPct))}%</div>
         <div class="pace-card-detail">Higher is more cost-efficient</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Avg Fluency Score</div>
+        <div class="pace-card-value">${avgScore != null ? escapeHtml(String(avgScore)) + '%' : '—'}</div>
+        <div class="pace-card-detail">${avgScore != null ? escapeHtml(String(scoredSessions.length)) + ' scored sessions' : 'No scored sessions'}</div>
       </div>
     </div>`
 }
@@ -1277,6 +1296,8 @@ function renderSessionTokenTable(sessions) {
         return (a.user_message_count - b.user_message_count) * dir
       case 'total_tokens':
         return (a.total_tokens - b.total_tokens) * dir
+      case 'estimated_cost':
+        return ((a.estimated_cost || 0) - (b.estimated_cost || 0)) * dir
       case 'tokens_per_prompt':
         return (a.tokens_per_prompt - b.tokens_per_prompt) * dir
       case 'cache_hit_rate':
@@ -1297,6 +1318,7 @@ function renderSessionTokenTable(sessions) {
     const project = s.project || '-'
     const prompts = s.user_message_count || 0
     const totalTokens = formatTokens(s.total_tokens || 0)
+    const cost = s.estimated_cost > 0 ? formatCost(s.estimated_cost) : '-'
     const tokensPerPrompt = s.user_message_count > 0 ? formatTokens(Math.round(s.tokens_per_prompt)) : '-'
     const cacheHit = Math.round((s.cache_hit_rate || 0) * 100) + '%'
     const score = s.overall_score != null ? Math.round(s.overall_score) : null
@@ -1308,6 +1330,7 @@ function renderSessionTokenTable(sessions) {
       <td>${escapeHtml(project)}</td>
       <td>${escapeHtml(String(prompts))}</td>
       <td>${escapeHtml(totalTokens)}</td>
+      <td>${escapeHtml(cost)}</td>
       <td>${escapeHtml(tokensPerPrompt)}</td>
       <td>${escapeHtml(cacheHit)}</td>
       <td>${scoreHtml}</td>
