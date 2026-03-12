@@ -417,14 +417,29 @@ async def get_session_analytics(
         except Exception:
             pricing = None
 
+        # Load config behaviors for effective score computation
+        config_cache = _load_config_cache()
+        config_behaviors = {}
+        for entry in config_cache.values():
+            if entry.get("fluency_behaviors"):
+                config_behaviors = entry["fluency_behaviors"]
+                break  # Use first available config (typically one workspace)
+
         # Build session analytics with token data + optional score + cost
         analytics_sessions = []
         for s in sessions_list:
             score_entry = cached_scores.get(s["id"], {})
             overall_score = None
             if "overall_score" in score_entry and score_entry.get("prompt_version") == SCORING_PROMPT_VERSION:
-                # Prefer effective_score (includes CLAUDE.md config boost) over raw overall_score
-                overall_score = score_entry.get("effective_score", score_entry["overall_score"])
+                # Compute effective score: session behavior OR config behavior
+                if config_behaviors and score_entry.get("fluency_behaviors"):
+                    effective_count = sum(
+                        1 for b in BEHAVIORS
+                        if score_entry["fluency_behaviors"].get(b, False) or config_behaviors.get(b, False)
+                    )
+                    overall_score = round((effective_count / len(BEHAVIORS)) * 100)
+                else:
+                    overall_score = score_entry["overall_score"]
 
             estimated_cost = _estimate_session_cost(s, pricing) if pricing else 0
 

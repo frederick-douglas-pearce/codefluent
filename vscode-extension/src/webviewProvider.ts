@@ -397,7 +397,13 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const cached = this.cache.read()
     const scores = Object.values(cached).filter((r: any) => r.fluency_behaviors)
 
-    return buildSessionAnalytics(sessions, scores as any[])
+    // Read config behaviors from config score cache for effective score computation
+    const configCache = this.cache.readConfig()
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    const configEntry = workspacePath ? configCache[workspacePath] : undefined
+    const configBehaviors = configEntry?.fluency_behaviors as Record<string, boolean> | undefined
+
+    return buildSessionAnalytics(sessions, scores as any[], configBehaviors)
   }
 
   private mergeWithConfig(

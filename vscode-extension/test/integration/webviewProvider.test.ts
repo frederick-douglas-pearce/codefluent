@@ -1460,6 +1460,7 @@ describe('CodeFluentViewProvider', () => {
       expect(buildSessionAnalytics).toHaveBeenCalledWith(
         [expect.objectContaining({ id: 's1', project: 'proj-a' })],
         expect.any(Array),
+        undefined,
       )
     })
 
@@ -1484,6 +1485,7 @@ describe('CodeFluentViewProvider', () => {
       expect(buildSessionAnalytics).toHaveBeenCalledWith(
         [expect.objectContaining({ id: 's1', project: 'my-project' })],
         expect.any(Array),
+        undefined,
       )
 
       ;(vscode.workspace as any).workspaceFolders = undefined

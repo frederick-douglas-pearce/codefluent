@@ -1,5 +1,5 @@
 import { ParsedSession } from './parser'
-import { ScoreResult, getISOWeekKey } from './scoring'
+import { ScoreResult, getISOWeekKey, BEHAVIORS } from './scoring'
 import { estimateSessionCost, loadPricing, PricingData } from './pricing'
 
 export interface WeeklyTokenAggregation {
@@ -112,12 +112,20 @@ export function joinSessionsWithScores(
   sessions: ParsedSession[],
   scores: ScoreResult[],
   pricing?: PricingData,
+  configBehaviors?: Record<string, boolean>,
 ): EnrichedSession[] {
   const scoreMap = new Map<string, number | null>()
   for (const score of scores) {
-    // Prefer effective_score (includes CLAUDE.md config boost) over raw overall_score
-    const effectiveScore = (score as any).effective_score
-    scoreMap.set(score.session_id, effectiveScore ?? score.overall_score ?? null)
+    if (score.overall_score == null) continue
+    // Compute effective score: session behavior OR config behavior
+    if (configBehaviors && score.fluency_behaviors) {
+      const effectiveCount = BEHAVIORS.filter(b =>
+        score.fluency_behaviors![b] || configBehaviors[b]
+      ).length
+      scoreMap.set(score.session_id, Math.round((effectiveCount / BEHAVIORS.length) * 100))
+    } else {
+      scoreMap.set(score.session_id, score.overall_score ?? null)
+    }
   }
 
   let pricingData: PricingData | undefined
@@ -156,8 +164,9 @@ export function joinSessionsWithScores(
 export function buildSessionAnalytics(
   sessions: ParsedSession[],
   scores: ScoreResult[],
+  configBehaviors?: Record<string, boolean>,
 ): SessionAnalyticsResult {
-  const enriched = joinSessionsWithScores(sessions, scores)
+  const enriched = joinSessionsWithScores(sessions, scores, undefined, configBehaviors)
   const weekly = computeWeeklyTokenAggregation(sessions)
   const efficiency = computeSessionEfficiency(sessions)
 
