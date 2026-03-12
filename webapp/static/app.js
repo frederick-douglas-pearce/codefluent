@@ -618,7 +618,16 @@ function renderUsageDashboard() {
       scales: {
         y: {
           type: 'logarithmic',
-          ticks: { callback: v => formatTokens(v) }
+          afterBuildTicks: function(axis) {
+            // Keep only powers of 10 — removes intermediate ticks and gridlines
+            axis.ticks = axis.ticks.filter(t => {
+              const log = Math.log10(t.value)
+              return Math.abs(log - Math.round(log)) < 0.01
+            })
+          },
+          ticks: {
+            callback: v => formatTokens(v),
+          }
         },
         x: { ticks: { maxTicksLimit: 15 } }
       }
