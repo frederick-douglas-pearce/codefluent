@@ -1225,12 +1225,19 @@ function renderSessionEfficiencyCards(analytics) {
 
   const totalCost = agg.total_estimated_cost != null ? agg.total_estimated_cost : sessions.reduce((s, sess) => s + (sess.estimated_cost || 0), 0)
 
+  const totalPrompts = sessions.reduce((s, sess) => s + sess.user_message_count, 0)
+
   container.innerHTML = `
     <div class="pace-grid">
       <div class="pace-card">
+        <div class="pace-card-title">Total Prompts</div>
+        <div class="pace-card-value">${escapeHtml(formatTokens(totalPrompts))}</div>
+        <div class="pace-card-detail">Across ${escapeHtml(String(sessions.length))} sessions</div>
+      </div>
+      <div class="pace-card">
         <div class="pace-card-title">Total Tokens</div>
         <div class="pace-card-value">${escapeHtml(formatTokens(sessions.reduce((s, sess) => s + sess.total_tokens, 0)))}</div>
-        <div class="pace-card-detail">Across ${escapeHtml(String(sessions.length))} sessions</div>
+        <div class="pace-card-detail">${escapeHtml(formatTokens(totalPrompts))} prompts</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Estimated Total Cost</div>
