@@ -115,7 +115,9 @@ export function joinSessionsWithScores(
 ): EnrichedSession[] {
   const scoreMap = new Map<string, number | null>()
   for (const score of scores) {
-    scoreMap.set(score.session_id, score.overall_score ?? null)
+    // Prefer effective_score (includes CLAUDE.md config boost) over raw overall_score
+    const effectiveScore = (score as any).effective_score
+    scoreMap.set(score.session_id, effectiveScore ?? score.overall_score ?? null)
   }
 
   let pricingData: PricingData | undefined

@@ -423,7 +423,8 @@ async def get_session_analytics(
             score_entry = cached_scores.get(s["id"], {})
             overall_score = None
             if "overall_score" in score_entry and score_entry.get("prompt_version") == SCORING_PROMPT_VERSION:
-                overall_score = score_entry["overall_score"]
+                # Prefer effective_score (includes CLAUDE.md config boost) over raw overall_score
+                overall_score = score_entry.get("effective_score", score_entry["overall_score"])
 
             estimated_cost = _estimate_session_cost(s, pricing) if pricing else 0
 
