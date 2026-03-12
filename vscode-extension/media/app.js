@@ -514,7 +514,11 @@ function renderUsageDashboard() {
     return
   }
 
-  // Token usage stacked area chart (cache read, cache creation, input, output)
+  // Token usage line chart with log scale (cache read, cache creation, input, output)
+  // Zero values replaced with null so Chart.js skips them (log(0) is undefined)
+  // spanGaps linearly interpolates between adjacent non-null points
+  const toLog = v => (v > 0 ? v : null)
+
   destroyChart('usage')
   charts.usage = new Chart(document.getElementById('usage-chart').getContext('2d'), {
     type: 'line',
@@ -522,52 +526,48 @@ function renderUsageDashboard() {
       labels: daily.map(d => d.date),
       datasets: [
         {
-          label: 'Cache Read',
-          data: daily.map(d => d.cacheReadTokens || 0),
-          borderColor: '#D97706',
-          backgroundColor: 'rgba(217, 119, 6, 0.35)',
-          fill: true,
+          label: 'Output',
+          data: daily.map(d => toLog(d.outputTokens)),
+          borderColor: '#2563EB',
+          backgroundColor: '#2563EB',
           tension: 0.3,
           pointRadius: 3,
           pointHoverRadius: 6,
           borderWidth: 2,
-          order: 4,
-        },
-        {
-          label: 'Cache Creation',
-          data: daily.map(d => d.cacheCreationTokens || 0),
-          borderColor: '#B45309',
-          backgroundColor: 'rgba(180, 83, 9, 0.35)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 3,
-          pointHoverRadius: 6,
-          borderWidth: 2,
-          order: 3,
+          spanGaps: true,
         },
         {
           label: 'Input',
-          data: daily.map(d => d.inputTokens || 0),
+          data: daily.map(d => toLog(d.inputTokens)),
           borderColor: '#059669',
-          backgroundColor: 'rgba(5, 150, 105, 0.35)',
-          fill: true,
+          backgroundColor: '#059669',
           tension: 0.3,
           pointRadius: 3,
           pointHoverRadius: 6,
           borderWidth: 2,
-          order: 2,
+          spanGaps: true,
         },
         {
-          label: 'Output',
-          data: daily.map(d => d.outputTokens || 0),
-          borderColor: '#2563EB',
-          backgroundColor: 'rgba(37, 99, 235, 0.35)',
-          fill: true,
+          label: 'Cache Creation',
+          data: daily.map(d => toLog(d.cacheCreationTokens)),
+          borderColor: '#B45309',
+          backgroundColor: '#B45309',
           tension: 0.3,
           pointRadius: 3,
           pointHoverRadius: 6,
           borderWidth: 2,
-          order: 1,
+          spanGaps: true,
+        },
+        {
+          label: 'Cache Read',
+          data: daily.map(d => toLog(d.cacheReadTokens)),
+          borderColor: '#D97706',
+          backgroundColor: '#D97706',
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          borderWidth: 2,
+          spanGaps: true,
         },
       ]
     },
@@ -578,13 +578,12 @@ function renderUsageDashboard() {
         legend: { position: 'top' },
         tooltip: {
           mode: 'index',
-          callbacks: { label: ctx => `${ctx.dataset.label}: ${formatTokens(ctx.raw)}` }
+          callbacks: { label: ctx => ctx.raw != null ? `${ctx.dataset.label}: ${formatTokens(ctx.raw)}` : '' }
         }
       },
       scales: {
         y: {
-          stacked: true,
-          beginAtZero: true,
+          type: 'logarithmic',
           ticks: { callback: v => formatTokens(v) }
         },
         x: { ticks: { maxTicksLimit: 15 } }
