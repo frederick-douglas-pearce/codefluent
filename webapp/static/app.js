@@ -502,7 +502,7 @@ document.addEventListener('click', (e) => {
 
   // Session analytics table: show more
   if (target.classList.contains('session-table-show-more')) {
-    sessionTableShowAll = true
+    sessionTableShowCount += 10
     renderSessionTokenTable()
     return
   }
@@ -721,7 +721,6 @@ async function loadSessionAnalytics() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     state.sessionAnalytics = await resp.json()
     renderSessionEfficiencyCards()
-    renderWeeklyTokenChart()
     renderSessionTokenTable()
   } catch (e) {
     console.error('Failed to load session analytics:', e)
@@ -764,14 +763,14 @@ function renderSessionEfficiencyCards() {
   container.innerHTML = `
     <div class="pace-grid">
       <div class="pace-card">
-        <div class="pace-card-title">Avg Tokens/Prompt</div>
-        <div class="pace-card-value">${formatTokens(agg.avg_tokens_per_prompt)}</div>
-        <div class="pace-card-detail">Across ${escapeHtml(String(agg.total_sessions))} sessions</div>
+        <div class="pace-card-title">Total Tokens</div>
+        <div class="pace-card-value">${formatTokens(totalTokens)}</div>
+        <div class="pace-card-detail">Across ${escapeHtml(String(sessions.length))} sessions</div>
       </div>
       <div class="pace-card">
-        <div class="pace-card-title">Avg Cache Hit Rate</div>
-        <div class="pace-card-value">${Math.round(agg.avg_cache_hit_rate * 100)}%</div>
-        <div class="pace-card-detail">Higher is more cost-efficient</div>
+        <div class="pace-card-title">Avg Tokens/Prompt</div>
+        <div class="pace-card-value">${formatTokens(agg.avg_tokens_per_prompt)}</div>
+        <div class="pace-card-detail">${escapeHtml(String(agg.total_sessions))} sessions analyzed</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Most Efficient Session</div>
@@ -779,74 +778,16 @@ function renderSessionEfficiencyCards() {
         <div class="pace-card-detail">${mostEfficientLabel} tokens/prompt</div>
       </div>
       <div class="pace-card">
-        <div class="pace-card-title">Total Tokens</div>
-        <div class="pace-card-value">${formatTokens(totalTokens)}</div>
-        <div class="pace-card-detail">All sessions combined</div>
+        <div class="pace-card-title">Avg Cache Hit Rate</div>
+        <div class="pace-card-value">${Math.round(agg.avg_cache_hit_rate * 100)}%</div>
+        <div class="pace-card-detail">Higher is more cost-efficient</div>
       </div>
     </div>`
 }
 
-function renderWeeklyTokenChart() {
-  const chartContainer = document.getElementById('weekly-token-chart-container')
-  if (!chartContainer) return
-
-  destroyChart('weeklyTokens')
-
-  const data = state.sessionAnalytics
-  if (!data || !data.weekly || data.weekly.length === 0) {
-    chartContainer.style.display = 'none'
-    return
-  }
-
-  chartContainer.style.display = ''
-  const weekly = data.weekly
-  const labels = weekly.map(w => {
-    // Convert "2026-W10" to "W10"
-    const parts = w.week.split('-')
-    return parts.length > 1 ? parts[1] : w.week
-  })
-  const values = weekly.map(w => w.avg_tokens_per_session)
-
-  const canvas = document.getElementById('weekly-tokens-chart')
-  charts.weeklyTokens = new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Avg Tokens/Session',
-        data: values,
-        borderColor: '#D97706',
-        backgroundColor: 'rgba(217, 119, 6, 0.15)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => `Avg: ${formatTokens(ctx.raw)} tokens (${weekly[ctx.dataIndex].session_count} sessions)`
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { callback: v => formatTokens(v) }
-        }
-      }
-    }
-  })
-}
 
 // Session table state
-let sessionTableShowAll = false
+let sessionTableShowCount = 10
 
 function renderSessionTokenTable() {
   const container = document.getElementById('session-token-table-container')
@@ -872,9 +813,8 @@ function renderSessionTokenTable() {
     return sortDir === 'asc' ? (va || 0) - (vb || 0) : (vb || 0) - (va || 0)
   })
 
-  const maxRows = sessionTableShowAll ? sessions.length : 50
-  const visible = sessions.slice(0, maxRows)
-  const remaining = sessions.length - maxRows
+  const visible = sessions.slice(0, sessionTableShowCount)
+  const remaining = sessions.length - sessionTableShowCount
 
   function sortIcon(key) {
     if (sortKey !== key) return ''
@@ -923,7 +863,7 @@ function renderSessionTokenTable() {
       </table>`
 
   if (remaining > 0) {
-    html += `<button class="show-more-btn session-table-show-more">Show ${remaining} more session${remaining !== 1 ? 's' : ''}</button>`
+    html += `<button class="session-show-more-btn session-table-show-more">Show ${remaining} more session${remaining !== 1 ? 's' : ''}</button>`
   }
 
   html += '</div>'

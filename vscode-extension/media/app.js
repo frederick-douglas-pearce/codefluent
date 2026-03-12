@@ -25,6 +25,10 @@ window.addEventListener('message', event => {
   }
   if (msg.type === 'sessionsUpdated') {
     state.sessions = msg.data
+    state.sessionAnalytics = null  // Invalidate so Usage tab re-fetches
+    if (document.querySelector('.tab.active')?.dataset?.tab === 'usage') {
+      loadSessionAnalytics()
+    }
     return
   }
   if (!msg.requestId) return
@@ -482,7 +486,7 @@ document.addEventListener('click', (e) => {
 
   // Session table show more
   if (target.id === 'session-table-show-more') {
-    sessionTableShowCount += 50
+    sessionTableShowCount += 10
     if (state.sessionAnalytics) renderSessionTokenTable(state.sessionAnalytics.sessions)
     return
   }
@@ -776,7 +780,7 @@ function renderFluencyScore() {
           <span class="score-label">/ 100</span>
         </div>
       </div>
-      <p class="score-summary">${aggregate.sessions_scored} sessions analyzed${aggregate.sessions_skipped ? ` (${aggregate.sessions_skipped} skipped — no prompts)` : ''}</p>
+      <p class="score-summary">${aggregate.sessions_scored} of ${aggregate.sessions_requested} sessions scored${aggregate.sessions_skipped ? ` · ${aggregate.sessions_skipped} had no prompts` : ''}${aggregate.sessions_errored ? ` · ${aggregate.sessions_errored} failed` : ''}</p>
       ${renderTrajectoryText(aggregate.score_history)}
     </div>`
 
@@ -1162,7 +1166,7 @@ function renderRecCard(rec) {
 
 // --- Session Analytics ---
 let sessionTableSort = { column: 'date', direction: 'desc' }
-let sessionTableShowCount = 50
+let sessionTableShowCount = 10
 
 async function loadSessionAnalytics() {
   if (state.sessionAnalytics) {
@@ -1182,7 +1186,6 @@ function renderSessionAnalytics() {
   if (!analytics || !analytics.sessions || analytics.sessions.length === 0) {
     document.getElementById('session-analytics-header').style.display = 'none'
     document.getElementById('session-efficiency-cards').innerHTML = ''
-    document.getElementById('weekly-tokens-container').style.display = 'none'
     document.getElementById('session-token-table-container').style.display = 'none'
     return
   }
@@ -1193,7 +1196,6 @@ function renderSessionAnalytics() {
   header.textContent = 'Session Analytics'
 
   renderSessionEfficiencyCards(analytics)
-  renderWeeklyTokenChart(analytics.weekly)
   renderSessionTokenTable(analytics.sessions)
 }
 
@@ -1224,14 +1226,14 @@ function renderSessionEfficiencyCards(analytics) {
   container.innerHTML = `
     <div class="pace-grid">
       <div class="pace-card">
+        <div class="pace-card-title">Total Tokens</div>
+        <div class="pace-card-value">${escapeHtml(formatTokens(sessions.reduce((s, sess) => s + sess.total_tokens, 0)))}</div>
+        <div class="pace-card-detail">Across ${escapeHtml(String(sessions.length))} sessions</div>
+      </div>
+      <div class="pace-card">
         <div class="pace-card-title">Avg Tokens/Prompt</div>
         <div class="pace-card-value">${escapeHtml(formatTokens(agg.avg_tokens_per_prompt))}</div>
         <div class="pace-card-detail">${escapeHtml(String(agg.total_sessions))} sessions analyzed</div>
-      </div>
-      <div class="pace-card">
-        <div class="pace-card-title">Avg Cache Hit Rate</div>
-        <div class="pace-card-value">${escapeHtml(String(cacheHitPct))}%</div>
-        <div class="pace-card-detail">Higher is more efficient</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Most Efficient Session</div>
@@ -1239,65 +1241,13 @@ function renderSessionEfficiencyCards(analytics) {
         <div class="pace-card-detail">${escapeHtml(mostEffDate)} tokens/prompt</div>
       </div>
       <div class="pace-card">
-        <div class="pace-card-title">Total Tokens</div>
-        <div class="pace-card-value">${escapeHtml(formatTokens(sessions.reduce((s, sess) => s + sess.total_tokens, 0)))}</div>
-        <div class="pace-card-detail">Across ${escapeHtml(String(sessions.length))} sessions</div>
+        <div class="pace-card-title">Avg Cache Hit Rate</div>
+        <div class="pace-card-value">${escapeHtml(String(cacheHitPct))}%</div>
+        <div class="pace-card-detail">Higher is more cost-efficient</div>
       </div>
     </div>`
 }
 
-function renderWeeklyTokenChart(weekly) {
-  const container = document.getElementById('weekly-tokens-container')
-  if (!weekly || weekly.length === 0) {
-    container.style.display = 'none'
-    return
-  }
-
-  container.style.display = ''
-  destroyChart('weeklyTokens')
-
-  const labels = weekly.map(w => {
-    const parts = w.week.split('-W')
-    return parts.length === 2 ? 'W' + parts[1] : w.week
-  })
-  const data = weekly.map(w => w.avg_tokens_per_session)
-
-  charts.weeklyTokens = new Chart(document.getElementById('weekly-tokens-chart').getContext('2d'), {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Avg Tokens/Session',
-        data,
-        borderColor: '#D97706',
-        backgroundColor: 'rgba(217, 119, 6, 0.15)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: 4,
-        pointHoverRadius: 7,
-        borderWidth: 2,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => `Avg: ${formatTokens(ctx.raw)} tokens/session`
-          }
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          ticks: { callback: v => formatTokens(v) }
-        }
-      }
-    }
-  })
-}
 
 function renderSessionTokenTable(sessions) {
   const container = document.getElementById('session-token-table-container')
@@ -1340,8 +1290,9 @@ function renderSessionTokenTable(sessions) {
     }
   })
 
-  // Build rows
-  const rows = sorted.map((s, i) => {
+  // Build rows — only render visible rows to avoid DOM bloat
+  const visible = sorted.slice(0, sessionTableShowCount)
+  const rows = visible.map(s => {
     const date = s.started_at ? new Date(s.started_at).toLocaleDateString() : '-'
     const project = s.project || '-'
     const prompts = s.user_message_count || 0
@@ -1352,8 +1303,7 @@ function renderSessionTokenTable(sessions) {
     const scoreHtml = score != null
       ? escapeHtml(String(score))
       : '<span class="score-cell-na">\u2014</span>'
-    const hidden = i >= sessionTableShowCount ? ' style="display:none"' : ''
-    return `<tr${hidden}>
+    return `<tr>
       <td>${escapeHtml(date)}</td>
       <td>${escapeHtml(project)}</td>
       <td>${escapeHtml(String(prompts))}</td>

@@ -329,7 +329,7 @@ async def get_session_analytics(
     """Return sessions with token analytics and optional cached fluency scores."""
     try:
         data_dir = _resolve_data_dir(data_path)
-        session_data = get_all_sessions(data_dir, project=project)
+        session_data = get_all_sessions(data_dir, project=project, max_files=200)
         sessions_list = session_data.get("sessions", [])
 
         # Load cached scores

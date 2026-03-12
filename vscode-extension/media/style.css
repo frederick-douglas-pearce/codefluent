@@ -440,7 +440,8 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   display: none;
 }
 .session-item.expanded .session-detail { display: block; }
-.show-more-btn {
+.show-more-btn,
+.session-show-more-btn {
   width: 100%;
   padding: 10px;
   margin-top: 8px;
@@ -452,7 +453,8 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
 }
-.show-more-btn:hover {
+.show-more-btn:hover,
+.session-show-more-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
 }
