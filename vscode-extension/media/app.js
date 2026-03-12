@@ -1227,6 +1227,11 @@ function renderSessionEfficiencyCards(analytics) {
 
   const totalPrompts = sessions.reduce((s, sess) => s + sess.user_message_count, 0)
 
+  const scoredSessions = sessions.filter(s => s.overall_score != null)
+  const avgScore = scoredSessions.length > 0
+    ? Math.round(scoredSessions.reduce((sum, s) => sum + s.overall_score, 0) / scoredSessions.length)
+    : null
+
   container.innerHTML = `
     <div class="pace-grid">
       <div class="pace-card">
@@ -1253,6 +1258,11 @@ function renderSessionEfficiencyCards(analytics) {
         <div class="pace-card-title">Avg Cache Hit Rate</div>
         <div class="pace-card-value">${escapeHtml(String(cacheHitPct))}%</div>
         <div class="pace-card-detail">Higher is more cost-efficient</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Avg Fluency Score</div>
+        <div class="pace-card-value">${avgScore != null ? escapeHtml(String(avgScore)) + '%' : '—'}</div>
+        <div class="pace-card-detail">${avgScore != null ? escapeHtml(String(scoredSessions.length)) + ' scored sessions' : 'No scored sessions'}</div>
       </div>
     </div>`
 }
