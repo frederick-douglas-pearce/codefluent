@@ -69,14 +69,19 @@ Track daily and monthly token usage, costs, and session history. Powered by [`cc
 
 ![Usage Dashboard](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage.png)
 
+![Session Analytics](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage-analytics.png)
+
+![Cost Efficiency Charts](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage-charts.png)
+
 ## How It Works
 
-1. **Session parsing** — Reads JSONL session files from `~/.claude/projects/` to extract your prompts
+1. **Session parsing** — Reads JSONL session files from `~/.claude/projects/` to extract your prompts and token usage
 2. **Fluency scoring** — Sends prompts (up to 20 per session, max 2000 chars each) to Claude Sonnet for behavioral classification
 3. **Config scoring** — Reads your workspace `CLAUDE.md` and scores it against the same behaviors
 4. **Score aggregation** — Merges session + config scores, caches results to minimize API calls
 5. **Recommendations** — Identifies your weakest behaviors and generates targeted improvement tips
-6. **Usage tracking** — Calls `ccusage` to aggregate token/cost data from Claude Code sessions
+6. **Prompt optimization** — Analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config, and generates an improved version
+7. **Usage tracking** — Calls `ccusage` for all-projects token/cost data; computes per-session efficiency metrics from parsed JSONL history
 
 All data stays local. No telemetry, no external servers — just your local session files and direct Anthropic API calls for scoring.
 
@@ -101,4 +106,4 @@ CodeFluent uses the following API key resolution order:
 
 ## License
 
-[MIT](LICENSE)
+[MIT](../LICENSE)
