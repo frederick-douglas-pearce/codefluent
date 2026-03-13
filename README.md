@@ -6,7 +6,7 @@ Millions of developers use AI coding assistants daily, but nobody knows if they'
 
 CodeFluent reads your local Claude Code session data, scores your prompting behaviors against [Anthropic's AI Fluency Research](https://www.anthropic.com/research/AI-fluency-index), and gives you actionable recommendations to become a more effective AI collaborator. Available as a **VS Code extension** and a **standalone web app**.
 
-Originally built at PDX Hacks 2026, now in active development for production release.
+Originally built at PDX Hacks 2026. Now publicly available and actively maintained.
 
 ### How It Compares
 
