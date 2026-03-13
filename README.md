@@ -180,6 +180,7 @@ The extension resolves this automatically via the system home directory.
 - **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
 - **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
 - **VS Code Theming** — Automatically respects your light/dark theme.
+- **Project Scoping (Web App)** — A project dropdown filters fluency scoring, prompt optimization, quick wins, and session analytics to a specific project, so you can analyze each codebase independently.
 
 ## How It Works
 
