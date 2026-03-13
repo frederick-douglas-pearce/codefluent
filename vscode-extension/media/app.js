@@ -1256,9 +1256,9 @@ function renderSessionEfficiencyCards(analytics) {
         <div class="pace-card-detail">Based on model pricing</div>
       </div>
       <div class="pace-card">
-        <div class="pace-card-title">Avg Tokens/Prompt</div>
-        <div class="pace-card-value">${escapeHtml(formatTokens(agg.avg_tokens_per_prompt))}</div>
-        <div class="pace-card-detail">${escapeHtml(String(agg.total_sessions))} sessions analyzed</div>
+        <div class="pace-card-title">Avg Cost/Prompt</div>
+        <div class="pace-card-value">${totalPrompts > 0 ? escapeHtml(formatCost(totalCost / totalPrompts)) : '—'}</div>
+        <div class="pace-card-detail">${escapeHtml(totalPrompts.toLocaleString())} prompts across ${escapeHtml(String(sessions.length))} sessions</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Most Efficient Session</div>
@@ -1321,6 +1321,10 @@ function renderSessionTokenTable(sessions) {
         return ((a.estimated_cost || 0) - (b.estimated_cost || 0)) * dir
       case 'tokens_per_prompt':
         return (a.tokens_per_prompt - b.tokens_per_prompt) * dir
+      case 'cost_per_prompt':
+        va = a.user_message_count > 0 && a.estimated_cost > 0 ? a.estimated_cost / a.user_message_count : 0
+        vb = b.user_message_count > 0 && b.estimated_cost > 0 ? b.estimated_cost / b.user_message_count : 0
+        return (va - vb) * dir
       case 'cache_hit_rate':
         return (a.cache_hit_rate - b.cache_hit_rate) * dir
       case 'cache_read_creation':
@@ -1349,6 +1353,7 @@ function renderSessionTokenTable(sessions) {
     const totalTokens = formatTokens(s.total_tokens || 0)
     const cost = s.estimated_cost > 0 ? formatCost(s.estimated_cost) : '-'
     const tokensPerPrompt = s.user_message_count > 0 ? formatTokens(Math.round(s.tokens_per_prompt)) : '-'
+    const costPerPrompt = s.user_message_count > 0 && s.estimated_cost > 0 ? formatCost(s.estimated_cost / s.user_message_count) : '-'
     const cacheHit = Math.round((s.cache_hit_rate || 0) * 100) + '%'
     const cacheRC = s.total_cache_creation_tokens > 0
       ? (s.total_cache_read_tokens / s.total_cache_creation_tokens).toFixed(1) + 'x' : '-'
@@ -1366,6 +1371,7 @@ function renderSessionTokenTable(sessions) {
       <td>${escapeHtml(totalTokens)}</td>
       <td>${escapeHtml(cost)}</td>
       <td>${escapeHtml(tokensPerPrompt)}</td>
+      <td>${escapeHtml(costPerPrompt)}</td>
       <td>${escapeHtml(cacheHit)}</td>
       <td>${escapeHtml(cacheRC)}</td>
       <td>${escapeHtml(outIn)}</td>
@@ -1596,7 +1602,7 @@ function renderScoreCorrelation(sessions) {
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => { const d = ctx.raw; return [`Cost/Prompt: $${d.x.toFixed(2)}`, `Score: ${d.y}%`, `Cache Hit: ${Math.round(d.cacheHit * 100)}%`, `Date: ${d.date}`] } } } },
         scales: {
           x: { title: { display: true, text: 'Cost per Prompt ($)' }, max: costMax2 * 1.05, ticks: { callback: v => '$' + v.toFixed(2) } },
-          y: { title: { display: true, text: 'Fluency Score (%)' }, min: Math.max(0, Math.floor((Math.min(...d3.map(d => d.y)) - 5) / 10) * 10), max: Math.max(...d3.map(d => d.y)) + 5 }
+          y: { title: { display: true, text: 'Fluency Score (%)' }, min: Math.max(0, Math.floor((Math.min(...d3.map(d => d.y)) - 5) / 10) * 10), max: 100 }
         }
       }
     })

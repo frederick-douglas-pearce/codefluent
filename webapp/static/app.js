@@ -799,9 +799,9 @@ function renderSessionEfficiencyCards() {
         <div class="pace-card-detail">Based on model pricing</div>
       </div>
       <div class="pace-card">
-        <div class="pace-card-title">Avg Tokens/Prompt</div>
-        <div class="pace-card-value">${formatTokens(agg.avg_tokens_per_prompt)}</div>
-        <div class="pace-card-detail">${escapeHtml(String(agg.total_sessions))} sessions analyzed</div>
+        <div class="pace-card-title">Avg Cost/Prompt</div>
+        <div class="pace-card-value">${totalPrompts > 0 ? escapeHtml(formatCost(totalCost / totalPrompts)) : '—'}</div>
+        <div class="pace-card-detail">${escapeHtml(String(totalPrompts.toLocaleString()))} prompts across ${escapeHtml(String(agg.total_sessions))} sessions</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Most Efficient Session</div>
@@ -858,6 +858,9 @@ function renderSessionTokenTable() {
       const denom = s.total_input_tokens + s.total_cache_read_tokens + s.total_cache_creation_tokens
       return denom > 0 ? s.total_output_tokens / denom : 0
     }
+    if (key === 'cost_per_prompt') {
+      return s.prompt_count > 0 && s.estimated_cost > 0 ? s.estimated_cost / s.prompt_count : 0
+    }
     return s[key]
   }
 
@@ -890,6 +893,7 @@ function renderSessionTokenTable() {
             <th class="session-table-sortable" data-sort-key="total_tokens">Total Tokens${sortIcon('total_tokens')}</th>
             <th class="session-table-sortable" data-sort-key="estimated_cost">Cost${sortIcon('estimated_cost')}</th>
             <th class="session-table-sortable" data-sort-key="tokens_per_prompt">Tokens/Prompt${sortIcon('tokens_per_prompt')}</th>
+            <th class="session-table-sortable" data-sort-key="cost_per_prompt">Cost/Prompt${sortIcon('cost_per_prompt')}</th>
             <th class="session-table-sortable" data-sort-key="cache_hit_rate">Cache Hit Rate${sortIcon('cache_hit_rate')}</th>
             <th class="session-table-sortable" data-sort-key="cache_read_creation_ratio">Cache R/C${sortIcon('cache_read_creation_ratio')}</th>
             <th class="session-table-sortable" data-sort-key="output_input_ratio">Out/In${sortIcon('output_input_ratio')}</th>
@@ -905,6 +909,7 @@ function renderSessionTokenTable() {
     const totalTok = formatTokens(s.total_tokens || 0)
     const cost = s.estimated_cost > 0 ? formatCost(s.estimated_cost) : '—'
     const tokPerPrompt = s.prompt_count > 0 ? formatTokens(Math.round(s.tokens_per_prompt || 0)) : '—'
+    const costPerPrompt = s.prompt_count > 0 && s.estimated_cost > 0 ? formatCost(s.estimated_cost / s.prompt_count) : '—'
     const cacheRate = s.cache_hit_rate > 0 ? Math.round(s.cache_hit_rate * 100) + '%' : '—'
     const cacheRC = s.total_cache_creation_tokens > 0
       ? (s.total_cache_read_tokens / s.total_cache_creation_tokens).toFixed(1) + 'x' : '—'
@@ -921,6 +926,7 @@ function renderSessionTokenTable() {
             <td>${totalTok}</td>
             <td>${escapeHtml(cost)}</td>
             <td>${tokPerPrompt}</td>
+            <td>${escapeHtml(costPerPrompt)}</td>
             <td>${cacheRate}</td>
             <td>${cacheRC}</td>
             <td>${outIn}</td>
@@ -1156,7 +1162,7 @@ function renderScoreCorrelation() {
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => { const d = ctx.raw; return [`Cost/Prompt: $${d.x.toFixed(2)}`, `Score: ${d.y}%`, `Cache Hit: ${Math.round(d.cacheHit * 100)}%`, `Date: ${d.date}`] } } } },
         scales: {
           x: { title: { display: true, text: 'Cost per Prompt ($)' }, max: costMax * 1.05, ticks: { callback: v => '$' + v.toFixed(2) } },
-          y: { title: { display: true, text: 'Fluency Score (%)' }, min: Math.max(0, Math.floor((Math.min(...d3.map(d => d.y)) - 5) / 10) * 10), max: Math.max(...d3.map(d => d.y)) + 5 }
+          y: { title: { display: true, text: 'Fluency Score (%)' }, min: Math.max(0, Math.floor((Math.min(...d3.map(d => d.y)) - 5) / 10) * 10), max: 100 }
         }
       }
     })
