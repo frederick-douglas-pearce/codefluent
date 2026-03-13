@@ -253,7 +253,8 @@ codefluent/
 │   │   ├── index.html         # Webview UI
 │   │   ├── app.js             # Frontend logic + Chart.js rendering
 │   │   ├── style.css          # VS Code theme-aware design system
-│   │   └── icon.svg           # Activity bar icon
+│   │   ├── icon.svg           # Activity bar icon
+│   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
 │   ├── test/
 │   │   ├── unit/              # Unit tests (scoring, parsing, caching, XSS, platform)
 │   │   └── integration/       # Integration tests (extension, webview)
@@ -262,7 +263,9 @@ codefluent/
 ├── webapp/                    # FastAPI web app (standalone alternative)
 │   ├── main.py                # FastAPI backend
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
-│   └── static/                # Web frontend (HTML/CSS/JS)
+│   ├── static/                # Web frontend (HTML/CSS/JS)
+│   ├── tests/                 # Pytest suite (API, security, helpers, prompts)
+│   └── pyproject.toml         # Python dependencies
 ├── shared/                    # Shared resources (both interfaces)
 │   ├── benchmarks.json        # Population benchmark data
 │   ├── pricing.json           # Token pricing by model
@@ -276,6 +279,7 @@ codefluent/
 │   ├── PROJECT_PLAN.md
 │   ├── TECHNICAL_SPEC.md
 │   ├── UI_SPEC.md
+│   ├── SESSION_DATA.md
 │   ├── REFERENCES.md
 │   └── DEMO_SCRIPT.md
 ├── images/                    # Demo screenshots
