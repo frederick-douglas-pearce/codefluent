@@ -1602,7 +1602,7 @@ function renderScoreCorrelation(sessions) {
         plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => { const d = ctx.raw; return [`Cost/Prompt: $${d.x.toFixed(2)}`, `Score: ${d.y}%`, `Cache Hit: ${Math.round(d.cacheHit * 100)}%`, `Date: ${d.date}`] } } } },
         scales: {
           x: { title: { display: true, text: 'Cost per Prompt ($)' }, max: costMax2 * 1.05, ticks: { callback: v => '$' + v.toFixed(2) } },
-          y: { title: { display: true, text: 'Fluency Score (%)' }, min: Math.max(0, Math.floor((Math.min(...d3.map(d => d.y)) - 5) / 10) * 10), max: 100 }
+          y: { title: { display: true, text: 'Fluency Score (%)' }, min: Math.max(0, Math.floor((Math.min(...d3.map(d => d.y)) - 5) / 10) * 10), max: 102, afterBuildTicks: axis => { axis.ticks = axis.ticks.filter(t => t.value <= 100); if (!axis.ticks.some(t => t.value === 100)) axis.ticks.push({ value: 100 }) }, ticks: { stepSize: 5 } }
         }
       }
     })
