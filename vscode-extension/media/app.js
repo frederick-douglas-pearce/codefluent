@@ -1186,6 +1186,7 @@ function renderSessionAnalytics() {
     document.getElementById('session-analytics-header').style.display = 'none'
     document.getElementById('session-efficiency-cards').innerHTML = ''
     document.getElementById('session-token-table-container').style.display = 'none'
+    document.getElementById('score-correlation-container').innerHTML = ''
     return
   }
 
@@ -1196,6 +1197,7 @@ function renderSessionAnalytics() {
 
   renderSessionEfficiencyCards(analytics)
   renderSessionTokenTable(analytics.sessions)
+  renderScoreCorrelation(analytics.sessions)
 }
 
 function renderSessionEfficiencyCards(analytics) {
@@ -1356,6 +1358,170 @@ function renderSessionTokenTable(sessions) {
   } else {
     showMoreBtn.style.display = 'none'
   }
+}
+
+function renderScoreCorrelation(sessions) {
+  const container = document.getElementById('score-correlation-container')
+  if (!container) return
+
+  const scored = sessions.filter(s => s.overall_score != null && s.tokens_per_prompt > 0)
+
+  // Hide entirely when 0 scored sessions
+  if (scored.length === 0) {
+    container.innerHTML = ''
+    return
+  }
+
+  // Need 3+ for scatter plot
+  if (scored.length < 3) {
+    container.innerHTML = `
+      <div class="correlation-section">
+        <h3>Score-Token Correlation</h3>
+        <div class="correlation-placeholder">
+          <p>Score more sessions to see correlations (${escapeHtml(String(scored.length))} of 3 minimum).</p>
+        </div>
+      </div>`
+    return
+  }
+
+  // Build scatter data with cache hit rate coloring
+  const scatterData = scored.map(s => ({
+    x: Math.round(s.overall_score),
+    y: Math.round(s.tokens_per_prompt),
+    cacheHitRate: s.cache_hit_rate || 0,
+    date: s.started_at ? new Date(s.started_at).toLocaleDateString() : '-',
+  }))
+
+  // Continuous color by cache hit rate, normalized to data range
+  const cacheRates = scored.map(s => s.cache_hit_rate || 0)
+  const cacheMin = Math.min(...cacheRates)
+  const cacheMax = Math.max(...cacheRates)
+  const cacheRange = cacheMax - cacheMin || 1
+
+  function cacheHitColor(rate) {
+    // Normalize to [0,1] based on data range
+    const t = (rate - cacheMin) / cacheRange
+    if (t <= 0.5) {
+      // Red (#DC2626) -> Amber (#D97706)
+      const u = t / 0.5
+      const r = Math.round(220 + (217 - 220) * u)
+      const g = Math.round(38 + (119 - 38) * u)
+      const b = Math.round(38 + (6 - 38) * u)
+      return `rgb(${r},${g},${b})`
+    }
+    // Amber (#D97706) -> Green (#059669)
+    const u = (t - 0.5) / 0.5
+    const r = Math.round(217 + (5 - 217) * u)
+    const g = Math.round(119 + (150 - 119) * u)
+    const b = Math.round(6 + (105 - 6) * u)
+    return `rgb(${r},${g},${b})`
+  }
+  const pointColors = scatterData.map(d => cacheHitColor(d.cacheHitRate))
+  const cacheLabelMin = Math.round(cacheMin * 100)
+  const cacheLabelMax = Math.round(cacheMax * 100)
+
+  // Compute dynamic x-axis range from data
+  const scores = scored.map(s => Math.round(s.overall_score))
+  const minScore = Math.min(...scores)
+  const maxScore = Math.max(...scores)
+  const xMin = Math.max(0, Math.floor((minScore - 5) / 10) * 10)
+  const xMax = maxScore + 5
+
+  // Build insights if 5+ scored sessions
+  let insightsHtml = ''
+  if (scored.length >= 5) {
+    const sortedByScore = [...scored].sort((a, b) => a.overall_score - b.overall_score)
+    const medianIdx = Math.floor(sortedByScore.length / 2)
+    const medianScore = sortedByScore[medianIdx].overall_score
+
+    const high = scored.filter(s => s.overall_score > medianScore)
+    const low = scored.filter(s => s.overall_score <= medianScore)
+
+    // If all sessions have the same score, skip insights (no variance to compare)
+    if (high.length > 0 && low.length > 0) {
+      const avgTokHigh = high.reduce((sum, s) => sum + s.tokens_per_prompt, 0) / high.length
+      const avgTokLow = low.reduce((sum, s) => sum + s.tokens_per_prompt, 0) / low.length
+      const tokDiff = avgTokLow > 0 ? Math.round(((avgTokHigh - avgTokLow) / avgTokLow) * 100) : 0
+      const tokDirection = tokDiff < 0 ? 'fewer' : 'more'
+
+      const avgCacheHigh = Math.round(high.reduce((sum, s) => sum + (s.cache_hit_rate || 0), 0) / high.length * 100)
+      const avgCacheLow = Math.round(low.reduce((sum, s) => sum + (s.cache_hit_rate || 0), 0) / low.length * 100)
+
+      insightsHtml = `
+        <div class="correlation-insights">
+          <div class="insight-card">
+            <span class="insight-icon">&#x1f4ca;</span>
+            <span>Sessions scoring above ${escapeHtml(String(Math.round(medianScore)))}% use <strong>${escapeHtml(String(Math.abs(tokDiff)))}% ${escapeHtml(tokDirection)}</strong> tokens per prompt on average</span>
+          </div>
+          <div class="insight-card">
+            <span class="insight-icon">&#x1f4be;</span>
+            <span>High-scoring sessions average <strong>${escapeHtml(String(avgCacheHigh))}%</strong> cache hit rate vs <strong>${escapeHtml(String(avgCacheLow))}%</strong> for lower-scoring</span>
+          </div>
+        </div>`
+    }
+  }
+
+  container.innerHTML = `
+    <div class="correlation-section">
+      <h3>Score-Token Correlation</h3>
+      <div class="correlation-chart-wrap">
+        <canvas id="correlation-chart"></canvas>
+      </div>
+      <div class="correlation-legend">
+        <span>Cache hit rate:</span>
+        <span class="legend-label">${escapeHtml(String(cacheLabelMin))}%</span>
+        <span class="legend-gradient"></span>
+        <span class="legend-label">${escapeHtml(String(cacheLabelMax))}%</span>
+      </div>
+      ${insightsHtml}
+    </div>`
+
+  // Render scatter chart
+  destroyChart('correlation')
+  charts.correlation = new Chart(document.getElementById('correlation-chart').getContext('2d'), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Sessions',
+        data: scatterData,
+        backgroundColor: pointColors,
+        borderColor: pointColors,
+        pointRadius: 6,
+        pointHoverRadius: 9,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(ctx) {
+              const d = ctx.raw
+              return [
+                `Score: ${d.x}%`,
+                `Tokens/Prompt: ${formatTokens(d.y)}`,
+                `Cache Hit: ${Math.round(d.cacheHitRate * 100)}%`,
+                `Date: ${d.date}`,
+              ]
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Fluency Score (%)' },
+          min: xMin,
+          max: xMax,
+        },
+        y: {
+          title: { display: true, text: 'Tokens per Prompt' },
+          ticks: { callback: v => formatTokens(v) }
+        }
+      }
+    }
+  })
 }
 
 // --- Load cached scores ---
