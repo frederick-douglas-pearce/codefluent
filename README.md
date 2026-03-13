@@ -162,9 +162,13 @@ The extension resolves this automatically via the system home directory.
 |------------------|------------|
 | ![VS Code sidebar showing Prompt Optimizer](images/vscode-optimizer.png) | ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) |
 
-| Usage |
-|-------|
-| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) |
+| Usage | Session Analytics |
+|-------|-------------------|
+| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) | ![VS Code sidebar showing Session Analytics cards and scatter chart](images/vscode-usage-analytics.png) |
+
+| Cost Efficiency Charts |
+|------------------------|
+| ![VS Code sidebar showing cost efficiency scatter charts and session table](images/vscode-usage-charts.png) |
 
 ## Features
 
