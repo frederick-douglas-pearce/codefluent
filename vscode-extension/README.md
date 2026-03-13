@@ -121,6 +121,10 @@ CodeFluent's scoring framework is grounded in published Anthropic research:
 - [Coding Skills Formation with AI](https://www.anthropic.com/research/coding-skill-formation) (Jan 2026) — 6 coding interaction patterns and quality analysis
 - [Claude Code Best Practices](https://www.anthropic.com/research/claude-code-best-practices) — Practical guidelines for effective AI collaboration
 
+## Contributing
+
+CodeFluent is open source and actively looking for contributors! Whether it's bug fixes, new features, or improving the scoring framework — all contributions are welcome. Check out the [open issues](https://github.com/frederick-douglas-pearce/codefluent/issues) for ideas, or see [`CONTRIBUTING.md`](https://github.com/frederick-douglas-pearce/codefluent/blob/main/CONTRIBUTING.md) for dev setup and guidelines.
+
 ## License
 
 [MIT](../LICENSE)
