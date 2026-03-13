@@ -2,7 +2,7 @@
 
 **AI fluency analytics for Claude Code users** — track your prompting skills, monitor token usage, and get personalized recommendations to write better prompts.
 
-CodeFluent parses your local Claude Code session files, scores your prompts against 11 research-backed fluency behaviors, and shows you exactly where to improve.
+CodeFluent parses your local Claude Code session files, scores your prompts against 11 research-backed fluency behaviors, and shows you exactly how to improve.
 
 ## Getting Started
 
@@ -99,10 +99,27 @@ CodeFluent uses the following API key resolution order:
 2. `.env` file in your workspace root
 3. VS Code SecretStorage (persisted after first prompt)
 
-## Known Issues
+## Privacy
 
-- `ccusage` must be available via `npx` (requires Node.js and npm on PATH)
-- Quick Wins requires `gh` CLI to be installed and authenticated
+All data stays on your machine. CodeFluent reads local session files and makes direct Anthropic API calls for scoring — no telemetry, no external servers, no data collection.
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| **No sessions found** | Check that `~/.claude/projects/` contains `.jsonl` session files. Claude Code creates these automatically during use. |
+| **API key not found** | The extension checks: env var → workspace `.env` → VS Code secrets → interactive prompt. Make sure `ANTHROPIC_API_KEY` is set in at least one location. |
+| **Quick Wins shows no results** | Run `gh auth login` to authenticate the GitHub CLI. |
+| **ccusage returns no data** | Click the Refresh button in the Usage tab. Ensure Node.js and npm are on PATH so `npx ccusage` works. |
+| **Extension doesn't activate** | Look for the CodeFluent icon in the activity bar. If missing, try reloading the window (`Ctrl+Shift+P` → "Reload Window"). |
+
+## Research Foundations
+
+CodeFluent's scoring framework is grounded in published Anthropic research:
+
+- [AI Fluency Index](https://www.anthropic.com/research/AI-fluency-index) (Feb 2026) — 11 behavioral indicators and population benchmarks
+- [Coding Skills Formation with AI](https://www.anthropic.com/research/coding-skill-formation) (Jan 2026) — 6 coding interaction patterns and quality analysis
+- [Claude Code Best Practices](https://www.anthropic.com/research/claude-code-best-practices) — Practical guidelines for effective AI collaboration
 
 ## License
 
