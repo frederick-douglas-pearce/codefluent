@@ -350,4 +350,4 @@ Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setu
 
 ## License
 
-MIT
+[MIT](LICENSE)
