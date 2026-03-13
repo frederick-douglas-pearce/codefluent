@@ -144,9 +144,13 @@ The extension resolves this automatically via the system home directory.
 |------------------|------------|
 | ![Prompt Optimizer tab](images/demo-optimizer.png) | ![Quick Wins tab](images/demo-quickwins.png) |
 
-| Usage |
-|-------|
-| ![Usage tab](images/demo-usage.png) |
+| Usage | Session Analytics |
+|-------|-------------------|
+| ![Usage tab](images/demo-usage.png) | ![Session Analytics](images/demo-usage-analytics.png) |
+
+| Cost Efficiency Charts |
+|------------------------|
+| ![Cost Efficiency Charts](images/demo-usage-charts.png) |
 
 ### VS Code Extension
 
