@@ -317,7 +317,7 @@ The project has **769 automated tests** across both interfaces:
 cd vscode-extension
 npm test                   # 528 tests across 14 suites (Jest)
 
-cd ../webapp
+cd webapp
 uv run pytest tests/ -v    # 241 tests across 5 suites (pytest)
 ```
 
