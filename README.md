@@ -288,6 +288,8 @@ codefluent/
 
 ## Development
 
+### VS Code Extension
+
 ```bash
 cd vscode-extension
 npm install
@@ -295,32 +297,50 @@ npm run watch          # Continuous TypeScript compilation
 # Press F5 in VS Code to launch Extension Development Host
 ```
 
+See [`vscode-extension/README.md`](vscode-extension/README.md) for full setup, packaging, and installation details.
+
+### Web App
+
+```bash
+cd webapp
+uv sync
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+See [`webapp/README.md`](webapp/README.md) for configuration, CORS, and Windows notes.
+
+### Testing
+
+The project has **769 automated tests** across both interfaces:
+
+```bash
+cd vscode-extension
+npm test                   # 528 tests across 14 suites (Jest)
+
+cd ../webapp
+uv run pytest tests/ -v    # 241 tests across 5 suites (pytest)
+```
+
+Test suites cover scoring, parsing, caching, analytics, pricing, XSS prevention, shell injection, path traversal, rate limiting, CORS, and API surface. All tests must pass before merging to main.
+
+### CI/CD
+
+Four GitHub Actions workflows run automatically:
+
+- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 769 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
+- **Claude Code Review** (`claude-review.yml`) — AI-powered PR review, responds to `@claude` mentions.
+- **Security Review** (`security-review.yml`) — Grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml).
+- **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
+
 ### Branching Strategy
 
 - **`main`** — Always releasable. Protected by CI, requires a PR to merge.
 - **`feature/<issue>-desc`** — New features (e.g., `feature/44-remaining-recommendations`)
 - **`fix/<issue>-desc`** — Bug fixes (e.g., `fix/46-cache-unbounded`)
 
-### CI/CD
+## Contributing
 
-Four GitHub Actions workflows run automatically:
-
-- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 528 extension tests + 241 webapp tests. Must pass to merge.
-- **Claude Code Review** (`claude-review.yml`) — AI-powered PR review on all PRs, responds to `@claude` mentions.
-- **Security Review** (`security-review.yml`) — Claude-based security scan on PRs, checks for XSS/injection vectors.
-- **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
-
-### Testing
-
-```bash
-npm test               # Run all Jest tests (528 tests across 14 suites)
-```
-
-### Packaging
-
-```bash
-npx @vscode/vsce package --allow-missing-repository
-```
+Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, code conventions, security rules, and the PR checklist.
 
 ## Research Foundations
 

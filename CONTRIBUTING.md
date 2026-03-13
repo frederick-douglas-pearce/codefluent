@@ -33,7 +33,7 @@ For the web app, see [`webapp/README.md`](webapp/README.md).
 
 ```bash
 cd vscode-extension
-npm test                        # Run all 471 tests across 12 suites
+npm test                        # Run all 528 tests across 14 suites
 npx jest --coverage             # Run with coverage report
 npx jest test/unit/scoring      # Run a specific test file
 ```
@@ -114,7 +114,7 @@ CodeFluent ships **two production interfaces**: the VS Code extension and the we
 
 Before submitting a pull request, verify:
 
-- [ ] `npm test` passes (all 471+ tests green)
+- [ ] `npm test` passes (all 528+ tests green)
 - [ ] No regressions in existing functionality
 - [ ] New features include test coverage
 - [ ] Both interfaces updated if the change affects shared functionality
