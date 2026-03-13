@@ -147,6 +147,7 @@
         <!-- Session Analytics (from parsed JSONL data) -->
         <h3 class="session-analytics-header" id="session-analytics-header" style="display:none;">Session Analytics</h3>
         <div id="session-efficiency-cards" class="pace-section"></div>
+        <div id="score-correlation-container"></div>
         <div id="session-token-table-container" style="display:none;">
           <h3>Session Token Details</h3>
           <div class="table-wrapper">
@@ -159,7 +160,10 @@
                   <th data-sort="total_tokens" class="sortable">Total Tokens</th>
                   <th data-sort="estimated_cost" class="sortable">Cost</th>
                   <th data-sort="tokens_per_prompt" class="sortable">Tokens/Prompt</th>
+                  <th data-sort="cost_per_prompt" class="sortable">Cost/Prompt</th>
                   <th data-sort="cache_hit_rate" class="sortable">Cache Hit</th>
+                  <th data-sort="cache_read_creation" class="sortable">Cache R/C</th>
+                  <th data-sort="output_input" class="sortable">Out/In</th>
                   <th data-sort="score" class="sortable">Score</th>
                 </tr>
               </thead>
@@ -168,7 +172,6 @@
           </div>
           <button class="session-show-more-btn" id="session-table-show-more" style="display:none;">Show more</button>
         </div>
-        <div id="score-correlation-container"></div>
       </div>
     </main>
 

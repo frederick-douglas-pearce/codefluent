@@ -708,7 +708,7 @@ function renderUsagePace(daily) {
 // --- Session Analytics ---
 async function loadSessionAnalytics() {
   const dataPath = getDataPath()
-  const project = getSelectedProjectEncoded()
+  const project = getSelectedProject()
   let url = '/api/session-analytics'
   const params = []
   if (dataPath) params.push(`data_path=${encodeURIComponent(dataPath)}`)
@@ -771,6 +771,16 @@ function renderSessionEfficiencyCards() {
   const totalCost = agg.total_estimated_cost != null ? agg.total_estimated_cost : sessions.reduce((sum, s) => sum + (s.estimated_cost || 0), 0)
   const totalPrompts = sessions.reduce((sum, s) => sum + (s.prompt_count || 0), 0)
 
+  // Compute avg cache read/creation ratio and output/input ratio
+  const totalCacheRead = sessions.reduce((sum, s) => sum + (s.total_cache_read_tokens || 0), 0)
+  const totalCacheCreation = sessions.reduce((sum, s) => sum + (s.total_cache_creation_tokens || 0), 0)
+  const avgCacheRC = totalCacheCreation > 0 ? totalCacheRead / totalCacheCreation : null
+
+  const totalOutput = sessions.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0)
+  const totalInput = sessions.reduce((sum, s) => sum + (s.total_input_tokens || 0), 0)
+  const totalInputAll = totalInput + totalCacheRead + totalCacheCreation
+  const avgOutIn = totalInputAll > 0 ? totalOutput / totalInputAll : null
+
   const scoredSessions = sessions.filter(s => s.overall_score != null)
   const avgScore = scoredSessions.length > 0
     ? Math.round(scoredSessions.reduce((sum, s) => sum + s.overall_score, 0) / scoredSessions.length)
@@ -789,9 +799,9 @@ function renderSessionEfficiencyCards() {
         <div class="pace-card-detail">Based on model pricing</div>
       </div>
       <div class="pace-card">
-        <div class="pace-card-title">Avg Tokens/Prompt</div>
-        <div class="pace-card-value">${formatTokens(agg.avg_tokens_per_prompt)}</div>
-        <div class="pace-card-detail">${escapeHtml(String(agg.total_sessions))} sessions analyzed</div>
+        <div class="pace-card-title">Avg Cost/Prompt</div>
+        <div class="pace-card-value">${totalPrompts > 0 ? escapeHtml(formatCost(totalCost / totalPrompts)) : '—'}</div>
+        <div class="pace-card-detail">${escapeHtml(String(totalPrompts.toLocaleString()))} prompts across ${escapeHtml(String(agg.total_sessions))} sessions</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Most Efficient Session</div>
@@ -802,6 +812,16 @@ function renderSessionEfficiencyCards() {
         <div class="pace-card-title">Avg Cache Hit Rate</div>
         <div class="pace-card-value">${Math.round(agg.avg_cache_hit_rate * 100)}%</div>
         <div class="pace-card-detail">Higher is more cost-efficient</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Avg Cache R/C Ratio</div>
+        <div class="pace-card-value">${avgCacheRC != null ? escapeHtml(avgCacheRC.toFixed(1)) + 'x' : '—'}</div>
+        <div class="pace-card-detail">Cache reads per creation</div>
+      </div>
+      <div class="pace-card">
+        <div class="pace-card-title">Avg Output/Input Ratio</div>
+        <div class="pace-card-value">${avgOutIn != null ? escapeHtml((avgOutIn * 100).toFixed(1)) + '%' : '—'}</div>
+        <div class="pace-card-detail">Output as % of input tokens</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Avg Fluency Score</div>
@@ -829,8 +849,23 @@ function renderSessionTokenTable() {
   let sessions = [...data.sessions]
   const sortKey = container.dataset.sortKey || 'started_at'
   const sortDir = container.dataset.sortDir || 'desc'
+
+  function derivedValue(s, key) {
+    if (key === 'cache_read_creation_ratio') {
+      return s.total_cache_creation_tokens > 0 ? s.total_cache_read_tokens / s.total_cache_creation_tokens : 0
+    }
+    if (key === 'output_input_ratio') {
+      const denom = s.total_input_tokens + s.total_cache_read_tokens + s.total_cache_creation_tokens
+      return denom > 0 ? s.total_output_tokens / denom : 0
+    }
+    if (key === 'cost_per_prompt') {
+      return s.prompt_count > 0 && s.estimated_cost > 0 ? s.estimated_cost / s.prompt_count : 0
+    }
+    return s[key]
+  }
+
   sessions.sort((a, b) => {
-    let va = a[sortKey], vb = b[sortKey]
+    let va = derivedValue(a, sortKey), vb = derivedValue(b, sortKey)
     if (sortKey === 'started_at') {
       va = va || ''
       vb = vb || ''
@@ -858,7 +893,10 @@ function renderSessionTokenTable() {
             <th class="session-table-sortable" data-sort-key="total_tokens">Total Tokens${sortIcon('total_tokens')}</th>
             <th class="session-table-sortable" data-sort-key="estimated_cost">Cost${sortIcon('estimated_cost')}</th>
             <th class="session-table-sortable" data-sort-key="tokens_per_prompt">Tokens/Prompt${sortIcon('tokens_per_prompt')}</th>
+            <th class="session-table-sortable" data-sort-key="cost_per_prompt">Cost/Prompt${sortIcon('cost_per_prompt')}</th>
             <th class="session-table-sortable" data-sort-key="cache_hit_rate">Cache Hit Rate${sortIcon('cache_hit_rate')}</th>
+            <th class="session-table-sortable" data-sort-key="cache_read_creation_ratio">Cache R/C${sortIcon('cache_read_creation_ratio')}</th>
+            <th class="session-table-sortable" data-sort-key="output_input_ratio">Out/In${sortIcon('output_input_ratio')}</th>
             <th class="session-table-sortable" data-sort-key="overall_score">Score${sortIcon('overall_score')}</th>
           </tr>
         </thead>
@@ -871,7 +909,13 @@ function renderSessionTokenTable() {
     const totalTok = formatTokens(s.total_tokens || 0)
     const cost = s.estimated_cost > 0 ? formatCost(s.estimated_cost) : '—'
     const tokPerPrompt = s.prompt_count > 0 ? formatTokens(Math.round(s.tokens_per_prompt || 0)) : '—'
+    const costPerPrompt = s.prompt_count > 0 && s.estimated_cost > 0 ? formatCost(s.estimated_cost / s.prompt_count) : '—'
     const cacheRate = s.cache_hit_rate > 0 ? Math.round(s.cache_hit_rate * 100) + '%' : '—'
+    const cacheRC = s.total_cache_creation_tokens > 0
+      ? (s.total_cache_read_tokens / s.total_cache_creation_tokens).toFixed(1) + 'x' : '—'
+    const outInRaw = (s.total_input_tokens + s.total_cache_read_tokens + s.total_cache_creation_tokens) > 0
+      ? s.total_output_tokens / (s.total_input_tokens + s.total_cache_read_tokens + s.total_cache_creation_tokens) : null
+    const outIn = outInRaw != null ? (outInRaw * 100).toFixed(1) + '%' : '—'
     const score = s.overall_score != null ? s.overall_score + '%' : '—'
 
     html += `
@@ -882,7 +926,10 @@ function renderSessionTokenTable() {
             <td>${totalTok}</td>
             <td>${escapeHtml(cost)}</td>
             <td>${tokPerPrompt}</td>
+            <td>${escapeHtml(costPerPrompt)}</td>
             <td>${cacheRate}</td>
+            <td>${cacheRC}</td>
+            <td>${outIn}</td>
             <td>${score}</td>
           </tr>`
   }
@@ -909,164 +956,218 @@ function renderScoreCorrelation() {
     return
   }
 
-  const scored = data.sessions.filter(s => s.overall_score != null && s.tokens_per_prompt > 0)
+  // Use all sessions for cost charts, scored subset for score-colored charts
+  const allSessions = data.sessions.filter(s => s.tokens_per_prompt > 0 && s.estimated_cost > 0)
+  const scored = allSessions.filter(s => s.overall_score != null)
 
-  // Hide entirely when 0 scored sessions
-  if (scored.length === 0) {
-    container.innerHTML = ''
-    return
-  }
-
-  // Need 3+ for scatter plot
-  if (scored.length < 3) {
-    container.innerHTML = `
+  if (allSessions.length < 3) {
+    container.innerHTML = allSessions.length === 0 ? '' : `
       <div class="correlation-section">
-        <h3>Score-Token Correlation</h3>
+        <h3>Cost Efficiency Analysis</h3>
         <div class="correlation-placeholder">
-          <p>Score more sessions to see correlations (${escapeHtml(String(scored.length))} of 3 minimum).</p>
+          <p>Need at least 3 sessions for analysis (${escapeHtml(String(allSessions.length))} available).</p>
         </div>
       </div>`
     return
   }
 
-  // Build scatter data with cache hit rate coloring
-  const scatterData = scored.map(s => ({
-    x: Math.round(s.overall_score),
-    y: Math.round(s.tokens_per_prompt),
-    cacheHitRate: s.cache_hit_rate || 0,
-    date: s.started_at ? new Date(s.started_at).toLocaleDateString() : '-',
-  }))
-
-  // Continuous color by cache hit rate, normalized to data range
-  const cacheRates = scored.map(s => s.cache_hit_rate || 0)
-  const cacheMin = Math.min(...cacheRates)
-  const cacheMax = Math.max(...cacheRates)
-  const cacheRange = cacheMax - cacheMin || 1
-
-  function cacheHitColor(rate) {
-    // Normalize to [0,1] based on data range
-    const t = (rate - cacheMin) / cacheRange
+  // --- Shared color helpers ---
+  // Score color: normalized to data range, red (low) -> amber -> green (high)
+  function normalizedColor(value, min, max) {
+    const range = max - min || 1
+    const t = (value - min) / range
     if (t <= 0.5) {
-      // Red (#DC2626) -> Amber (#D97706)
       const u = t / 0.5
-      const r = Math.round(220 + (217 - 220) * u)
-      const g = Math.round(38 + (119 - 38) * u)
-      const b = Math.round(38 + (6 - 38) * u)
-      return `rgb(${r},${g},${b})`
+      return `rgb(${Math.round(220 + (217 - 220) * u)},${Math.round(38 + (119 - 38) * u)},${Math.round(38 + (6 - 38) * u)})`
     }
-    // Amber (#D97706) -> Green (#059669)
     const u = (t - 0.5) / 0.5
-    const r = Math.round(217 + (5 - 217) * u)
-    const g = Math.round(119 + (150 - 119) * u)
-    const b = Math.round(6 + (105 - 6) * u)
-    return `rgb(${r},${g},${b})`
+    return `rgb(${Math.round(217 + (5 - 217) * u)},${Math.round(119 + (150 - 119) * u)},${Math.round(6 + (105 - 6) * u)})`
   }
-  const pointColors = scatterData.map(d => cacheHitColor(d.cacheHitRate))
-  const cacheLabelMin = Math.round(cacheMin * 100)
-  const cacheLabelMax = Math.round(cacheMax * 100)
 
-  // Compute dynamic x-axis range from data
-  const scores = scored.map(s => Math.round(s.overall_score))
-  const minScore = Math.min(...scores)
-  const maxScore = Math.max(...scores)
-  const xMin = Math.max(0, Math.floor((minScore - 5) / 10) * 10)
-  const xMax = maxScore + 5
+  // --- Compute derived features for all sessions ---
+  const enriched = allSessions.map(s => {
+    const promptCount = s.prompt_count || 1
+    const costPerPrompt = s.estimated_cost / promptCount
+    const cacheReadCreation = s.total_cache_creation_tokens > 0
+      ? s.total_cache_read_tokens / s.total_cache_creation_tokens : null
+    const outputInput = (s.total_input_tokens + s.total_cache_read_tokens + s.total_cache_creation_tokens) > 0
+      ? s.total_output_tokens / (s.total_input_tokens + s.total_cache_read_tokens + s.total_cache_creation_tokens) : null
+    return { ...s, costPerPrompt, cacheReadCreation, outputInput }
+  })
 
-  // Build insights if 5+ scored sessions
+  // --- Chart 1: Cost/Prompt vs Cache Read/Creation Ratio (score as color) ---
+  const chart1Data = enriched.filter(s => s.cacheReadCreation != null && s.overall_score != null)
+  const chart1All = enriched.filter(s => s.cacheReadCreation != null)
+
+  // --- Chart 2: Cost/Prompt vs Output/Input Ratio (score as color) ---
+  const chart2Data = enriched.filter(s => s.outputInput != null && s.overall_score != null)
+  const chart2All = enriched.filter(s => s.outputInput != null)
+
+  // --- Chart 3: Score vs Cost/Prompt (cache hit as color) ---
+  const chart3Data = enriched.filter(s => s.overall_score != null)
+
+  // Score color bounds (from scored sessions)
+  const scoreVals = scored.map(s => s.overall_score)
+  const scoreMin = scoreVals.length > 0 ? Math.min(...scoreVals) : 0
+  const scoreMax = scoreVals.length > 0 ? Math.max(...scoreVals) : 100
+
+  // Cache hit color bounds
+  const cacheVals = allSessions.map(s => s.cache_hit_rate || 0)
+  const cacheMin = Math.min(...cacheVals)
+  const cacheMax = Math.max(...cacheVals)
+
+  // --- Build insights ---
   let insightsHtml = ''
-  if (scored.length >= 5) {
-    const sortedByScore = [...scored].sort((a, b) => a.overall_score - b.overall_score)
-    const medianIdx = Math.floor(sortedByScore.length / 2)
-    const medianScore = sortedByScore[medianIdx].overall_score
-
-    const high = scored.filter(s => s.overall_score > medianScore)
-    const low = scored.filter(s => s.overall_score <= medianScore)
-
-    // If all sessions have the same score, skip insights (no variance to compare)
-    if (high.length > 0 && low.length > 0) {
-      const avgTokHigh = high.reduce((sum, s) => sum + s.tokens_per_prompt, 0) / high.length
-      const avgTokLow = low.reduce((sum, s) => sum + s.tokens_per_prompt, 0) / low.length
-      const tokDiff = avgTokLow > 0 ? Math.round(((avgTokHigh - avgTokLow) / avgTokLow) * 100) : 0
-      const tokDirection = tokDiff < 0 ? 'fewer' : 'more'
-
-      const avgCacheHigh = Math.round(high.reduce((sum, s) => sum + (s.cache_hit_rate || 0), 0) / high.length * 100)
-      const avgCacheLow = Math.round(low.reduce((sum, s) => sum + (s.cache_hit_rate || 0), 0) / low.length * 100)
-
-      insightsHtml = `
-        <div class="correlation-insights">
+  if (chart1All.length >= 5) {
+    // Cache reuse insight
+    const sortedByCache = [...chart1All].sort((a, b) => a.cacheReadCreation - b.cacheReadCreation)
+    const midIdx = Math.floor(sortedByCache.length / 2)
+    const highCache = sortedByCache.slice(midIdx)
+    const lowCache = sortedByCache.slice(0, midIdx)
+    if (highCache.length > 0 && lowCache.length > 0) {
+      const avgCostHigh = highCache.reduce((s, d) => s + d.costPerPrompt, 0) / highCache.length
+      const avgCostLow = lowCache.reduce((s, d) => s + d.costPerPrompt, 0) / lowCache.length
+      const costDiff = avgCostLow > 0 ? Math.round(((avgCostLow - avgCostHigh) / avgCostLow) * 100) : 0
+      if (costDiff > 0) {
+        insightsHtml += `
           <div class="insight-card">
-            <span class="insight-icon">&#x1f4ca;</span>
-            <span>Sessions scoring above ${escapeHtml(String(Math.round(medianScore)))}% use <strong>${escapeHtml(String(Math.abs(tokDiff)))}% ${escapeHtml(tokDirection)}</strong> tokens per prompt on average</span>
-          </div>
-          <div class="insight-card">
-            <span class="insight-icon">&#x1f4be;</span>
-            <span>High-scoring sessions average <strong>${escapeHtml(String(avgCacheHigh))}%</strong> cache hit rate vs <strong>${escapeHtml(String(avgCacheLow))}%</strong> for lower-scoring</span>
-          </div>
+            <span class="insight-icon">&#x1f4b0;</span>
+            <span>Sessions with higher cache reuse cost <strong>${escapeHtml(String(costDiff))}% less</strong> per prompt on average</span>
+          </div>`
+      }
+    }
+  }
+  if (chart3Data.length >= 5) {
+    // Score vs cost insight
+    const sortedByScore = [...chart3Data].sort((a, b) => a.overall_score - b.overall_score)
+    const midIdx = Math.floor(sortedByScore.length / 2)
+    const medianScore = sortedByScore[midIdx].overall_score
+    const highScore = chart3Data.filter(s => s.overall_score > medianScore)
+    const lowScore = chart3Data.filter(s => s.overall_score <= medianScore)
+    if (highScore.length > 0 && lowScore.length > 0) {
+      const avgCostHigh = highScore.reduce((s, d) => s + d.costPerPrompt, 0) / highScore.length
+      const avgCostLow = lowScore.reduce((s, d) => s + d.costPerPrompt, 0) / lowScore.length
+      const costDir = avgCostHigh > avgCostLow ? 'more' : 'less'
+      const costPct = avgCostLow > 0 ? Math.round(Math.abs(avgCostHigh - avgCostLow) / avgCostLow * 100) : 0
+      insightsHtml += `
+        <div class="insight-card">
+          <span class="insight-icon">&#x1f3af;</span>
+          <span>Sessions scoring above ${escapeHtml(String(Math.round(medianScore)))}% cost <strong>${escapeHtml(String(costPct))}% ${escapeHtml(costDir)}</strong> per prompt on average</span>
         </div>`
     }
   }
 
+  // --- Render HTML (Score vs Cost first as headline, then detailed breakdowns) ---
+  let chartsHtml = ''
+
+  if (chart3Data.length >= 3) {
+    chartsHtml += `
+      <div class="correlation-chart-block">
+        <h4>Fluency Score vs Cost/Prompt</h4>
+        <div class="correlation-chart-wrap"><canvas id="chart-score-cost"></canvas></div>
+        <div class="correlation-legend">
+          <span>Cache hit rate:</span>
+          <span class="legend-label">${escapeHtml(String(Math.round(cacheMin * 100)))}%</span>
+          <span class="legend-gradient"></span>
+          <span class="legend-label">${escapeHtml(String(Math.round(cacheMax * 100)))}%</span>
+        </div>
+      </div>`
+  }
+
+  if (chart1All.length >= 3) {
+    chartsHtml += `
+      <div class="correlation-chart-block">
+        <h4>Cost/Prompt vs Cache Reuse Ratio</h4>
+        <div class="correlation-chart-wrap"><canvas id="chart-cache-cost"></canvas></div>
+        <div class="correlation-legend">
+          <span>Fluency score:</span>
+          <span class="legend-label">${escapeHtml(String(Math.round(scoreMin)))}%</span>
+          <span class="legend-gradient"></span>
+          <span class="legend-label">${escapeHtml(String(Math.round(scoreMax)))}%</span>
+        </div>
+      </div>`
+  }
+
+  if (chart2All.length >= 3) {
+    chartsHtml += `
+      <div class="correlation-chart-block">
+        <h4>Cost/Prompt vs Output/Input Ratio</h4>
+        <div class="correlation-chart-wrap"><canvas id="chart-output-cost"></canvas></div>
+        <div class="correlation-legend">
+          <span>Fluency score:</span>
+          <span class="legend-label">${escapeHtml(String(Math.round(scoreMin)))}%</span>
+          <span class="legend-gradient"></span>
+          <span class="legend-label">${escapeHtml(String(Math.round(scoreMax)))}%</span>
+        </div>
+      </div>`
+  }
+
   container.innerHTML = `
     <div class="correlation-section">
-      <h3>Score-Token Correlation</h3>
-      <div class="correlation-chart-wrap">
-        <canvas id="correlation-chart"></canvas>
-      </div>
-      <div class="correlation-legend">
-        <span>Cache hit rate:</span>
-        <span class="legend-label">${escapeHtml(String(cacheLabelMin))}%</span>
-        <span class="legend-gradient"></span>
-        <span class="legend-label">${escapeHtml(String(cacheLabelMax))}%</span>
-      </div>
-      ${insightsHtml}
+      <h3>Cost Efficiency Analysis</h3>
+      ${insightsHtml ? '<div class="correlation-insights">' + insightsHtml + '</div>' : ''}
+      ${chartsHtml}
     </div>`
 
-  // Render scatter chart
-  destroyChart('correlation')
-  charts.correlation = new Chart(document.getElementById('correlation-chart').getContext('2d'), {
-    type: 'scatter',
-    data: {
-      datasets: [{
-        label: 'Sessions',
-        data: scatterData,
-        backgroundColor: pointColors,
-        borderColor: pointColors,
-        pointRadius: 6,
-        pointHoverRadius: 9,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: function(ctx) {
-              const d = ctx.raw
-              return [
-                `Score: ${d.x}%`,
-                `Tokens/Prompt: ${formatTokens(d.y)}`,
-                `Cache Hit: ${Math.round(d.cacheHitRate * 100)}%`,
-                `Date: ${d.date}`,
-              ]
-            }
-          }
-        }
-      },
-      scales: {
-        x: {
-          title: { display: true, text: 'Fluency Score (%)' },
-          min: xMin,
-          max: xMax,
-        },
-        y: {
-          title: { display: true, text: 'Tokens per Prompt' },
-          ticks: { callback: v => formatTokens(v) }
+  // --- Render Chart 1: Cost/Prompt vs Cache Read/Creation ---
+  if (chart1All.length >= 3) {
+    const d1 = chart1All.map(s => ({ x: s.cacheReadCreation, y: s.costPerPrompt, score: s.overall_score, date: s.started_at ? new Date(s.started_at).toLocaleDateString() : '-', cacheHit: Math.round((s.cache_hit_rate || 0) * 100) }))
+    const c1 = d1.map(d => d.score != null ? normalizedColor(d.score, scoreMin, scoreMax) : 'rgba(150,150,150,0.5)')
+    destroyChart('cacheCost')
+    charts.cacheCost = new Chart(document.getElementById('chart-cache-cost').getContext('2d'), {
+      type: 'scatter',
+      data: { datasets: [{ data: d1, backgroundColor: c1, borderColor: c1, pointRadius: 6, pointHoverRadius: 9 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => { const d = ctx.raw; return [`Cache Read/Create: ${d.x.toFixed(1)}x`, `Cost/Prompt: $${d.y.toFixed(2)}`, d.score != null ? `Score: ${d.score}%` : 'Score: —', `Cache Hit: ${d.cacheHit}%`, `Date: ${d.date}`] } } } },
+        scales: {
+          x: { title: { display: true, text: 'Cache Read / Creation Ratio' } },
+          y: { title: { display: true, text: 'Cost per Prompt ($)' }, ticks: { callback: v => '$' + v.toFixed(2) } }
         }
       }
-    }
-  })
+    })
+  }
+
+  // --- Render Chart 2: Cost/Prompt vs Output/Input ---
+  if (chart2All.length >= 3) {
+    const d2 = chart2All.map(s => ({ x: s.outputInput * 100, y: s.costPerPrompt, score: s.overall_score, date: s.started_at ? new Date(s.started_at).toLocaleDateString() : '-', cacheHit: Math.round((s.cache_hit_rate || 0) * 100) }))
+    const c2 = d2.map(d => d.score != null ? normalizedColor(d.score, scoreMin, scoreMax) : 'rgba(150,150,150,0.5)')
+    destroyChart('outputCost')
+    charts.outputCost = new Chart(document.getElementById('chart-output-cost').getContext('2d'), {
+      type: 'scatter',
+      data: { datasets: [{ data: d2, backgroundColor: c2, borderColor: c2, pointRadius: 6, pointHoverRadius: 9 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => { const d = ctx.raw; return [`Output/Input: ${d.x.toFixed(1)}%`, `Cost/Prompt: $${d.y.toFixed(2)}`, d.score != null ? `Score: ${d.score}%` : 'Score: —', `Cache Hit: ${d.cacheHit}%`, `Date: ${d.date}`] } } } },
+        scales: {
+          x: { title: { display: true, text: 'Output / Input Token Ratio (%)' }, ticks: { callback: v => v.toFixed(1) + '%' } },
+          y: { title: { display: true, text: 'Cost per Prompt ($)' }, ticks: { callback: v => '$' + v.toFixed(2) } }
+        }
+      }
+    })
+  }
+
+  // --- Render Chart 3: Score vs Cost/Prompt ---
+  if (chart3Data.length >= 3) {
+    const d3 = chart3Data.map(s => ({ x: s.costPerPrompt, y: s.overall_score, cacheHit: s.cache_hit_rate || 0, date: s.started_at ? new Date(s.started_at).toLocaleDateString() : '-' }))
+    const c3 = d3.map(d => normalizedColor(d.cacheHit, cacheMin, cacheMax))
+    const costValues = d3.map(d => d.x)
+    const costMax = Math.max(...costValues)
+    destroyChart('scoreCost')
+    charts.scoreCost = new Chart(document.getElementById('chart-score-cost').getContext('2d'), {
+      type: 'scatter',
+      data: { datasets: [{ data: d3, backgroundColor: c3, borderColor: c3, pointRadius: 6, pointHoverRadius: 9 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => { const d = ctx.raw; return [`Cost/Prompt: $${d.x.toFixed(2)}`, `Score: ${d.y}%`, `Cache Hit: ${Math.round(d.cacheHit * 100)}%`, `Date: ${d.date}`] } } } },
+        scales: {
+          x: { title: { display: true, text: 'Cost per Prompt ($)' }, max: costMax * 1.05, ticks: { callback: v => '$' + v.toFixed(2) } },
+          y: { title: { display: true, text: 'Fluency Score (%)' }, min: Math.max(0, Math.floor((Math.min(...d3.map(d => d.y)) - 5) / 10) * 10), max: 102, afterBuildTicks: axis => { axis.ticks = axis.ticks.filter(t => t.value <= 100); if (!axis.ticks.some(t => t.value === 100)) axis.ticks.push({ value: 100 }) }, ticks: { stepSize: 5 } }
+        }
+      }
+    })
+  }
+
 }
 
 // --- Fluency Scoring ---

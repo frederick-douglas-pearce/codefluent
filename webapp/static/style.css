@@ -925,6 +925,7 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 /* Session Token Table */
 .session-table-wrapper {
   margin-top: 24px;
+  overflow-x: auto;
 }
 .session-token-table {
   width: 100%;
@@ -970,6 +971,8 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 /* Score-Token Correlation */
 .correlation-section { margin-top: 24px; }
 .correlation-section h3 { font-size: 18px; font-weight: 600; margin-bottom: 12px; }
+.correlation-chart-block { margin-bottom: 24px; }
+.correlation-chart-block h4 { font-size: 15px; font-weight: 600; margin-bottom: 8px; color: var(--text-primary); }
 .correlation-chart-wrap { height: 300px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 8px; }
 .correlation-legend { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
 .legend-gradient { display: inline-block; width: 100px; height: 10px; border-radius: 5px; background: linear-gradient(to right, #DC2626, #D97706, #059669); }
