@@ -463,6 +463,66 @@ Recommendations are generated from the scoring aggregate by comparing `behavior_
 
 ---
 
+## Tab 5: Usage Dashboard — Session Analytics (v0.3.0)
+
+Below the ccusage token chart, the Usage tab includes a **Session Analytics** section that visualizes per-session token efficiency from parsed JSONL data.
+
+### Layout
+```
+┌──────────────────────────────────────────────────┐
+│  SESSION ANALYTICS HEADER                        │
+├──────────────────────────────────────────────────┤
+│  SUMMARY CARDS ROW (4 across)                    │
+│  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐           │
+│  │Total │ │ Avg  │ │ Avg  │ │Most  │           │
+│  │Cost  │ │Cost/ │ │Cost/ │ │Effic.│           │
+│  │$48.20│ │Sess. │ │Prompt│ │Session│           │
+│  └──────┘ └──────┘ └──────┘ └──────┘           │
+├──────────────────────────────────────────────────┤
+│  SCATTER CHARTS (3 side-by-side)                 │
+│  ┌─────────────┐ ┌─────────────┐ ┌────────────┐│
+│  │Cost/Prompt  │ │Cost/Prompt  │ │Fluency     ││
+│  │vs Cache Hit │ │vs Out/In %  │ │vs Cost/    ││
+│  │  ·  ·      │ │   ·   ·    │ │Prompt      ││
+│  │ · ·  ·     │ │  ·  ·  ·   │ │ ·  ·  ·    ││
+│  └─────────────┘ └─────────────┘ └────────────┘│
+│  (markers colored red→amber→green by score)      │
+├──────────────────────────────────────────────────┤
+│  SESSION DETAILS TABLE (sortable)                │
+│  Date | Project | Prompts | Tokens | Cost | ...  │
+│  ─────┼─────────┼─────────┼────────┼──────┼───── │
+│  3/12 │ myproj  │    15   │  250K  │$2.10 │ ...  │
+│  3/11 │ other   │     8   │  120K  │$0.95 │ ...  │
+│  [Show more]                                     │
+└──────────────────────────────────────────────────┘
+```
+
+### Chart Color Gradient
+
+Scatter chart markers use a continuous color gradient based on fluency score:
+- **0–50%**: Red (#DC2626) → Amber (#D97706)
+- **50–100%**: Amber (#D97706) → Green (#059669)
+
+This maps to a function `scoreColor(score)` that interpolates between the three stops.
+
+### Table Columns
+
+| Column | Data | Sortable |
+|--------|------|----------|
+| Date | Session start date | Yes (default desc) |
+| Project | Project short name | Yes |
+| Prompts | User message count | Yes |
+| Total Tokens | Sum of all token types | Yes |
+| Cost | Estimated cost (USD) | Yes |
+| Tokens/Prompt | total_tokens / prompts | Yes |
+| Cost/Prompt | estimated_cost / prompts | Yes |
+| Cache Hit | cache_read / (cache_read + cache_creation + input) | Yes |
+| Cache R/C | cache_read / cache_creation ratio | Yes |
+| Out/In | output / input ratio (shown as %) | Yes |
+| Score | Fluency score (if scored) | Yes |
+
+---
+
 ## Global CSS Components
 
 ### Tab Navigation

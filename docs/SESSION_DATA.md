@@ -85,3 +85,22 @@ Each session file contains one JSON object per line. The key message types used 
 | `thinking` | Extended thinking events | Thinking count signal |
 
 User prompt content can be either a plain string or an array of content blocks (e.g., `[{"type": "text", "text": "..."}]`). The parser handles both formats.
+
+## Token Usage Data for Session Analytics
+
+Assistant messages include a `usage` block with per-message token counts:
+
+```json
+{
+  "usage": {
+    "input_tokens": 3,
+    "output_tokens": 2,
+    "cache_creation_input_tokens": 14450,
+    "cache_read_input_tokens": 19155
+  }
+}
+```
+
+These are aggregated per session to compute cost estimates, cache efficiency ratios, and output/input ratios. Cost calculations use model-specific pricing from `shared/pricing.json`, which maps model name prefixes to per-token rates for input, output, cache creation, and cache read.
+
+The session analytics UI (Usage tab) uses this data to render efficiency summary cards, cost-efficiency scatter charts, and a sortable session details table. See `docs/TECHNICAL_SPEC.md` §7 for full details.

@@ -778,3 +778,65 @@ PATTERN_RECOMMENDATIONS = {
 ```
 
 The `/api/recommendations` endpoint (or hardcoded logic) compares the user's aggregate scores against these thresholds and returns applicable recommendations sorted by impact.
+
+---
+
+## 7. Session Token Analytics (v0.3.0)
+
+### Overview
+
+The Usage tab includes a **Session Analytics** section that aggregates per-session token usage from parsed JSONL data (assistant message `usage` blocks) and provides cost-efficiency insights. This runs entirely client-side in both the VS Code extension and webapp.
+
+### Data Source
+
+Token data comes from `type: "assistant"` messages in JSONL session files. Each assistant message contains:
+```json
+{
+  "usage": {
+    "input_tokens": 3,
+    "output_tokens": 2,
+    "cache_creation_input_tokens": 14450,
+    "cache_read_input_tokens": 19155
+  }
+}
+```
+
+These are summed per session. Cost estimates use model-specific pricing from `shared/pricing.json`.
+
+### Architecture
+
+| Component | Extension | Webapp |
+|-----------|-----------|--------|
+| Token aggregation | `analytics.ts` → `getSessionAnalytics()` IPC | `main.py` → `/api/sessions` (includes token fields) |
+| Pricing lookup | `pricing.ts` (reads `shared/pricing.json`) | Inline in `main.py` |
+| Frontend rendering | `media/app.js` → `loadSessionAnalytics()` | `static/app.js` → `loadSessionAnalytics()` |
+
+### Derived Metrics
+
+For each session:
+- **Total tokens** — sum of input + output + cache creation + cache read
+- **Estimated cost** — tokens × model-specific rates from `pricing.json`
+- **Cache hit rate** — `cache_read / (cache_read + cache_creation + input)` (0–1)
+- **Cache R/C ratio** — `cache_read / cache_creation` (higher = better reuse)
+- **Output/Input ratio** — `output / input` (higher = more output per fresh input)
+- **Cost per prompt** — `estimated_cost / user_message_count`
+- **Tokens per prompt** — `total_tokens / user_message_count`
+
+### UI Components
+
+1. **Summary cards** — Total cost, avg cost/session, avg cost/prompt, most efficient session
+2. **Scatter charts** (3 Chart.js scatter plots with continuous color gradients):
+   - Cost/Prompt vs Cache Hit Rate (feature → target, score as color)
+   - Cost/Prompt vs Output/Input Ratio (feature → target, score as color)
+   - Fluency Score vs Cost/Prompt (target → target, score as color)
+3. **Session details table** — Sortable columns: date, project, prompts, total tokens, cost, tokens/prompt, cost/prompt, cache hit, cache R/C, out/in, score
+
+### Color Gradient
+
+Chart markers use a red → amber → green gradient based on fluency score:
+- Score 0–50: red (#DC2626) → amber (#D97706)
+- Score 50–100: amber (#D97706) → green (#059669)
+
+### Project Filtering
+
+The webapp project dropdown and extension both support filtering session analytics by project. The webapp uses `getSelectedProject()` (short name) to match against `session.project`.

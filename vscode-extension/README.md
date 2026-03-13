@@ -18,7 +18,7 @@ CodeFluent parses your local Claude Code session files, scores your prompts agai
 
 1. Install the `.vsix` package:
    ```
-   code --install-extension codefluent-0.2.1.vsix
+   code --install-extension codefluent-0.2.2.vsix
    ```
 2. Open the CodeFluent sidebar by clicking the activity bar icon
 3. When prompted, enter your Anthropic API key (stored securely in VS Code SecretStorage)
@@ -65,7 +65,7 @@ GitHub-repo-scoped task suggestions — CodeFluent detects your current workspac
 
 ### Usage Dashboard
 
-Track daily and monthly token usage, costs, and session history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage).
+Track daily and monthly token usage, costs, and session history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage). Session analytics shows per-session efficiency metrics, cost-efficiency scatter charts with fluency score color gradients, and a sortable details table with cost/prompt, cache hit rates, and output/input ratios.
 
 ![Usage Dashboard](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage.png)
 

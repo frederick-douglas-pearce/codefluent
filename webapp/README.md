@@ -78,7 +78,7 @@ GitHub-repo-scoped task suggestions. Fetches open issues and recent activity, th
 
 ### Usage Dashboard
 
-Track daily and monthly token usage, costs, and session history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage). Click **Refresh** to fetch the latest data on demand.
+Track daily and monthly token usage, costs, and session history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage). Click **Refresh** to fetch the latest data on demand. Session analytics shows per-session efficiency metrics, cost-efficiency scatter charts with fluency score color gradients, and a sortable details table with cost/prompt, cache hit rates, and output/input ratios.
 
 ## How It Works
 

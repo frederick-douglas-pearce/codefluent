@@ -61,7 +61,7 @@ cd codefluent/vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.2.1.vsix
+code --install-extension codefluent-0.2.2.vsix
 ```
 
 **Windows (PowerShell):**
@@ -72,7 +72,7 @@ cd codefluent\vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.2.1.vsix
+code --install-extension codefluent-0.2.2.vsix
 ```
 
 Then reload VS Code. The CodeFluent icon appears in the activity bar.
@@ -166,7 +166,7 @@ The extension resolves this automatically via the system home directory.
 - **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
 - **Prompt Optimizer** — Paste any prompt and get an optimized version that naturally incorporates missing fluency behaviors. Considers your CLAUDE.md config so it won't add behaviors already covered by project conventions. Shows before/after effective scores, highlights added behaviors, and lets you copy or run the improved prompt directly.
 - **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
-- **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). A **Refresh** button fetches the latest data on demand. Stacked area charts show cache read/creation/input/output token breakdown.
+- **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). A **Refresh** button fetches the latest data on demand. Stacked area charts show cache read/creation/input/output token breakdown. Session analytics shows per-session efficiency metrics, cost-efficiency scatter charts with fluency score color gradients, and a sortable details table.
 - **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
 - **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
 - **VS Code Theming** — Automatically respects your light/dark theme.
@@ -194,7 +194,7 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 669 tests including security-focused suites | Regressions |
+| Automated testing | 769 tests including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -233,6 +233,8 @@ codefluent/
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub integration + task suggestions
 │   │   ├── prompts.ts         # Prompt loader + template filler
+│   │   ├── analytics.ts       # Session token analytics (efficiency, cost)
+│   │   ├── pricing.ts         # Token pricing lookup
 │   │   ├── cache.ts           # Persistent score caching
 │   │   ├── dataCache.ts       # Session/usage data caching
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
@@ -252,6 +254,7 @@ codefluent/
 │   └── static/                # Web frontend (HTML/CSS/JS)
 ├── shared/                    # Shared resources (both interfaces)
 │   ├── benchmarks.json        # Population benchmark data
+│   ├── pricing.json           # Token pricing by model
 │   └── prompts/               # Versioned prompt templates
 │       ├── registry.json      # Active version pointers
 │       ├── scoring/v1.0.md        # Session scoring prompt
@@ -287,7 +290,7 @@ npm run watch          # Continuous TypeScript compilation
 
 Four GitHub Actions workflows run automatically:
 
-- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 471 extension tests + 198 webapp tests. Must pass to merge.
+- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 528 extension tests + 241 webapp tests. Must pass to merge.
 - **Claude Code Review** (`claude-review.yml`) — AI-powered PR review on all PRs, responds to `@claude` mentions.
 - **Security Review** (`security-review.yml`) — Claude-based security scan on PRs, checks for XSS/injection vectors.
 - **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
@@ -295,7 +298,7 @@ Four GitHub Actions workflows run automatically:
 ### Testing
 
 ```bash
-npm test               # Run all Jest tests (471 tests across 12 suites)
+npm test               # Run all Jest tests (528 tests across 14 suites)
 ```
 
 ### Packaging
