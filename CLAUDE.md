@@ -50,6 +50,8 @@ codefluent/
 │   │   ├── webviewProvider.ts # WebviewViewProvider, IPC, terminal launch
 │   │   ├── parser.ts          # JSONL session parsing (~/.claude/projects/)
 │   │   ├── scoring.ts         # Fluency scoring via Anthropic API
+│   │   ├── analytics.ts       # Session token analytics (efficiency metrics, cost calculations)
+│   │   ├── pricing.ts         # Token pricing lookup (shared/pricing.json)
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub repo scoping + task suggestions
 │   │   ├── prompts.ts         # Prompt loader + template filler (shared/prompts/)
@@ -77,6 +79,7 @@ codefluent/
 │   └── uv.lock
 ├── shared/
 │   ├── benchmarks.json        # Benchmark data
+│   ├── pricing.json           # Token pricing by model (input/output/cache rates)
 │   └── prompts/               # Versioned prompt templates
 │       ├── registry.json          # Active version pointers
 │       ├── scoring/v1.0.md        # Session scoring prompt
@@ -105,11 +108,11 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 471 tests)
+npm test                   # Jest (unit + integration, 528 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.2.1.vsix
+code --install-extension codefluent-0.2.2.vsix
 
 # Debug: press F5 in VS Code with vscode-extension/ open
 
@@ -145,6 +148,7 @@ The webview (browser context) communicates with the extension host (Node context
 | `getCachedScores` | webview -> ext | Returns cached scores + aggregate (includes config behaviors) |
 | `getQuickwins` | webview -> ext | GitHub repo context + Claude suggestions |
 | `optimizePrompt` | webview -> ext | Scores input prompt, generates optimized version, scores output (2 API calls) |
+| `getSessionAnalytics` | webview -> ext | Returns per-session token metrics (efficiency, cost, cache ratios) |
 | `copyToClipboard` | webview -> ext | Copies text via `vscode.env.clipboard` |
 | `runInTerminal` | webview -> ext | Opens terminal, runs `claude "<prompt>"` |
 
@@ -167,7 +171,7 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 The webapp uses a project dropdown (populated from session data) to scope features to a specific project:
 - **Quick Wins:** Sends `project_path_encoded` to `/api/quickwins?project=...`, backend detects GitHub repo via `git remote get-url origin` in the decoded project directory
 - **Prompt Optimizer:** Sends `project_path_encoded` so the backend can find and score the project's `CLAUDE.md`
-- **Settings bar visibility per tab:** Data path shown only on Fluency Score; project dropdown on Fluency Score, Prompt Optimizer, and Quick Wins; neither on Recommendations or Usage
+- **Settings bar visibility per tab:** Data path shown only on Fluency Score; project dropdown on Fluency Score, Prompt Optimizer, Quick Wins, and Usage (for session analytics filtering); settings bar hidden on Recommendations
 - Frontend resolves `project_path_encoded` from session data via `getSelectedProjectEncoded()` (short name → encoded path lookup)
 
 ### Terminal Launch
@@ -189,7 +193,7 @@ The webapp uses a project dropdown (populated from session data) to scope featur
 - **Commit to feature/fix branches freely** — push often, squash or merge to main via PR.
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (471 tests) in `vscode-extension/`, `pytest` (198 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (528 tests) in `vscode-extension/`, `pytest` (241 tests) in `webapp/`
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
 - **`release.yml`** — Release workflow for publishing
@@ -197,7 +201,7 @@ The webapp uses a project dropdown (populated from session data) to scope featur
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 471 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 528 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -383,7 +387,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 471 Jest tests (12 suites)
+npm test                   # Runs all 528 Jest tests (14 suites)
 
 # Test structure:
 # test/unit/prompts.test.ts                    — prompt loader + template filler (all prompt types)
@@ -396,12 +400,14 @@ npm test                   # Runs all 471 Jest tests (12 suites)
 # test/unit/parser.test.ts                     — JSONL parsing, content extraction, subagent filtering
 # test/unit/recommendations.test.ts            — recommendation generation, behavior categorization
 # test/unit/usage.test.ts                      — ccusage CLI bridge, data formatting
+# test/unit/analytics.test.ts                  — session analytics, efficiency metrics, cost calculations
+# test/unit/pricing.test.ts                    — token pricing lookup, model matching, fallback rates
 # test/integration/extension.test.ts           — activation, status bar, commands
 # test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests, optimizer IPC
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (198 tests, 5 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (241 tests, 5 suites)
 
 # Test structure:
 # tests/test_api.py              — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage
@@ -422,5 +428,5 @@ Run before merging PRs that touch webapp UI or API. Start the server with `uv ru
 4. **Fluency scoring** — Run Scoring button triggers analysis, results display with score ring and behavior bars
 5. **Prompt Optimizer** — paste prompt, click Optimize, input/output scores and optimized prompt appear
 6. **Quick Wins** — Generate button works; project-scoped mode uses selected project
-7. **Usage tab** — data renders with pace cards and chart (if ccusage data exists)
+7. **Usage tab** — data renders with pace cards and chart (if ccusage data exists); session analytics section shows efficiency cards, cost-efficiency scatter charts, and sortable session details table; project dropdown filters session data
 8. **Health endpoint** — `GET /health` returns status, version, and dependency checks

@@ -6,7 +6,7 @@ Millions of developers use AI coding assistants daily, but nobody knows if they'
 
 CodeFluent reads your local Claude Code session data, scores your prompting behaviors against [Anthropic's AI Fluency Research](https://www.anthropic.com/research/AI-fluency-index), and gives you actionable recommendations to become a more effective AI collaborator. Available as a **VS Code extension** and a **standalone web app**.
 
-Originally built at PDX Hacks 2026, now in active development for production release.
+Originally built at PDX Hacks 2026. Now publicly available and actively maintained.
 
 ### How It Compares
 
@@ -28,6 +28,8 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 - **Research-grounded, not vibes.** Every score maps to Anthropic's AI Fluency Index (Feb 2026) and Coding Skills Formation study (Jan 2026). The benchmark bars are real population data.
 - **First to score collaboration quality.** Existing tools count tokens or track errors. CodeFluent is the first to analyze *how* you interact with AI and whether your patterns build or erode skills.
 - **AI evaluating AI collaboration.** Claude scores your prompts against the fluency framework, creating a feedback loop: the AI tells you how to work with it more effectively.
+- **Not just scoring — active coaching.** The Prompt Optimizer and Quick Wins generate ready-to-use prompts that incorporate missing fluency behaviors and respect your project's CLAUDE.md config. They don't just tell you what to improve — they show you how.
+- **Connects fluency to cost.** Session analytics links your fluency scores to token spending and cache efficiency, revealing which collaboration patterns are most cost-effective. No other tool examines these relationships.
 - **Native VS Code integration.** Lives in your sidebar, respects your theme, launches Claude Code sessions directly from suggestions.
 - **Completely local and private.** All session data stays on your machine. The only external calls are to the Anthropic API for scoring.
 - **No server infrastructure.** No database, no auth, no backend to maintain. Install the `.vsix` and go.
@@ -61,7 +63,7 @@ cd codefluent/vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.2.1.vsix
+code --install-extension codefluent-0.2.2.vsix
 ```
 
 **Windows (PowerShell):**
@@ -72,7 +74,7 @@ cd codefluent\vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.2.1.vsix
+code --install-extension codefluent-0.2.2.vsix
 ```
 
 Then reload VS Code. The CodeFluent icon appears in the activity bar.
@@ -142,9 +144,13 @@ The extension resolves this automatically via the system home directory.
 |------------------|------------|
 | ![Prompt Optimizer tab](images/demo-optimizer.png) | ![Quick Wins tab](images/demo-quickwins.png) |
 
-| Usage |
-|-------|
-| ![Usage tab](images/demo-usage.png) |
+| Usage | Session Analytics |
+|-------|-------------------|
+| ![Usage tab](images/demo-usage.png) | ![Session Analytics](images/demo-usage-analytics.png) |
+
+| Cost Efficiency Charts |
+|------------------------|
+| ![Cost Efficiency Charts](images/demo-usage-charts.png) |
 
 ### VS Code Extension
 
@@ -156,9 +162,13 @@ The extension resolves this automatically via the system home directory.
 |------------------|------------|
 | ![VS Code sidebar showing Prompt Optimizer](images/vscode-optimizer.png) | ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) |
 
-| Usage |
-|-------|
-| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) |
+| Usage | Session Analytics |
+|-------|-------------------|
+| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) | ![VS Code sidebar showing Session Analytics cards and scatter chart](images/vscode-usage-analytics.png) |
+
+| Cost Efficiency Charts |
+|------------------------|
+| ![VS Code sidebar showing cost efficiency scatter charts and session table](images/vscode-usage-charts.png) |
 
 ## Features
 
@@ -166,10 +176,11 @@ The extension resolves this automatically via the system home directory.
 - **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
 - **Prompt Optimizer** — Paste any prompt and get an optimized version that naturally incorporates missing fluency behaviors. Considers your CLAUDE.md config so it won't add behaviors already covered by project conventions. Shows before/after effective scores, highlights added behaviors, and lets you copy or run the improved prompt directly.
 - **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
-- **Usage Dashboard** — Token consumption, cost tracking, model breakdown, and usage pace from your Claude Code history via [ccusage](https://github.com/ryoppippi/ccusage). A **Refresh** button fetches the latest data on demand. Stacked area charts show cache read/creation/input/output token breakdown.
+- **Usage Dashboard** — Two complementary views of your Claude Code usage. **All-projects analytics** (via [ccusage](https://github.com/ryoppippi/ccusage)) shows daily usage pace cards, cost projections, and a stacked token breakdown chart across all projects. **Session analytics** (from parsed JSONL history) shows per-session efficiency metrics — cost/prompt, cache hit rates, output/input ratios — with summary cards, three cost-efficiency scatter charts colored by fluency score, and a sortable details table. A **Refresh** button fetches the latest data on demand.
 - **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
 - **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
 - **VS Code Theming** — Automatically respects your light/dark theme.
+- **Project Scoping (Web App)** — A project dropdown filters fluency scoring, prompt optimization, quick wins, and session analytics to a specific project, so you can analyze each codebase independently.
 
 ## How It Works
 
@@ -194,7 +205,7 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 669 tests including security-focused suites | Regressions |
+| Automated testing | 769 tests including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -233,6 +244,8 @@ codefluent/
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub integration + task suggestions
 │   │   ├── prompts.ts         # Prompt loader + template filler
+│   │   ├── analytics.ts       # Session token analytics (efficiency, cost)
+│   │   ├── pricing.ts         # Token pricing lookup
 │   │   ├── cache.ts           # Persistent score caching
 │   │   ├── dataCache.ts       # Session/usage data caching
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
@@ -240,7 +253,8 @@ codefluent/
 │   │   ├── index.html         # Webview UI
 │   │   ├── app.js             # Frontend logic + Chart.js rendering
 │   │   ├── style.css          # VS Code theme-aware design system
-│   │   └── icon.svg           # Activity bar icon
+│   │   ├── icon.svg           # Activity bar icon
+│   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
 │   ├── test/
 │   │   ├── unit/              # Unit tests (scoring, parsing, caching, XSS, platform)
 │   │   └── integration/       # Integration tests (extension, webview)
@@ -249,9 +263,12 @@ codefluent/
 ├── webapp/                    # FastAPI web app (standalone alternative)
 │   ├── main.py                # FastAPI backend
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
-│   └── static/                # Web frontend (HTML/CSS/JS)
+│   ├── static/                # Web frontend (HTML/CSS/JS)
+│   ├── tests/                 # Pytest suite (API, security, helpers, prompts)
+│   └── pyproject.toml         # Python dependencies
 ├── shared/                    # Shared resources (both interfaces)
 │   ├── benchmarks.json        # Population benchmark data
+│   ├── pricing.json           # Token pricing by model
 │   └── prompts/               # Versioned prompt templates
 │       ├── registry.json      # Active version pointers
 │       ├── scoring/v1.0.md        # Session scoring prompt
@@ -262,6 +279,7 @@ codefluent/
 │   ├── PROJECT_PLAN.md
 │   ├── TECHNICAL_SPEC.md
 │   ├── UI_SPEC.md
+│   ├── SESSION_DATA.md
 │   ├── REFERENCES.md
 │   └── DEMO_SCRIPT.md
 ├── images/                    # Demo screenshots
@@ -270,6 +288,8 @@ codefluent/
 
 ## Development
 
+### VS Code Extension
+
 ```bash
 cd vscode-extension
 npm install
@@ -277,32 +297,50 @@ npm run watch          # Continuous TypeScript compilation
 # Press F5 in VS Code to launch Extension Development Host
 ```
 
+See [`vscode-extension/README.md`](vscode-extension/README.md) for full setup, packaging, and installation details.
+
+### Web App
+
+```bash
+cd webapp
+uv sync
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+See [`webapp/README.md`](webapp/README.md) for configuration, CORS, and Windows notes.
+
+### Testing
+
+The project has **769 automated tests** across both interfaces:
+
+```bash
+cd vscode-extension
+npm test                   # 528 tests across 14 suites (Jest)
+
+cd webapp
+uv run pytest tests/ -v    # 241 tests across 5 suites (pytest)
+```
+
+Test suites cover scoring, parsing, caching, analytics, pricing, XSS prevention, shell injection, path traversal, rate limiting, CORS, and API surface. All tests must pass before merging to main.
+
+### CI/CD
+
+Four GitHub Actions workflows run automatically:
+
+- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 769 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
+- **Claude Code Review** (`claude-review.yml`) — AI-powered PR review, responds to `@claude` mentions.
+- **Security Review** (`security-review.yml`) — Grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml).
+- **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
+
 ### Branching Strategy
 
 - **`main`** — Always releasable. Protected by CI, requires a PR to merge.
 - **`feature/<issue>-desc`** — New features (e.g., `feature/44-remaining-recommendations`)
 - **`fix/<issue>-desc`** — Bug fixes (e.g., `fix/46-cache-unbounded`)
 
-### CI/CD
+## Contributing
 
-Four GitHub Actions workflows run automatically:
-
-- **CI** (`ci.yml`) — Runs on PRs + pushes to main. Compiles TypeScript, runs all 471 extension tests + 198 webapp tests. Must pass to merge.
-- **Claude Code Review** (`claude-review.yml`) — AI-powered PR review on all PRs, responds to `@claude` mentions.
-- **Security Review** (`security-review.yml`) — Claude-based security scan on PRs, checks for XSS/injection vectors.
-- **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
-
-### Testing
-
-```bash
-npm test               # Run all Jest tests (471 tests across 12 suites)
-```
-
-### Packaging
-
-```bash
-npx @vscode/vsce package --allow-missing-repository
-```
+Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, code conventions, security rules, and the PR checklist.
 
 ## Research Foundations
 
@@ -312,4 +350,4 @@ npx @vscode/vsce package --allow-missing-repository
 
 ## License
 
-MIT
+[MIT](LICENSE)

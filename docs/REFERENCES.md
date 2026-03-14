@@ -50,13 +50,7 @@ All research, documentation, and tools that inform CodeFluent's design and scori
 ### 6. ccusage
 - **GitHub:** https://github.com/ryoppippi/ccusage
 - **Role in CodeFluent:** Primary source for all token/cost data
-- **Verified commands:**
-  ```bash
-  npx ccusage@latest daily --json > data/ccusage/daily.json
-  npx ccusage@latest monthly --json > data/ccusage/monthly.json
-  npx ccusage@latest session --json -o desc > data/ccusage/session.json
-  npx ccusage@latest blocks --json > data/ccusage/blocks.json
-  ```
+- **Data types used:** `daily`, `monthly`, `session` (called via `npx ccusage@latest <type> --json`)
 
 ### 7. Community Resources
 - https://rosmur.github.io/claudecode-best-practices/
@@ -64,24 +58,7 @@ All research, documentation, and tools that inform CodeFluent's design and scori
 
 ---
 
-## Verified Local Data
-
-| Item | Value |
-|------|-------|
-| Session data path | `~/.claude/projects/` |
-| Projects | 2 active repos |
-| Total sessions | 117 JSONL files |
-| Claude Code version | 2.1.44 |
-| Models in use | claude-opus-4-6, claude-opus-4-5-20251101 |
-| Date range | Dec 28, 2025 – Feb 27, 2026 (2 months) |
-| Python | 3.12.3 |
-| Node | v22.18.0 |
-| Package manager | uv |
-| GitHub CLI | authenticated |
-
----
-
-## Verified JSONL Schema
+## JSONL Schema
 
 **User messages:** `type: "user"` → `message.content` (string or array of `{type: "text", text: "..."}`)
 
@@ -91,7 +68,7 @@ All research, documentation, and tools that inform CodeFluent's design and scori
 
 **Plan Mode signal:** `type: "user"` → `planContent` field (present when Plan Mode used)
 
-**Message types in data:** user (96), assistant (129), tool_use (86), tool_result (86), progress (81), thinking (4), system (4), file-history-snapshot (22), plus streaming types
+See [`SESSION_DATA.md`](SESSION_DATA.md) for full format details, message types, and scoring scope.
 
 ## ccusage JSON Schema
 
