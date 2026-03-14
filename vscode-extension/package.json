@@ -2,7 +2,7 @@
   "name": "codefluent",
   "displayName": "CodeFluent",
   "description": "Claude Code analytics dashboard — AI fluency scoring, usage tracking, and recommendations",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "publisher": "frederick-douglas-pearce",
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
