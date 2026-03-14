@@ -13,3 +13,6 @@ vscode-extension/coverage/
 
 # Playwright MCP
 .playwright-mcp/
+
+# Social media content
+social/
