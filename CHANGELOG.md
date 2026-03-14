@@ -5,6 +5,13 @@ All notable changes to the CodeFluent project will be documented in this file. T
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.1](https://github.com/frederick-douglas-pearce/codefluent/compare/v0.3.0...v0.3.1) (2026-03-14)
+
+
+### Bug Fixes
+
+* add FORCE_JAVASCRIPT_ACTIONS_TO_NODE24 to release-please workflow ([aa14fc0](https://github.com/frederick-douglas-pearce/codefluent/commit/aa14fc09627e2c74f88346d8202426acd0f076a2))
+
 ## [0.3.0] - 2026-03-14
 
 ### Added
