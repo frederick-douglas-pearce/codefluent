@@ -1,9 +1,31 @@
 # Changelog
 
-All notable changes to the CodeFluent extension will be documented in this file.
+Extension-specific changes. For the full project changelog (including webapp and shared components), see the [root CHANGELOG](../CHANGELOG.md).
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
+
+## [0.3.0] - 2026-03-14
+
+### Added
+
+- **Session token analytics** — per-session token aggregation from JSONL data with cost estimation, cache hit rates, and output/input ratios displayed on the Usage tab (#86, #88, #89)
+- **Cost-efficiency scatter charts** — 3 scatter plots with continuous red-amber-green color gradient by fluency score: Cost/Prompt vs Cache Hit Rate, Cost/Prompt vs Output/Input Ratio, Fluency Score vs Cost/Prompt (#90, #102)
+- **Per-session cost estimation** — model-specific pricing from `shared/pricing.json` (#91)
+- **Session analytics project filtering** — filter analytics by selected project (#104)
+- **Sortable session details table** — date, project, prompts, tokens, cost, cost/prompt, cache hit, cache R/C, out/in, score
+
+### Changed
+
+- Daily Token Usage chart switched to log scale (#100)
+- Replaced Avg Tokens/Prompt summary card with Avg Cost/Prompt
+- Test coverage: 528 tests across 14 suites
+
+### Fixed
+
+- Session analytics OOM crash on large datasets
+- Sparkline score history not scoped to current project
+- Score chart y-axis clipping above 100
 
 ## [0.2.0] - 2026-03-08
 

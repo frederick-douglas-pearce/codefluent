@@ -90,6 +90,23 @@ uv run pytest tests/test_api.py # Run a specific test file
 
 Commit to feature/fix branches freely — push often, squash or merge to main via PR. See the [CI/CD section](README.md#cicd) in the README for details on automated workflows.
 
+### Commit Messages
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for automated changelog generation. Prefix your commit messages:
+
+| Prefix | Purpose | Version bump |
+|--------|---------|-------------|
+| `feat:` | New feature | Minor (0.x.0) |
+| `fix:` | Bug fix | Patch (0.0.x) |
+| `docs:` | Documentation only | None |
+| `test:` | Adding or updating tests | None |
+| `chore:` | Maintenance, dependencies, CI | None |
+| `refactor:` | Code restructuring | None |
+
+Example: `feat: add session token analytics to Usage tab (#89)`
+
+[Release Please](https://github.com/googleapis/release-please) uses these prefixes to auto-generate changelogs and determine version bumps. Only `feat` and `fix` commits appear in the changelog by default.
+
 ## Code Conventions
 
 ### TypeScript (extension — `vscode-extension/src/`)

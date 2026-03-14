@@ -330,13 +330,16 @@ Four GitHub Actions workflows run automatically:
 - **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 769 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
 - **Claude Code Review** (`claude-review.yml`) — AI-powered PR review, responds to `@claude` mentions.
 - **Security Review** (`security-review.yml`) — Grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml).
-- **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX and creates GitHub Release.
+- **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX, publishes to VS Code Marketplace, uploads to GitHub Release.
+- **Release Please** (`release-please.yml`) — Auto-generates release PRs with changelog updates and version bumps from [Conventional Commits](https://www.conventionalcommits.org/).
 
 ### Branching Strategy
 
 - **`main`** — Always releasable. Protected by CI, requires a PR to merge.
 - **`feature/<issue>-desc`** — New features (e.g., `feature/44-remaining-recommendations`)
 - **`fix/<issue>-desc`** — Bug fixes (e.g., `fix/46-cache-unbounded`)
+
+Commit messages use [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, etc.) for automated changelog generation. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for details.
 
 ## Contributing
 

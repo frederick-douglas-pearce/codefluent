@@ -68,11 +68,14 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: npx @vscode/vsce publish --pat "$VSCE_PAT"
 
-      - name: Create GitHub Release
+      - name: Upload VSIX to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
+          # Release Please creates the GitHub Release; upload VSIX as asset
+          # Falls back to creating a new release if one doesn't exist (manual tag)
+          gh release upload "$TAG" "${{ env.vsix_path }}#${{ env.vsix_name }}" --clobber 2>/dev/null || \
           gh release create "$TAG" \
             --generate-notes \
             --title "$TAG" \
