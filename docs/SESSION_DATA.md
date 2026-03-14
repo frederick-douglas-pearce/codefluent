@@ -2,7 +2,13 @@
 
 ## Quick Summary
 
-CodeFluent scores your AI fluency based on Claude Code session transcripts stored as JSONL files at `~/.claude/projects/`. **Session transcripts are only available from late January 2026 onward** — Claude Code did not persist full session transcripts before that. Subagent sessions (spawned by Claude's Agent tool) are excluded from scoring because they contain AI-generated prompts, not human input.
+CodeFluent scores your AI fluency based on Claude Code session transcripts stored as JSONL files. **Session transcripts are only available from late January 2026 onward** — Claude Code did not persist full session transcripts before that. Subagent sessions (spawned by Claude's Agent tool) are excluded from scoring because they contain AI-generated prompts, not human input.
+
+| Platform | Session data path |
+|----------|-------------------|
+| Linux | `~/.claude/projects/` |
+| macOS | `~/.claude/projects/` |
+| Windows | `C:\Users\<username>\.claude\projects\` |
 
 ## Session Data Availability
 
@@ -18,7 +24,9 @@ If you've been using Claude Code since before late January 2026, you may notice 
 | Usage stats | `~/.claude/stats-cache.json` | Aggregate daily counts (sessions, messages, tool calls) | No — aggregate counts only, no prompt text |
 | File history | `~/.claude/file-history/` | File snapshots versioned per session | No — file contents only, not conversations |
 | Debug logs | `~/.claude/debug/` | Debug output per session | No — debug data, not session transcripts |
-| MCP logs | `~/.cache/claude-cli-nodejs/` | MCP tool communication logs | No — tool protocol logs, not session data |
+| MCP logs | `~/.cache/claude-cli-nodejs/` (Linux), `~/Library/Caches/claude-cli-nodejs/` (macOS), `%LOCALAPPDATA%\claude-cli-nodejs\` (Windows) | MCP tool communication logs | No — tool protocol logs, not session data |
+
+> **Note:** On Windows, `~/.claude/` maps to `C:\Users\<username>\.claude\`. All other paths in this table follow the same pattern.
 
 ### Why Some Projects May Be Missing
 
@@ -45,7 +53,7 @@ Claude Code stores session data at `~/.claude/projects/` using the following str
 
 - **Main sessions** are flat `.jsonl` files named with a UUID (e.g., `1a67a55f-b4ed-45f9-8347-bde22cd0609c.jsonl`)
 - **Support directories** share the same UUID as the flat file and contain subagent data and tool results
-- **Project path encoding** replaces `/` with `-` in the project path (e.g., `/home/user/my-project` becomes `-home-user-my-project`)
+- **Project path encoding** replaces path separators with `-` (e.g., `/home/user/my-project` → `-home-user-my-project` on Linux/macOS, `C:\Users\user\my-project` → `-C-Users-user-my-project` on Windows)
 - Both the flat file and its support directory may coexist for the same session
 - Some support directories exist without a corresponding flat file — these contain only subagent and tool-result data
 
@@ -66,11 +74,20 @@ Claude Code stores session data at `~/.claude/projects/` using the following str
 
 ### How to verify your session count
 
-The number of sessions shown in CodeFluent's dropdown should match the number of `.jsonl` files in your `~/.claude/projects/` directories (excluding subagent files). You can check with:
+The number of sessions shown in CodeFluent's dropdown should match the number of `.jsonl` files in your session directories (excluding subagent files).
+
+**Linux / macOS:**
 
 ```bash
 # Count main session files (flat .jsonl files only)
 find ~/.claude/projects -maxdepth 2 -name "*.jsonl" | wc -l
+```
+
+**Windows (PowerShell):**
+
+```powershell
+# Count main session files (flat .jsonl files only)
+(Get-ChildItem "$env:USERPROFILE\.claude\projects\*\*.jsonl").Count
 ```
 
 ## JSONL Session Format
