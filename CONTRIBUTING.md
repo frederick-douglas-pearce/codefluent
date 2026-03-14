@@ -2,6 +2,8 @@
 
 Thanks for your interest in contributing to CodeFluent! This guide covers everything you need to get started.
 
+CodeFluent ships **two production interfaces** — a VS Code extension and a FastAPI web app — both actively maintained and held to the same standards. See the [README](README.md) for a full project overview and [project structure](README.md#project-structure).
+
 ## Prerequisites
 
 - **Node.js 22+** — extension runtime and `npx ccusage`
@@ -13,32 +15,39 @@ Thanks for your interest in contributing to CodeFluent! This guide covers everyt
 
 ## Dev Setup
 
+### VS Code Extension
+
 ```bash
-# Clone the repo
 git clone https://github.com/frederick-douglas-pearce/codefluent.git
 cd codefluent/vscode-extension
-
-# Install dependencies
 npm install
-
-# Start continuous compilation
-npm run watch
+npm run watch          # Continuous TypeScript compilation
 ```
 
-To debug the VS Code extension, open `vscode-extension/` in VS Code and press **F5** to launch the Extension Development Host.
+To debug, open `vscode-extension/` in VS Code and press **F5** to launch the Extension Development Host. See [`vscode-extension/README.md`](vscode-extension/README.md) for packaging and installation.
 
-For the web app, see [`webapp/README.md`](webapp/README.md).
+### Web App
+
+```bash
+cd codefluent/webapp
+uv sync
+uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Then open `http://localhost:8000`. See [`webapp/README.md`](webapp/README.md) for configuration and Windows notes.
 
 ## Running Tests
 
+The project has **769 automated tests** across both interfaces. All must pass before merging.
+
+### VS Code Extension (528 tests, 14 suites)
+
 ```bash
 cd vscode-extension
-npm test                        # Run all 528 tests across 14 suites
+npm test                        # Run all tests
 npx jest --coverage             # Run with coverage report
 npx jest test/unit/scoring      # Run a specific test file
 ```
-
-All tests must pass before submitting a PR. The test suites cover:
 
 | Suite | What it tests |
 |-------|--------------|
@@ -48,9 +57,38 @@ All tests must pass before submitting a PR. The test suites cover:
 | `platform.test.ts` | Cross-platform shell, escaping, npx helpers |
 | `parser.test.ts` | JSONL session file parsing |
 | `cache.test.ts` | Score cache read/write, invalidation |
+| `dataCache.test.ts` | Session/usage data caching, stale-while-revalidate |
+| `analytics.test.ts` | Session analytics, efficiency metrics, cost calculations |
+| `pricing.test.ts` | Token pricing lookup, model matching, fallback rates |
 | `usage.test.ts` | ccusage CLI bridge |
+| `prompts.test.ts` | Prompt loader + template filler |
+| `recommendations.test.ts` | Recommendation generation, behavior categorization |
 | `extension.test.ts` | Activation, status bar, commands |
 | `webviewProvider.test.ts` | Message handling, HTML generation, injection tests |
+
+### Web App (241 tests, 5 suites)
+
+```bash
+cd webapp
+uv run pytest tests/ -v         # Run all tests
+uv run pytest tests/test_api.py # Run a specific test file
+```
+
+| Suite | What it tests |
+|-------|--------------|
+| `test_api.py` | Health endpoint, sessions, scores, scoring, optimizer, quickwins, usage |
+| `test_helpers.py` | Path decoding, repo detection, validators, compute_aggregate |
+| `test_security.py` | Rate limiting, CORS, error leakage, path traversal, security headers |
+| `test_extract_prompts.py` | JSONL parsing, content extraction, session filtering |
+| `test_prompts.py` | Prompt loading, template filling, registry consistency |
+
+## Branching Strategy
+
+- **`main`** — Always releasable. Protected by CI, requires a PR to merge.
+- **`feature/<issue>-desc`** — New features (e.g., `feature/44-remaining-recommendations`)
+- **`fix/<issue>-desc`** — Bug fixes (e.g., `fix/46-cache-unbounded`)
+
+Commit to feature/fix branches freely — push often, squash or merge to main via PR. See the [CI/CD section](README.md#cicd) in the README for details on automated workflows.
 
 ## Code Conventions
 
@@ -64,6 +102,12 @@ All tests must pass before submitting a PR. The test suites cover:
 
 - ES6+, no semicolons, async/await
 - **No inline `onclick` handlers** — the webview uses nonce-based CSP that blocks them. Use event delegation on `document` instead.
+
+### Python (webapp — `webapp/`)
+
+- Python 3.12+, type hints encouraged
+- Pydantic models for request/response validation
+- `subprocess.run` with argument arrays (never shell strings)
 
 ### CSS
 
@@ -88,7 +132,7 @@ html += `<span>${userInput}</span>`
 
 ### Command Injection Prevention
 
-All shell commands **must** use `execFileSync` (or `execFile`) with argument arrays. Never use string interpolation or `exec` with shell strings:
+All shell commands **must** use `execFileSync` / `subprocess.run` with argument arrays. Never use string interpolation or `exec` with shell strings:
 
 ```typescript
 // Good
@@ -98,9 +142,13 @@ execFileSync('gh', ['issue', 'list', '--repo', repoName])
 execSync(`gh issue list --repo ${repoName}`)
 ```
 
+### API Key Redaction
+
+All error paths must sanitize via `sanitizeError()` (extension) or `_sanitize_error()` (webapp) to strip `sk-ant-*` tokens before exposing to users.
+
 ### Test Coverage
 
-XSS and injection tests exist in `test/unit/xss.test.ts` and `test/unit/quickwins.test.ts`. These must stay green.
+Security-focused test suites exist in both interfaces (`xss.test.ts`, `quickwins.test.ts`, `test_security.py`). These must stay green.
 
 ## Feature Parity
 
@@ -114,18 +162,16 @@ CodeFluent ships **two production interfaces**: the VS Code extension and the we
 
 Before submitting a pull request, verify:
 
-- [ ] `npm test` passes (all 528+ tests green)
+- [ ] `npm test` passes (528+ extension tests green)
+- [ ] `uv run pytest` passes (241+ webapp tests green)
 - [ ] No regressions in existing functionality
 - [ ] New features include test coverage
 - [ ] Both interfaces updated if the change affects shared functionality
 - [ ] No inline `onclick` handlers in webview HTML
 - [ ] User-controlled strings use `escapeHtml()` in HTML contexts
-- [ ] Shell commands use `execFileSync` with argument arrays
+- [ ] Shell commands use `execFileSync` / `subprocess.run` with argument arrays
+- [ ] Error messages sanitized (no API keys in user-facing errors)
 - [ ] Code follows existing conventions (TypeScript strict, no semicolons in JS)
-
-## Project Structure
-
-See the [README](README.md#project-structure) for a full directory layout.
 
 ## Questions?
 
