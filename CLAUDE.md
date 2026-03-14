@@ -90,7 +90,10 @@ codefluent/
 │   ├── ci.yml                 # Tests + lint on PR
 │   ├── claude-review.yml      # AI code review (needs-review label)
 │   ├── security-review.yml    # Security-focused review
-│   └── release.yml            # Release workflow
+│   ├── release.yml            # Build VSIX + publish on tag
+│   └── release-please.yml     # Auto release PRs + changelog
+├── release-please-config.json # Release Please configuration
+├── .release-please-manifest.json # Current version tracking
 ├── data/                      # Generated data (gitignored)
 └── images/                    # Demo screenshots
 ```
@@ -192,11 +195,39 @@ The webapp uses a project dropdown (populated from session data) to scope featur
 - **PR required to merge to main** — CI runs automatically on the PR. All tests must pass before merge.
 - **Commit to feature/fix branches freely** — push often, squash or merge to main via PR.
 
+### Commit Messages (Conventional Commits)
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) for automated changelog generation via [Release Please](https://github.com/googleapis/release-please).
+
+**Required prefixes:**
+- `feat:` — new feature (triggers minor version bump)
+- `fix:` — bug fix (triggers patch version bump)
+- `docs:` — documentation only
+- `test:` — adding or updating tests
+- `chore:` — maintenance, dependencies, CI
+- `refactor:` — code change that neither fixes a bug nor adds a feature
+
+**Breaking changes:** Add `!` after the type (e.g., `feat!: remove legacy API`) or include `BREAKING CHANGE:` in the commit body. Triggers a major version bump.
+
+**Examples:**
+```
+feat: add session token analytics to Usage tab (#89)
+fix: sparkline score history not scoped to current project
+docs: update TECHNICAL_SPEC for v0.3.0 changes
+chore: bump @anthropic-ai/sdk to 0.52.0
+```
+
+### Release Workflow
+1. Merge PRs with conventional commit messages to `main`
+2. Release Please auto-creates/updates a release PR with changelog + version bumps
+3. When ready to release, merge the release PR
+4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
+
 ### CI Workflows
 - **`ci.yml`** — Runs on every PR: `npm test` (528 tests) in `vscode-extension/`, `pytest` (241 tests) in `webapp/`
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
-- **`release.yml`** — Release workflow for publishing
+- **`release.yml`** — Triggered by version tags: builds VSIX, publishes to Marketplace, uploads to GitHub Release
+- **`release-please.yml`** — Auto-creates release PRs with changelog + version bumps from conventional commits
 
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.

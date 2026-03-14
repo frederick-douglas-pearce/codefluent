@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the CodeFluent extension will be documented in this file.
+Extension-specific changes. For the full project changelog (including webapp and shared components), see the [root CHANGELOG](../CHANGELOG.md).
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
