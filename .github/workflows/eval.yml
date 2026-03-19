@@ -1,0 +1,27 @@
+name: Eval
+
+on:
+  pull_request:
+    paths:
+      - 'shared/prompts/**'
+
+jobs:
+  eval:
+    name: Scoring Regression Checks
+    runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        working-directory: webapp
+        run: uv sync --extra dev
+
+      - name: Run eval checks
+        working-directory: webapp
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: uv run python ../shared/eval/run_eval.py --check all --sections single_scoring,config_scoring --verbose
