@@ -80,14 +80,23 @@ codefluent/
 ├── shared/
 │   ├── benchmarks.json        # Benchmark data
 │   ├── pricing.json           # Token pricing by model (input/output/cache rates)
-│   └── prompts/               # Versioned prompt templates
-│       ├── registry.json          # Active version pointers
-│       ├── scoring/v1.0.md        # Session scoring prompt
-│       ├── config/v1.0.md         # CLAUDE.md scoring prompt
-│       ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
-│       └── single_scoring/v1.0.md # Single-prompt verification scorer
+│   ├── prompts/               # Versioned prompt templates
+│   │   ├── registry.json          # Active version pointers
+│   │   ├── scoring/v1.0.md        # Session scoring prompt
+│   │   ├── config/v1.0.md         # CLAUDE.md scoring prompt
+│   │   ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
+│   │   └── single_scoring/v1.0.md # Single-prompt verification scorer
+│   └── eval/                  # Scoring regression testing framework
+│       ├── README.md              # Golden set + eval runner docs
+│       ├── golden_set.json        # 50 curated regression test cases
+│       ├── run_eval.py            # CLI entry point (argparse)
+│       ├── scorer.py              # Prompt loading, API calls, retry
+│       ├── checks.py              # 5 check implementations
+│       ├── report.py              # JSON + stdout output, cost tracking
+│       └── results/               # Output directory (gitignored)
 ├── .github/workflows/         # CI/CD
 │   ├── ci.yml                 # Tests + lint on PR
+│   ├── eval.yml               # Scoring regression checks on prompt changes
 │   ├── claude-review.yml      # AI code review (needs-review label)
 │   ├── security-review.yml    # Security-focused review
 │   ├── release.yml            # Build VSIX + publish on tag
@@ -97,6 +106,26 @@ codefluent/
 ├── data/                      # Generated data (gitignored)
 └── images/                    # Demo screenshots
 ```
+
+## Documentation Map
+
+When adding features or changing architecture, check this list for files that may need updating.
+
+| File | Purpose | Update when... |
+|------|---------|----------------|
+| `CLAUDE.md` | AI coding instructions, architecture, conventions, commands | Adding files, commands, test suites, or CI workflows |
+| `README.md` | Public-facing project overview, features, setup, eval framework | Adding user-visible features, changing test counts, updating setup steps |
+| `vscode-extension/README.md` | Extension setup, features, screenshots, marketplace listing | Changing extension features, installation steps, or screenshots |
+| `webapp/README.md` | Webapp setup, design choices, security, testing | Changing webapp features, test counts, security controls, or API surface |
+| `shared/eval/README.md` | Golden set structure, eval runner CLI, checks, CI integration | Changing eval checks, CLI options, test counts, or CI workflow |
+| `CONTRIBUTING.md` | Dev setup, code conventions, PR checklist, security rules | Changing dev workflow, conventions, or review requirements |
+| `docs/PROJECT_PLAN.md` | Master plan and milestones | Completing milestones or changing project direction |
+| `docs/TECHNICAL_SPEC.md` | Implementation spec (scoring, analytics, caching) | Changing scoring logic, API surface, or data flow |
+| `docs/UI_SPEC.md` | Frontend design spec (both interfaces) | Changing UI layout, components, or interaction patterns |
+| `docs/SESSION_DATA.md` | JSONL data format, availability, scope | Changing parser behavior or supported data formats |
+| `docs/REFERENCES.md` | Research papers and external docs links | Adding new research foundations or external references |
+| `docs/DEMO_SCRIPT.md` | 3-minute demo walkthrough | Changing demo flow or feature highlights |
+| Memory files (`~/.claude/projects/.../memory/`) | Test counts, lessons learned, project phase | Changing test counts, learning new project conventions |
 
 ## Key Commands
 ```bash
@@ -126,6 +155,14 @@ uv sync
 npx ccusage@latest daily --json > ../data/ccusage/daily.json
 uv run python extract_prompts.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
+
+# --- Eval Runner ---
+
+cd webapp
+uv run python ../shared/eval/run_eval.py --dry-run           # Preview (no API calls)
+uv run python ../shared/eval/run_eval.py                      # Schema + agreement checks
+uv run python ../shared/eval/run_eval.py --check consistency  # Self-consistency check
+uv run python ../shared/eval/run_eval.py --verbose            # Verbose output
 ```
 
 ## Extension Architecture
@@ -223,7 +260,8 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (528 tests) in `vscode-extension/`, `pytest` (241 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (528 tests) in `vscode-extension/`, `pytest` (320 tests) in `webapp/`
+- **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
 - **`release.yml`** — Triggered by version tags: builds VSIX, publishes to Marketplace, uploads to GitHub Release
@@ -438,7 +476,7 @@ npm test                   # Runs all 528 Jest tests (14 suites)
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (241 tests, 5 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (320 tests, 6 suites)
 
 # Test structure:
 # tests/test_api.py              — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage
@@ -446,6 +484,7 @@ uv run pytest tests/ -v    # Runs all webapp tests (241 tests, 5 suites)
 # tests/test_security.py         — rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification
 # tests/test_extract_prompts.py  — JSONL parsing, content extraction, session filtering, metadata
 # tests/test_prompts.py          — prompt loading, template filling, registry consistency
+# tests/test_eval.py             — eval framework (scorer, checks, report, CLI, golden set integration)
 # tests/conftest.py              — shared fixtures (TestClient, mock Anthropic, mock sessions)
 ```
 
