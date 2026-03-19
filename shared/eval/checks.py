@@ -2,7 +2,9 @@
 
 import time
 
-from shared.eval.scorer import BEHAVIORS, build_filled_prompt, call_with_retry, load_prompt
+from shared.eval.scorer import (
+    BEHAVIORS, _sanitize_error, build_filled_prompt, call_with_retry, load_prompt,
+)
 
 
 def check_schema(results):
@@ -319,7 +321,7 @@ def check_regression(client, golden_set, old_file, new_file, section, delay=0.5)
             if delay > 0:
                 time.sleep(delay)
         except Exception as e:
-            details.append({"id": entry["id"], "error": str(e)})
+            details.append({"id": entry["id"], "error": _sanitize_error(str(e))})
             continue
 
         if not old_result["result"] or not new_result["result"]:
