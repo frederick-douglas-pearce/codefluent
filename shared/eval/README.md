@@ -56,3 +56,68 @@ Each behavior label was determined by:
 `overall_score` and `input_score` are computed as `(true_count / 11) * 100` rounded to nearest integer. These are expected values — the actual model may produce slightly different scores due to the `one_line_summary` and qualitative assessment influencing the JSON output.
 
 Acceptable tolerance: individual behaviors should match exactly; overall scores may differ by ±9 (one behavior).
+
+## Eval Runner
+
+Automated regression checker that scores the golden set against the Anthropic API and validates outputs.
+
+### Quick Start
+
+```bash
+# From project root — set your API key
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Dry run (no API calls)
+cd webapp && uv run python ../shared/eval/run_eval.py --dry-run
+
+# Run schema + agreement checks (default)
+cd webapp && uv run python ../shared/eval/run_eval.py
+
+# Run specific sections only
+cd webapp && uv run python ../shared/eval/run_eval.py --sections single_scoring,config_scoring
+
+# Run with verbose output
+cd webapp && uv run python ../shared/eval/run_eval.py --verbose
+```
+
+### Checks
+
+| Check | What it does | API calls | Opt-in |
+|-------|-------------|-----------|--------|
+| `schema` | Validates response structure (keys, types) | Included in default run | Default |
+| `agreement` | Compares actual vs expected behaviors | Included in default run | Default |
+| `consistency` | Runs subset N times, measures self-agreement | N × subset_size | `--check consistency` |
+| `drift` | Compares activation rates against a baseline | 0 (uses saved results) | `--check drift --baseline PATH` |
+| `regression` | Diffs results between two prompt versions | 2 × section_size | `--check regression` |
+
+### CLI Options
+
+```
+--check {all,schema,agreement,consistency,drift,regression}  (default: all)
+--threshold FLOAT       Agreement threshold (default: 0.85)
+--sections LIST         Comma-separated sections (default: all)
+--delay FLOAT           Seconds between API calls (default: 0.5)
+--runs INT              Consistency runs (default: 3)
+--subset INT            Consistency subset size (default: 10)
+--baseline PATH         For drift check
+--old-version PATH      For regression (e.g., scoring/v1.0.md)
+--new-version PATH      For regression (e.g., scoring/v1.1.md)
+--regression-section    Which section for regression
+--output DIR            Output dir (default: shared/eval/results/)
+--dry-run               Show what would run, no API calls
+--verbose               Print each API call
+```
+
+### Cost
+
+- Full golden set (50 entries): ~$0.20-0.30
+- Consistency (10 × 3 runs): ~$0.10
+- Regression (one section, 2 versions): ~$0.05-0.15
+
+### Tests
+
+```bash
+cd webapp
+uv run pytest tests/test_eval.py -v              # Unit + mock integration tests
+uv run pytest tests/test_eval.py -m live          # Live API tests (~$0.02)
+```
