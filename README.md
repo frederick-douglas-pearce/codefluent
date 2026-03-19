@@ -194,6 +194,51 @@ The extension resolves this automatically via the system home directory.
 
 Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
+## Eval Framework
+
+CodeFluent uses an LLM-as-judge architecture — an LLM scores user prompts against 11 fluency behaviors. This creates a challenge: how do you ensure scoring quality doesn't degrade when you update prompt templates, switch models, or add new LLM providers?
+
+The eval framework (`shared/eval/`) solves this with a golden set of 50 human-labeled entries and an automated regression runner that validates scoring outputs before changes ship. As CodeFluent expands beyond Claude to support additional LLM providers, the eval framework provides the ground truth needed to validate that scoring remains accurate and consistent across models.
+
+### Golden Set
+
+50 curated entries across 4 scoring sections, each with human-verified expected behaviors and rationale:
+
+| Section | Entries | What it validates |
+|---------|---------|-------------------|
+| Single-prompt scoring | 25 | Behavior classification across the full score range (0–100) |
+| Session scoring | 12 | Multi-prompt sessions with metadata signals (plan mode, tools, thinking) |
+| Config scoring | 8 | CLAUDE.md files testing behavior credit boundaries |
+| Optimizer | 5 | Input scoring accuracy and config-aware skip logic |
+
+Entries span web dev, data science, systems programming, mobile, infrastructure, and edge cases (injection attempts, code-only prompts, ambiguous requests).
+
+### Automated Checks
+
+The eval runner (`run_eval.py`) implements 5 checks:
+
+| Check | What it measures | When to use |
+|-------|-----------------|-------------|
+| **Schema** | Response structure validity (keys, types, value ranges) | Every run |
+| **Agreement** | Behavior-level match rate vs. human labels (target: 85%+) | Every run |
+| **Consistency** | Self-agreement across repeated runs (measures model determinism) | Before model changes |
+| **Drift** | Activation rate shifts >15pp against a baseline | After model updates |
+| **Regression** | Side-by-side diff between two prompt versions | Before prompt bumps, cross-model validation |
+
+### CI Integration
+
+A dedicated GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement checks on any PR that modifies prompt templates (`shared/prompts/**`). This catches scoring regressions before they reach production — no manual testing required.
+
+```bash
+# Run locally before a prompt change
+cd webapp
+uv run python ../shared/eval/run_eval.py --dry-run           # Preview what will run
+uv run python ../shared/eval/run_eval.py                      # Full schema + agreement check
+uv run python ../shared/eval/run_eval.py --check consistency  # Self-consistency analysis
+```
+
+Cost: ~$0.25 for a full 50-entry run, ~$0.15 for CI (33-entry subset). See [`shared/eval/README.md`](shared/eval/README.md) for full documentation.
+
 ## Security
 
 | Layer | Mechanism | Protects Against |
@@ -205,7 +250,7 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 769 tests including security-focused suites | Regressions |
+| Automated testing | 848 tests including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -269,12 +314,16 @@ codefluent/
 ├── shared/                    # Shared resources (both interfaces)
 │   ├── benchmarks.json        # Population benchmark data
 │   ├── pricing.json           # Token pricing by model
-│   └── prompts/               # Versioned prompt templates
-│       ├── registry.json      # Active version pointers
-│       ├── scoring/v1.0.md        # Session scoring prompt
-│       ├── config/v1.0.md         # CLAUDE.md scoring prompt
-│       ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
-│       └── single_scoring/v1.0.md # Single-prompt verification scorer
+│   ├── prompts/               # Versioned prompt templates
+│   │   ├── registry.json      # Active version pointers
+│   │   ├── scoring/v1.0.md        # Session scoring prompt
+│   │   ├── config/v1.0.md         # CLAUDE.md scoring prompt
+│   │   ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
+│   │   └── single_scoring/v1.0.md # Single-prompt verification scorer
+│   └── eval/                  # Scoring regression testing
+│       ├── golden_set.json    # 50 curated test cases
+│       ├── run_eval.py        # CLI runner (schema, agreement, drift, regression checks)
+│       └── README.md          # Eval framework docs
 ├── docs/                      # Design docs and specs
 │   ├── PROJECT_PLAN.md
 │   ├── TECHNICAL_SPEC.md
@@ -311,23 +360,24 @@ See [`webapp/README.md`](webapp/README.md) for configuration, CORS, and Windows 
 
 ### Testing
 
-The project has **769 automated tests** across both interfaces:
+The project has **848 automated tests** across both interfaces:
 
 ```bash
 cd vscode-extension
 npm test                   # 528 tests across 14 suites (Jest)
 
 cd webapp
-uv run pytest tests/ -v    # 241 tests across 5 suites (pytest)
+uv run pytest tests/ -v    # 320 tests across 6 suites (pytest)
 ```
 
-Test suites cover scoring, parsing, caching, analytics, pricing, XSS prevention, shell injection, path traversal, rate limiting, CORS, and API surface. All tests must pass before merging to main.
+Test suites cover scoring, parsing, caching, analytics, pricing, XSS prevention, shell injection, path traversal, rate limiting, CORS, API surface, and scoring prompt regression testing. The eval framework (`shared/eval/`) validates scoring outputs against a [golden set of 50 curated entries](shared/eval/README.md). All tests must pass before merging to main.
 
 ### CI/CD
 
-Four GitHub Actions workflows run automatically:
+Five GitHub Actions workflows run automatically:
 
-- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 769 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
+- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 848 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
+- **Eval** (`eval.yml`) — Runs on PRs that modify `shared/prompts/**`: scores the golden set via the Anthropic API, validates schema + agreement against human-labeled ground truth. See [Eval Framework](#eval-framework) below.
 - **Claude Code Review** (`claude-review.yml`) — AI-powered PR review, responds to `@claude` mentions.
 - **Security Review** (`security-review.yml`) — Grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml).
 - **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX, publishes to VS Code Marketplace, uploads to GitHub Release.

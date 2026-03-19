@@ -131,12 +131,13 @@ CORS is restricted to localhost origins by default. The allowed origin is determ
 
 ## Testing
 
-The webapp has **241 tests** across 5 suites. Run with:
+The webapp has **320 tests** across 6 suites. Run with:
 
 ```bash
 cd webapp
 uv run pytest tests/ -v         # Run all tests
 uv run pytest tests/test_api.py  # Run a specific suite
+uv run pytest tests/test_eval.py -m live  # Run live API eval tests (~$0.02)
 ```
 
 | Suite | Tests | What it covers |
@@ -146,6 +147,9 @@ uv run pytest tests/test_api.py  # Run a specific suite
 | `test_security.py` | 38 | Rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification |
 | `test_extract_prompts.py` | 58 | JSONL parsing, content extraction, session filtering, metadata extraction |
 | `test_prompts.py` | 17 | Prompt loading, template filling, registry consistency |
+| `test_eval.py` | 79 | Eval framework: scorer, checks, report, CLI args, golden set integration (+ 3 live API tests) |
+
+Live API tests (`@pytest.mark.live`) are excluded by default and require `ANTHROPIC_API_KEY`. Run with `-m live` to include them.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the full PR checklist and test requirements.
 

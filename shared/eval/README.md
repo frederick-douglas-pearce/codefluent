@@ -59,12 +59,25 @@ Acceptable tolerance: individual behaviors should match exactly; overall scores 
 
 ## Eval Runner
 
-Automated regression checker that scores the golden set against the Anthropic API and validates outputs.
+Automated regression checker that scores the golden set against the Anthropic API and validates outputs. Run from the `webapp/` directory using `uv`.
+
+### File Structure
+
+```
+shared/eval/
+├── golden_set.json    # 50 human-labeled test cases
+├── run_eval.py        # CLI entry point (argparse)
+├── scorer.py          # Prompt loading, template filling, API calls with retry
+├── checks.py          # 5 check implementations (schema, agreement, consistency, drift, regression)
+├── report.py          # JSON + stdout output formatting, cost tracking via pricing.json
+├── results/           # Output directory (gitignored)
+└── README.md          # This file
+```
 
 ### Quick Start
 
 ```bash
-# From project root — set your API key
+# Set your API key
 export ANTHROPIC_API_KEY=sk-ant-...
 
 # Dry run (no API calls)
@@ -84,11 +97,13 @@ cd webapp && uv run python ../shared/eval/run_eval.py --verbose
 
 | Check | What it does | API calls | Opt-in |
 |-------|-------------|-----------|--------|
-| `schema` | Validates response structure (keys, types) | Included in default run | Default |
-| `agreement` | Compares actual vs expected behaviors | Included in default run | Default |
-| `consistency` | Runs subset N times, measures self-agreement | N × subset_size | `--check consistency` |
-| `drift` | Compares activation rates against a baseline | 0 (uses saved results) | `--check drift --baseline PATH` |
-| `regression` | Diffs results between two prompt versions | 2 × section_size | `--check regression` |
+| `schema` | Validates response structure (keys, types, value ranges) | Included in default run | Default |
+| `agreement` | Compares actual vs expected behaviors per entry (target: 85%+) | Included in default run | Default |
+| `consistency` | Runs subset N times, measures self-agreement across runs | N × subset_size | `--check consistency` |
+| `drift` | Compares activation rates against a baseline, flags >15pp shifts | 0 (uses saved results) | `--check drift --baseline PATH` |
+| `regression` | Runs a section with two prompt versions, diffs behavior changes | 2 × section_size | `--check regression` |
+
+`--check all` (the default) runs schema + agreement in a single API pass. Consistency, drift, and regression are opt-in because they require additional API calls or a baseline file.
 
 ### CLI Options
 
@@ -108,16 +123,60 @@ cd webapp && uv run python ../shared/eval/run_eval.py --verbose
 --verbose               Print each API call
 ```
 
+### Example Output
+
+```
+Running golden set (all sections)
+  Scored 50 entries
+
+  SCHEMA
+  [PASS] 50/50 entries have valid schema
+
+  AGREEMENT
+  [PASS] Overall agreement: 88.5% (threshold: 85%)
+  By section:
+    single_scoring: 90.5%
+    session_scoring: 81.1%
+    config_scoring: 89.8%
+    optimizer: 94.5%
+  Behaviors below 85%:
+    - iteration_and_refinement: 78.0%
+    - clarifying_goals: 78.0%
+
+  Cost: 34,046 input + 9,762 output tokens
+  Estimated: $0.2486
+
+Results saved to: shared/eval/results/2026-03-19_183628_agreement_schema.json
+```
+
 ### Cost
 
 - Full golden set (50 entries): ~$0.20-0.30
-- Consistency (10 × 3 runs): ~$0.10
+- CI subset (33 entries): ~$0.10-0.15
+- Consistency (10 entries × 3 runs): ~$0.10
 - Regression (one section, 2 versions): ~$0.05-0.15
+
+### CI Integration
+
+A GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement checks on PRs that modify `shared/prompts/**`. It uses the `single_scoring` + `config_scoring` subset (33 entries, ~$0.15/run) and requires the `ANTHROPIC_API_KEY` repo secret. Skipped for Dependabot PRs.
 
 ### Tests
 
+82 tests in `webapp/tests/test_eval.py`:
+
+| Category | Tests | What it covers |
+|----------|-------|----------------|
+| `scorer.py` | 18 | Prompt loading, template filling, golden set template integration |
+| `checks.py` | 19 | Schema validation, agreement computation, drift detection, regression diffing |
+| `report.py` | 11 | Cost computation, JSON output, stdout formatting |
+| `run_eval.py` | 15 | Argument parsing, dry-run, section filtering, check routing, error handling |
+| Integration | 16 | End-to-end pipeline with mocked API, golden set structure verification |
+| Live API | 3 | Real API calls against golden set entries (excluded by default) |
+
 ```bash
 cd webapp
-uv run pytest tests/test_eval.py -v              # Unit + mock integration tests
-uv run pytest tests/test_eval.py -m live          # Live API tests (~$0.02)
+uv run pytest tests/test_eval.py -v       # Unit + mock integration (79 tests)
+uv run pytest tests/test_eval.py -m live   # Live API tests only (~$0.02)
 ```
+
+Live tests are excluded by default (`addopts = "-m 'not live'"` in `pyproject.toml`). They require `ANTHROPIC_API_KEY` to be set.
