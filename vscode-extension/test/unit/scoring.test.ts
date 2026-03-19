@@ -1,4 +1,4 @@
-import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions, SCORING_PROMPT_VERSION, CONFIG_SCORING_PROMPT_VERSION, validateOptimizerResult, validateSingleScoreResult, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, buildConfigBehaviorsContext } from '../../src/scoring'
+import { scoreSessions, computeAggregate, computeScoreHistory, getISOWeekKey, ScoreResult, validateScoreResult, validateConfigScoreResult, scoreClaudeMd, classifyError, withRetry, RetryOptions, SCORING_PROMPT_VERSION, CONFIG_SCORING_PROMPT_VERSION, validateOptimizerResult, validateSingleScoreResult, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, buildConfigBehaviorsContext, BEHAVIORS, CONFIG_ELIGIBLE_BEHAVIORS } from '../../src/scoring'
 import { ParsedSession } from '../../src/parser'
 
 // --- Helpers ---
@@ -386,8 +386,8 @@ describe('computeAggregate', () => {
     expect((session as any).effective_score).toBe(36)
   })
 
-  it('attaches config-boosted effective_score to each session', () => {
-    const session = makeScoreResult() // 4/11 true
+  it('attaches config-boosted effective_score to each session (eligible only)', () => {
+    const session = makeScoreResult() // 4/11 true (iteration, clarifying, adjusting, building)
     const configBehaviors: Record<string, boolean> = {
       iteration_and_refinement: false,
       clarifying_goals: false,
@@ -402,8 +402,8 @@ describe('computeAggregate', () => {
       providing_feedback: true,
     }
     computeAggregate([session], configBehaviors)
-    // Session: 4 + Config adds: 6 = 10/11 → 91
-    expect((session as any).effective_score).toBe(91)
+    // Session: 4 + Config eligible adds: setting_interaction_terms, questioning_reasoning = 2 → 6/11 = 55
+    expect((session as any).effective_score).toBe(55)
   })
 
   it('computes correct average across multiple sessions', () => {
@@ -537,7 +537,7 @@ describe('computeAggregate', () => {
     expect(result.average_score).toBe(0)
   })
 
-  it('config behaviors boost the overall score', () => {
+  it('config behaviors boost the overall score (eligible only)', () => {
     // Session has 4/11 true → base score 36
     const session = makeScoreResult()
     const configBehaviors: Record<string, boolean> = {
@@ -556,10 +556,41 @@ describe('computeAggregate', () => {
     const result = computeAggregate([session], configBehaviors)
 
     // Session has: iteration, clarifying, adjusting, building (4)
-    // Config adds: specifying, providing_examples, setting_terms, checking, questioning, feedback (6)
-    // Effective: 10/11 → (10/11)*100 = 90.9 → 91
-    expect(result.average_score).toBe(91)
+    // Config eligible adds: setting_interaction_terms, questioning_reasoning (2)
+    // Non-eligible ignored: specifying, providing_examples, checking, feedback
+    // Effective: 6/11 → (6/11)*100 = 54.5 → 55
+    expect(result.average_score).toBe(55)
     expect(result.config_behaviors).toEqual(configBehaviors)
+  })
+  it('all-true config only contributes 3 eligible behaviors', () => {
+    const session = makeScoreResult({
+      fluency_behaviors: Object.fromEntries(BEHAVIORS.map(b => [b, false])),
+    })
+    const allTrueConfig: Record<string, boolean> = Object.fromEntries(BEHAVIORS.map(b => [b, true]))
+    const result = computeAggregate([session], allTrueConfig)
+
+    // Only 3 eligible behaviors contribute → 3/11 = 27%
+    expect(result.average_score).toBe(27)
+  })
+})
+
+// --- CONFIG_ELIGIBLE_BEHAVIORS ---
+
+describe('CONFIG_ELIGIBLE_BEHAVIORS', () => {
+  it('has exactly 3 entries', () => {
+    expect(CONFIG_ELIGIBLE_BEHAVIORS.size).toBe(3)
+  })
+
+  it('contains the correct behavior names', () => {
+    expect(CONFIG_ELIGIBLE_BEHAVIORS.has('setting_interaction_terms')).toBe(true)
+    expect(CONFIG_ELIGIBLE_BEHAVIORS.has('identifying_missing_context')).toBe(true)
+    expect(CONFIG_ELIGIBLE_BEHAVIORS.has('questioning_reasoning')).toBe(true)
+  })
+
+  it('all entries are valid BEHAVIORS', () => {
+    for (const b of CONFIG_ELIGIBLE_BEHAVIORS) {
+      expect(BEHAVIORS).toContain(b)
+    }
   })
 })
 
@@ -1333,7 +1364,7 @@ describe('computeScoreHistory', () => {
     expect(history[0].period < history[1].period).toBe(true)
   })
 
-  it('config behaviors boost score', () => {
+  it('config behaviors boost score (eligible only)', () => {
     const scores: Record<string, ScoreResult> = {
       's1': makeScoreResult({
         session_id: 's1',
@@ -1355,12 +1386,21 @@ describe('computeScoreHistory', () => {
     const sessions = [makeSession({ id: 's1', started_at: '2026-01-05T10:00:00Z' })]
 
     const withoutConfig = computeScoreHistory(scores, sessions)
+    // Use eligible behaviors for config boost
     const withConfig = computeScoreHistory(scores, sessions, {
+      setting_interaction_terms: true,
+      questioning_reasoning: true,
+    } as any)
+
+    expect(withConfig[0].score).toBeGreaterThan(withoutConfig[0].score)
+
+    // Non-eligible config behaviors should NOT boost score
+    const withNonEligible = computeScoreHistory(scores, sessions, {
       clarifying_goals: true,
       specifying_format: true,
     } as any)
 
-    expect(withConfig[0].score).toBeGreaterThan(withoutConfig[0].score)
+    expect(withNonEligible[0].score).toBe(withoutConfig[0].score)
   })
 
   it('skips error sessions without fluency_behaviors', () => {
@@ -1521,9 +1561,14 @@ function extractComputeEffectiveScore(filePath: string): (fb: Record<string, boo
     if (depth === 0) { endIdx = i; break }
   }
   let fnSrc = src.substring(startIdx, endIdx + 1)
-  // Inline the TOTAL_BEHAVIORS constant so the function is self-contained
+  // Inline constants so the function is self-contained
   fnSrc = fnSrc.replace('TOTAL_BEHAVIORS', '11')
-  const fn = new Function(`return (${fnSrc.replace('function computeEffectiveScore', 'function')})`)()
+  // Wrap with CONFIG_ELIGIBLE in scope
+  const wrappedSrc = `
+    const CONFIG_ELIGIBLE = new Set(['setting_interaction_terms', 'identifying_missing_context', 'questioning_reasoning']);
+    return (${fnSrc.replace('function computeEffectiveScore', 'function')})
+  `
+  const fn = new Function(wrappedSrc)()
   return fn
 }
 
@@ -1551,16 +1596,16 @@ describe.each([
     expect(computeEffectiveScore(fb, {})).toBe(Math.round(2 / 11 * 100))
   })
 
-  it('unions session and config behaviors (OR logic)', () => {
+  it('unions session and eligible config behaviors (OR logic)', () => {
     const fb = {
       iteration_and_refinement: true,
       clarifying_goals: false,
     }
     const cb = {
-      clarifying_goals: true,
-      checking_facts: true,
+      setting_interaction_terms: true,
+      questioning_reasoning: true,
     }
-    // iteration_and_refinement (session), clarifying_goals (config), checking_facts (config) = 3
+    // iteration_and_refinement (session), setting_interaction_terms (config), questioning_reasoning (config) = 3
     expect(computeEffectiveScore(fb, cb)).toBe(Math.round(3 / 11 * 100))
   })
 
@@ -1584,14 +1629,24 @@ describe.each([
 
   it('handles null/undefined inputs gracefully', () => {
     expect(computeEffectiveScore(null, null)).toBe(0)
-    expect(computeEffectiveScore(null, { checking_facts: true })).toBe(Math.round(1 / 11 * 100))
+    // checking_facts is not eligible, so it shouldn't boost score
+    expect(computeEffectiveScore(null, { checking_facts: true })).toBe(0)
+    // eligible behavior should boost
+    expect(computeEffectiveScore(null, { setting_interaction_terms: true })).toBe(Math.round(1 / 11 * 100))
   })
 
-  it('config behaviors boost a low session score', () => {
-    // Session has 2/11, config adds 3 more = 5/11
+  it('config behaviors boost a low session score (eligible only)', () => {
+    // Session has 2/11, eligible config adds 2 more = 4/11
+    const fb = { iteration_and_refinement: true, clarifying_goals: true }
+    const cb = { setting_interaction_terms: true, questioning_reasoning: true }
+    expect(computeEffectiveScore(fb, cb)).toBe(Math.round(4 / 11 * 100))
+  })
+
+  it('non-eligible config behaviors do not boost score', () => {
     const fb = { iteration_and_refinement: true, clarifying_goals: true }
     const cb = { checking_facts: true, providing_examples: true, specifying_format: true }
-    expect(computeEffectiveScore(fb, cb)).toBe(Math.round(5 / 11 * 100))
+    // Non-eligible config behaviors are ignored → still 2/11
+    expect(computeEffectiveScore(fb, cb)).toBe(Math.round(2 / 11 * 100))
   })
 })
 
@@ -1925,7 +1980,7 @@ describe('optimizePrompt', () => {
     )
   })
 
-  it('includes config behaviors in API call when provided', async () => {
+  it('includes only eligible config behaviors in API call', async () => {
     const mockResponse = {
       content: [{
         type: 'text',
@@ -1947,7 +2002,8 @@ describe('optimizePrompt', () => {
     })
     const sentContent = createFn.mock.calls[0][0].messages[0].content
     expect(sentContent).toContain('- setting_interaction_terms')
-    expect(sentContent).toContain('- checking_facts')
+    // checking_facts is not eligible, should be filtered out of the covered list
+    expect(sentContent).not.toContain('- checking_facts')
     expect(sentContent).toContain('Already Covered by Project Config')
     // clarifying_goals is false, so it should not appear in the covered list
     expect(sentContent).not.toContain('- clarifying_goals')
@@ -2078,7 +2134,7 @@ describe('buildConfigBehaviorsContext', () => {
     })).toBe('')
   })
 
-  it('lists only true behaviors with context header', () => {
+  it('lists only true eligible behaviors with context header', () => {
     const result = buildConfigBehaviorsContext({
       setting_interaction_terms: true,
       checking_facts: true,
@@ -2086,8 +2142,19 @@ describe('buildConfigBehaviorsContext', () => {
     })
     expect(result).toContain('Already Covered by Project Config')
     expect(result).toContain('- setting_interaction_terms')
-    expect(result).toContain('- checking_facts')
+    // checking_facts is not eligible, should be filtered out
+    expect(result).not.toContain('checking_facts')
     expect(result).not.toContain('clarifying_goals')
+  })
+
+  it('filters out non-eligible behaviors even when true', () => {
+    const result = buildConfigBehaviorsContext({
+      checking_facts: true,
+      providing_examples: true,
+      specifying_format: true,
+    })
+    // No eligible behaviors are true → empty string
+    expect(result).toBe('')
   })
 
   it('returns empty string for empty object', () => {

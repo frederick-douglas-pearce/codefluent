@@ -140,7 +140,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 528 tests)
+npm test                   # Jest (unit + integration, 535 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -260,7 +260,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (528 tests) in `vscode-extension/`, `pytest` (320 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (535 tests) in `vscode-extension/`, `pytest` (331 tests) in `webapp/`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
@@ -270,7 +270,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 528 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 535 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -355,16 +355,22 @@ The parser MUST handle both.
 - Cache scoring results in `globalStorageUri/scores.json` to avoid re-scoring
 
 ## CLAUDE.md Config Scoring
-The extension scores the workspace's `CLAUDE.md` file separately against the same 11 fluency behaviors. This gives users credit for behaviors defined as project conventions.
+The extension scores the workspace's `CLAUDE.md` file against 3 eligible fluency behaviors (meta-interaction rules). Only these behaviors can genuinely be established as project-wide conventions via configuration:
+
+- `setting_interaction_terms` — "Push back if wrong", "ask before changing"
+- `identifying_missing_context` — "Flag assumptions you're making"
+- `questioning_reasoning` — "Explain rationale", "compare alternatives"
+
+The remaining 8 behaviors are task-specific and always scored `false` for config, regardless of content. A `CONFIG_ELIGIBLE_BEHAVIORS` constant in both TypeScript and Python enforces this as a code-layer guard (defense-in-depth with the prompt).
 
 ### How it works
 1. `scoreWorkspaceClaudeMd()` reads `CLAUDE.md` from the workspace root (called by Fluency Score tab and Prompt Optimizer)
-2. Content is truncated to 4000 chars and sent to Claude Sonnet with `CONFIG_SCORING_PROMPT`
+2. Content is truncated to 4000 chars and sent to Claude Sonnet with `CONFIG_SCORING_PROMPT` (v1.1)
 3. Returns `{ fluency_behaviors: Record<string, boolean>, one_line_summary: string }`
 4. Results cached in `globalStorageUri/config_scores.json` keyed by workspace path + content hash
-5. `computeAggregate()` merges via `effective_behavior = session_behavior OR config_behavior`
-6. Frontend shows an amber "CLAUDE.md" tag next to config-boosted behaviors
-7. Prompt Optimizer also scores CLAUDE.md on demand if not cached, passes config behavior flags (~50 tokens) to avoid adding redundant behaviors
+5. `computeAggregate()` merges via `effective_behavior = session_behavior OR (config_eligible AND config_behavior)`
+6. Frontend shows an amber "CLAUDE.md" tag next to config-boosted behaviors (only for eligible behaviors)
+7. Prompt Optimizer also scores CLAUDE.md on demand if not cached, passes only eligible config behavior flags to avoid adding redundant behaviors
 
 ### Cache invalidation
 - Content hash = first 100 chars + length (`ScoreCache.contentHash()`)
@@ -385,7 +391,7 @@ Scoring prompts are extracted into standalone files under `shared/prompts/` with
 shared/prompts/
 ├── registry.json              # Points to active prompt file for each type
 ├── scoring/v1.0.md            # Session scoring prompt template
-├── config/v1.0.md             # CLAUDE.md scoring prompt template
+├── config/v1.1.md             # CLAUDE.md scoring prompt (3 eligible behaviors only)
 ├── optimizer/v1.1.md          # Prompt optimizer template (config-aware)
 └── single_scoring/v1.0.md     # Single-prompt verification scorer
 ```
@@ -476,7 +482,7 @@ npm test                   # Runs all 528 Jest tests (14 suites)
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (320 tests, 6 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (331 tests, 6 suites)
 
 # Test structure:
 # tests/test_api.py              — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage

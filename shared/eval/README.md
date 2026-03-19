@@ -27,14 +27,14 @@ Each entry has tags for filtering:
 - **Edge cases:** `edge-case-short`, `edge-case-vague`, `edge-case-code-only`, `edge-case-injection`
 - **Config-specific:** `key-regression-118`, `should-be-zero-post-118`, `gold-standard-post-118`
 
-### Config Scoring and Issue #118
+### Config Scoring and Eligible Behaviors
 
-Config entries include a `config_eligible_expected` field that tracks the 3 behaviors eligible for config credit after #118 is implemented:
+Config scoring (v1.1) only evaluates 3 behaviors that genuinely represent meta-interaction rules:
 - `setting_interaction_terms`
 - `identifying_missing_context`
 - `questioning_reasoning`
 
-The `expected.fluency_behaviors` field reflects current v1.0 prompt behavior. After #118, use `config_eligible_expected` as the new ground truth for the config-eligible subset.
+The remaining 8 behaviors are forced to `false` regardless of content. The `expected.fluency_behaviors` field reflects this — only the 3 eligible behaviors can be `true`. Each config entry also has a `config_eligible_expected` field for reference documentation.
 
 ### How to Use
 

@@ -9,6 +9,7 @@ import pytest
 import main
 from main import (
     BEHAVIORS,
+    CONFIG_ELIGIBLE_BEHAVIORS,
     _config_content_hash,
     _decode_project_path,
     _detect_project_repo,
@@ -316,7 +317,24 @@ class TestComputeAggregate:
         assert "behavior_prevalence" in result
         assert "pattern_distribution" in result
 
-    def test_merges_config_behaviors_or_logic(self):
+    def test_merges_config_behaviors_or_logic_eligible_only(self):
+        sessions = [
+            {
+                "fluency_behaviors": {b: False for b in BEHAVIORS},
+                "overall_score": 0,
+                "coding_pattern": "unknown",
+            },
+        ]
+        # Use eligible behaviors
+        config = {"setting_interaction_terms": True, "questioning_reasoning": True}
+        result = compute_aggregate(sessions, config)
+        # Config adds 2 eligible behaviors -> 2/11 = 18%
+        assert result["average_score"] == round((2 / 11) * 100)
+        assert result["behavior_prevalence"]["setting_interaction_terms"] == 1.0
+        assert result["behavior_prevalence"]["questioning_reasoning"] == 1.0
+        assert result["config_behaviors"] == config
+
+    def test_non_eligible_config_behaviors_ignored(self):
         sessions = [
             {
                 "fluency_behaviors": {b: False for b in BEHAVIORS},
@@ -326,11 +344,23 @@ class TestComputeAggregate:
         ]
         config = {"clarifying_goals": True, "providing_examples": True}
         result = compute_aggregate(sessions, config)
-        # Config adds 2 behaviors -> 2/11 = 18%
-        assert result["average_score"] == round((2 / 11) * 100)
-        assert result["behavior_prevalence"]["clarifying_goals"] == 1.0
-        assert result["behavior_prevalence"]["providing_examples"] == 1.0
-        assert result["config_behaviors"] == config
+        # Non-eligible config behaviors are ignored -> 0/11 = 0%
+        assert result["average_score"] == 0
+        assert result["behavior_prevalence"]["clarifying_goals"] == 0
+        assert result["behavior_prevalence"]["providing_examples"] == 0
+
+    def test_all_true_config_only_contributes_3_eligible(self):
+        sessions = [
+            {
+                "fluency_behaviors": {b: False for b in BEHAVIORS},
+                "overall_score": 0,
+                "coding_pattern": "unknown",
+            },
+        ]
+        all_true_config = {b: True for b in BEHAVIORS}
+        result = compute_aggregate(sessions, all_true_config)
+        # Only 3 eligible behaviors contribute → 3/11 = 27%
+        assert result["average_score"] == 27
 
     def test_handles_empty_session_list(self):
         result = compute_aggregate([])
@@ -346,6 +376,31 @@ class TestComputeAggregate:
         result = compute_aggregate(sessions)
         assert result["pattern_distribution"]["conceptual_inquiry"] == 2
         assert result["pattern_distribution"]["ai_delegation"] == 1
+
+
+# --- CONFIG_ELIGIBLE_BEHAVIORS ---
+
+class TestConfigEligibleBehaviors:
+    def test_has_exactly_3_entries(self):
+        assert len(CONFIG_ELIGIBLE_BEHAVIORS) == 3
+
+    def test_contains_correct_behavior_names(self):
+        assert "setting_interaction_terms" in CONFIG_ELIGIBLE_BEHAVIORS
+        assert "identifying_missing_context" in CONFIG_ELIGIBLE_BEHAVIORS
+        assert "questioning_reasoning" in CONFIG_ELIGIBLE_BEHAVIORS
+
+    def test_all_entries_are_valid_behaviors(self):
+        for b in CONFIG_ELIGIBLE_BEHAVIORS:
+            assert b in BEHAVIORS
+
+    def test_matches_typescript_constant(self):
+        """Ensure Python constant matches the TypeScript CONFIG_ELIGIBLE_BEHAVIORS."""
+        expected = {
+            "setting_interaction_terms",
+            "identifying_missing_context",
+            "questioning_reasoning",
+        }
+        assert CONFIG_ELIGIBLE_BEHAVIORS == expected
 
 
 # --- classify_error ---

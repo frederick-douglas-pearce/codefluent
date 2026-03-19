@@ -28,6 +28,13 @@ BEHAVIORS = [
     "questioning_reasoning", "identifying_missing_context",
     "adjusting_approach", "building_on_responses", "providing_feedback",
 ]
+
+# Only these behaviors can be credited from CLAUDE.md config (meta-interaction rules).
+CONFIG_ELIGIBLE_BEHAVIORS = {
+    "setting_interaction_terms",
+    "identifying_missing_context",
+    "questioning_reasoning",
+}
 VALID_CODING_PATTERNS = [
     "conceptual_inquiry", "generation_then_comprehension", "hybrid_code_explanation",
     "ai_delegation", "progressive_ai_reliance", "iterative_ai_debugging",
@@ -435,7 +442,7 @@ async def get_session_analytics(
                 if config_behaviors and score_entry.get("fluency_behaviors"):
                     effective_count = sum(
                         1 for b in BEHAVIORS
-                        if score_entry["fluency_behaviors"].get(b, False) or config_behaviors.get(b, False)
+                        if score_entry["fluency_behaviors"].get(b, False) or (b in CONFIG_ELIGIBLE_BEHAVIORS and config_behaviors.get(b, False))
                     )
                     overall_score = round((effective_count / len(BEHAVIORS)) * 100)
                 else:
@@ -833,7 +840,7 @@ def _get_or_score_config_behaviors(project_encoded: str) -> dict:
 
 def _build_config_behaviors_context(config_behaviors: dict) -> str:
     """Build the config behaviors section for the optimizer prompt template."""
-    covered = [k for k, v in config_behaviors.items() if v]
+    covered = [k for k, v in config_behaviors.items() if v and k in CONFIG_ELIGIBLE_BEHAVIORS]
     if not covered:
         return ""
     lines = "\n".join(f"- {b}" for b in covered)
@@ -849,7 +856,7 @@ def _merge_with_config(prompt_behaviors: dict, config_behaviors: dict) -> dict:
     """Merge prompt behaviors with config behaviors: effective = prompt OR config."""
     merged = dict(prompt_behaviors)
     for key, value in config_behaviors.items():
-        if value:
+        if value and key in CONFIG_ELIGIBLE_BEHAVIORS:
             merged[key] = True
     return merged
 
@@ -1094,7 +1101,7 @@ def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> d
     for s in scored_sessions:
         effective_count = sum(
             1 for b in BEHAVIORS
-            if s.get("fluency_behaviors", {}).get(b, False) or cfg.get(b, False)
+            if s.get("fluency_behaviors", {}).get(b, False) or (b in CONFIG_ELIGIBLE_BEHAVIORS and cfg.get(b, False))
         )
         effective_score = round((effective_count / total_behaviors) * 100)
         s["effective_score"] = effective_score
@@ -1103,7 +1110,7 @@ def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> d
     for b in BEHAVIORS:
         count = sum(
             1 for s in scored_sessions
-            if s.get("fluency_behaviors", {}).get(b, False) or cfg.get(b, False)
+            if s.get("fluency_behaviors", {}).get(b, False) or (b in CONFIG_ELIGIBLE_BEHAVIORS and cfg.get(b, False))
         )
         prevalence[b] = round(count / n, 2) if n else 0
 
@@ -1176,7 +1183,7 @@ def compute_score_history(
         for s in group["sessions"]:
             effective_count = sum(
                 1 for b in BEHAVIORS
-                if s.get("fluency_behaviors", {}).get(b, False) or cfg.get(b, False)
+                if s.get("fluency_behaviors", {}).get(b, False) or (b in CONFIG_ELIGIBLE_BEHAVIORS and cfg.get(b, False))
             )
             score_sum += (effective_count / total_behaviors) * 100
         history.append({

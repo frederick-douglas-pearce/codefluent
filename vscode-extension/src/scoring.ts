@@ -97,6 +97,13 @@ export const BEHAVIORS = [
   'adjusting_approach', 'building_on_responses', 'providing_feedback',
 ]
 
+/** Only these behaviors can be credited from CLAUDE.md config (meta-interaction rules). */
+export const CONFIG_ELIGIBLE_BEHAVIORS = new Set([
+  'setting_interaction_terms',
+  'identifying_missing_context',
+  'questioning_reasoning',
+])
+
 const VALID_CODING_PATTERNS = [
   'conceptual_inquiry', 'generation_then_comprehension', 'hybrid_code_explanation',
   'ai_delegation', 'progressive_ai_reliance', 'iterative_ai_debugging',
@@ -363,7 +370,7 @@ export function computeAggregate(
     let effectiveCount = 0
     for (const b of BEHAVIORS) {
       const sessionHas = s.fluency_behaviors?.[b]
-      const configHas = configBehaviors?.[b]
+      const configHas = CONFIG_ELIGIBLE_BEHAVIORS.has(b) && configBehaviors?.[b]
       if (sessionHas || configHas) effectiveCount++
     }
     const effectiveScore = Math.round((effectiveCount / totalBehaviors) * 100)
@@ -374,7 +381,7 @@ export function computeAggregate(
   for (const b of BEHAVIORS) {
     const count = scoredSessions.filter(s => {
       const sessionHas = s.fluency_behaviors?.[b]
-      const configHas = configBehaviors?.[b]
+      const configHas = CONFIG_ELIGIBLE_BEHAVIORS.has(b) && configBehaviors?.[b]
       return sessionHas || configHas
     }).length
     prevalence[b] = n ? Math.round((count / n) * 100) / 100 : 0
@@ -466,7 +473,7 @@ export function computeScoreHistory(
     for (const s of weekSessions) {
       let effectiveCount = 0
       for (const b of BEHAVIORS) {
-        if (s.fluency_behaviors?.[b] || cfg[b]) effectiveCount++
+        if (s.fluency_behaviors?.[b] || (CONFIG_ELIGIBLE_BEHAVIORS.has(b) && cfg[b])) effectiveCount++
       }
       scoreSum += (effectiveCount / totalBehaviors) * 100
     }
@@ -558,7 +565,7 @@ export function validateSingleScoreResult(raw: unknown): SingleScoreResult {
 export function buildConfigBehaviorsContext(configBehaviors?: Record<string, boolean>): string {
   if (!configBehaviors) return ''
   const covered = Object.entries(configBehaviors)
-    .filter(([, v]) => v)
+    .filter(([k, v]) => v && CONFIG_ELIGIBLE_BEHAVIORS.has(k))
     .map(([k]) => k)
   if (covered.length === 0) return ''
   return `\n\n## Behaviors Already Covered by Project Config (CLAUDE.md)\n\nThe following behaviors are already active via the project's CLAUDE.md file. Do NOT add these to the optimized prompt — they apply automatically:\n${covered.map(b => `- ${b}`).join('\n')}`

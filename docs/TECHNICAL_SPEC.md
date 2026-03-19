@@ -80,7 +80,7 @@ Scoring prompts are managed as versioned template files under `shared/prompts/` 
 
 ### CLAUDE.md config scoring
 
-The user's project `CLAUDE.md` is scored separately against the same 11 behaviors. Results are merged via `effective_behavior = session_behavior OR config_behavior`, giving users credit for behaviors encoded as project conventions. Config scores are cached by content hash and invalidated when the file changes.
+The user's project `CLAUDE.md` is scored against 3 eligible meta-interaction behaviors (`setting_interaction_terms`, `identifying_missing_context`, `questioning_reasoning`). The remaining 8 task-specific behaviors are always `false` for config. Results are merged via `effective_behavior = session_behavior OR (config_eligible AND config_behavior)`, enforced by a `CONFIG_ELIGIBLE_BEHAVIORS` constant in both TypeScript and Python (defense-in-depth with the prompt). Config scores are cached by content hash and invalidated when the file or prompt version changes.
 
 ### Score aggregation
 
