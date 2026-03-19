@@ -14,5 +14,8 @@ vscode-extension/coverage/
 # Playwright MCP
 .playwright-mcp/
 
+# Eval results
+shared/eval/results/
+
 # Social media content
 social/
