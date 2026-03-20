@@ -54,6 +54,7 @@ codefluent/
 │   │   ├── pricing.ts         # Token pricing lookup (shared/pricing.json)
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub repo scoping + task suggestions
+│   │   ├── config.ts          # Centralized config (shared/defaults.json + VS Code settings)
 │   │   ├── prompts.ts         # Prompt loader + template filler (shared/prompts/)
 │   │   ├── cache.ts           # Persistent score caching (globalStorageUri)
 │   │   ├── dataCache.ts       # Session/usage data caching (stale-while-revalidate)
@@ -65,10 +66,11 @@ codefluent/
 │   │   ├── icon.svg           # Activity bar icon (amber brackets)
 │   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
 │   ├── test/
-│   │   ├── unit/{scoring,quickwins,xss,platform,prompts,cache,dataCache,parser,recommendations,usage}.test.ts
+│   │   ├── unit/{config,scoring,quickwins,xss,platform,prompts,cache,dataCache,parser,recommendations,usage}.test.ts
 │   │   └── integration/{extension,webviewProvider}.test.ts
 │   └── out/                   # Compiled JS (gitignored)
 ├── webapp/                    # FastAPI web app
+│   ├── config.py              # Centralized config (shared/defaults.json + env vars + config.json)
 │   ├── main.py                # FastAPI backend (scoring, optimizer, quickwins, usage)
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
 │   ├── static/
@@ -78,6 +80,7 @@ codefluent/
 │   ├── pyproject.toml         # Python dependencies
 │   └── uv.lock
 ├── shared/
+│   ├── defaults.json          # Centralized default config values (single source of truth)
 │   ├── benchmarks.json        # Benchmark data
 │   ├── pricing.json           # Token pricing by model (input/output/cache rates)
 │   ├── prompts/               # Versioned prompt templates
@@ -140,7 +143,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 535 tests)
+npm test                   # Jest (unit + integration, 546 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -189,6 +192,7 @@ The webview (browser context) communicates with the extension host (Node context
 | `getQuickwins` | webview -> ext | GitHub repo context + Claude suggestions |
 | `optimizePrompt` | webview -> ext | Scores input prompt, generates optimized version, scores output (2 API calls) |
 | `getSessionAnalytics` | webview -> ext | Returns per-session token metrics (efficiency, cost, cache ratios) |
+| `getConfig` | webview -> ext | Returns display config values from `shared/defaults.json` + VS Code settings |
 | `copyToClipboard` | webview -> ext | Copies text via `vscode.env.clipboard` |
 | `runInTerminal` | webview -> ext | Opens terminal, runs `claude "<prompt>"` |
 
@@ -260,7 +264,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (535 tests) in `vscode-extension/`, `pytest` (331 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (546 tests) in `vscode-extension/`, `pytest` (342 tests) in `webapp/`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
@@ -270,7 +274,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 535 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 546 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -423,7 +427,37 @@ Prompts use `{{PLACEHOLDER}}` for template variables (simple string replacement,
 Cached scores are stamped with `prompt_version`. On cache read, entries whose `prompt_version` doesn't match the current registry version are treated as stale and re-scored. This applies to session scores (`scores.json`), config scores (`config_scores.json`), and optimizer results (`optimizer_cache.json`).
 
 ### Build integration
-The compile script copies `shared/prompts/` into `vscode-extension/shared/prompts/` so the extension can load them at runtime via `prompts.ts`.
+The compile script copies `shared/prompts/` and `shared/defaults.json` into `vscode-extension/shared/` so the extension can load them at runtime via `prompts.ts` and `config.ts`.
+
+## Centralized Configuration
+
+All configurable parameters live in `shared/defaults.json` (single source of truth). Both interfaces read from this file and overlay user overrides.
+
+### Resolution order
+- **VS Code extension:** VS Code settings (`codefluent.*`) > `shared/defaults.json`
+- **Webapp:** Environment variables (`CODEFLUENT_SCORING_MODEL`) > `webapp/config.json` > `shared/defaults.json`
+
+### Config key structure
+Flat dotted keys: `"scoring.model"`, `"display.sparklineMaxWeeks"`, etc. Categories:
+- `scoring.*` — Model, tokens, truncation, confidence for scoring
+- `optimizer.*` — Model, tokens, thresholds for prompt optimizer
+- `quickwins.*` — Model, tokens, truncation for quick wins
+- `retry.*` — Retry attempts, backoff delay
+- `display.*` — Frontend thresholds (score colors, sparkline weeks, cache TTL)
+- `rateLimit.*` — Rate limiting (requests, window)
+- `conversation.*` — Conversation boundary detection
+
+### Frontend delivery
+- Extension: `getConfig` IPC message returns `display.*` keys
+- Webapp: `GET /api/config` endpoint returns `display.*` keys
+- Both frontends fall back to hardcoded defaults if config fetch fails
+
+### VS Code Settings UI
+Tier 1 settings exposed in VS Code Settings UI under "CodeFluent":
+- `codefluent.scoring.model` — Model ID for scoring
+- `codefluent.scoring.maxPromptsPerConversation` — Max prompts per conversation
+- `codefluent.optimizer.alreadyGoodThreshold` — Score threshold for "already good"
+- `codefluent.conversation.inactivityGapMinutes` — Conversation boundary gap
 
 ## Design System
 CSS custom properties map to VS Code theme tokens for automatic light/dark support:
@@ -462,9 +496,10 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 528 Jest tests (14 suites)
+npm test                   # Runs all 546 Jest tests (15 suites)
 
 # Test structure:
+# test/unit/config.test.ts                     — centralized config module (defaults, VS Code overrides, display config)
 # test/unit/prompts.test.ts                    — prompt loader + template filler (all prompt types)
 # test/unit/scoring.test.ts                    — scoreSessions, computeAggregate, optimizePrompt, scoreSinglePrompt, prompt versioning
 # test/unit/quickwins.test.ts                  — GitHub name validation, repo detection, arg safety
@@ -482,7 +517,7 @@ npm test                   # Runs all 528 Jest tests (14 suites)
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (331 tests, 6 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (342 tests, 7 suites)
 
 # Test structure:
 # tests/test_api.py              — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage
@@ -490,6 +525,7 @@ uv run pytest tests/ -v    # Runs all webapp tests (331 tests, 6 suites)
 # tests/test_security.py         — rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification
 # tests/test_extract_prompts.py  — JSONL parsing, content extraction, session filtering, metadata
 # tests/test_prompts.py          — prompt loading, template filling, registry consistency
+# tests/test_config.py           — centralized config module (defaults, env vars, config.json overrides)
 # tests/test_eval.py             — eval framework (scorer, checks, report, CLI, golden set integration)
 # tests/conftest.py              — shared fixtures (TestClient, mock Anthropic, mock sessions)
 ```

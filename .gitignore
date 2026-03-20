@@ -11,6 +11,9 @@ vscode-extension/*.vsix
 vscode-extension/shared/
 vscode-extension/coverage/
 
+# Webapp local config overrides
+webapp/config.json
+
 # Playwright MCP
 .playwright-mcp/
 
