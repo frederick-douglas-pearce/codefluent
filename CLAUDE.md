@@ -19,7 +19,7 @@ Originally built at PDX Hacks 2026. Now in **production deployment** phase — e
 ## Tech Stack
 - **Runtime:** Node.js v22.18.0 (VS Code extension host)
 - **Language:** TypeScript 5.3 (extension), Vanilla JS (webview frontend)
-- **Extension API:** VS Code 1.85+ (WebviewViewProvider)
+- **Extension API:** VS Code 1.110+ (WebviewViewProvider)
 - **Charts:** Chart.js (bundled locally in `media/libs/`)
 - **API:** Anthropic TypeScript SDK (`@anthropic-ai/sdk`)
 - **Usage data:** `ccusage` (called via `npx`, reads Claude Code sessions)
