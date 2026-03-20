@@ -1,0 +1,22 @@
+{
+  "scoring.model": "claude-sonnet-4-20250514",
+  "scoring.maxPromptsPerConversation": 20,
+  "scoring.configTruncationChars": 4000,
+  "scoring.maxTokens": 1024,
+  "scoring.lowConfidenceThreshold": 3,
+  "optimizer.model": "claude-sonnet-4-20250514",
+  "optimizer.maxTokens": 2048,
+  "optimizer.alreadyGoodThreshold": 90,
+  "quickwins.model": "claude-sonnet-4-20250514",
+  "quickwins.maxTokens": 2048,
+  "quickwins.claudeMdTruncationChars": 2000,
+  "retry.maxAttempts": 3,
+  "retry.baseDelayMs": 1000,
+  "display.scoreColorGreen": 70,
+  "display.scoreColorAmber": 50,
+  "display.sparklineMaxWeeks": 12,
+  "display.dataCacheTtlMinutes": 5,
+  "rateLimit.maxRequests": 10,
+  "rateLimit.windowSeconds": 60,
+  "conversation.inactivityGapMinutes": 60
+}

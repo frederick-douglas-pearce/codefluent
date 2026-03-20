@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { ParsedSession } from './parser'
 import { loadScoringPrompt, loadConfigPrompt, loadOptimizerPrompt, loadSingleScoringPrompt, fillTemplate } from './prompts'
+import { getConfig } from './config'
 
 export type ScoringErrorType = 'rate_limit' | 'network' | 'server' | 'auth' | 'invalid_request' | 'unknown'
 
@@ -147,7 +148,7 @@ export async function withRetry<T>(
   context: string,
   options: RetryOptions = {},
 ): Promise<T> {
-  const { maxAttempts = 3, baseDelayMs = 1000, delayFn } = options
+  const { maxAttempts = getConfig<number>('retry.maxAttempts'), baseDelayMs = getConfig<number>('retry.baseDelayMs'), delayFn } = options
   const sleep = delayFn ?? ((ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms)))
   let lastError: unknown
 
@@ -232,7 +233,7 @@ export function validateScoreResult(raw: unknown, sessionId: string, promptCount
     coding_pattern,
     coding_pattern_quality,
     one_line_summary,
-    low_confidence: promptCount < 3,
+    low_confidence: promptCount < getConfig<number>('scoring.lowConfidenceThreshold'),
     suspicious_perfect_score,
   }
 }
@@ -264,13 +265,13 @@ export async function scoreClaudeMd(
   client: Anthropic,
   retryOptions?: RetryOptions,
 ): Promise<ConfigScoreResult> {
-  const truncated = content.slice(0, 4000)
+  const truncated = content.slice(0, getConfig<number>('scoring.configTruncationChars'))
   const prompt = fillTemplate(CONFIG_SCORING_PROMPT_TEMPLATE, { CONTENT: truncated })
 
   const response = await withRetry(
     () => client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+      model: getConfig<string>('scoring.model'),
+      max_tokens: getConfig<number>('scoring.maxTokens'),
       messages: [{ role: 'user', content: prompt }],
     }),
     'scoreClaudeMd',
@@ -315,7 +316,7 @@ export async function scoreSessions(
       continue
     }
 
-    const promptsText = session.user_prompts.slice(0, 20)
+    const promptsText = session.user_prompts.slice(0, getConfig<number>('scoring.maxPromptsPerConversation'))
       .map((p, i) => `<user_prompt index="${i + 1}">${p}</user_prompt>`)
       .join('\n\n')
 
@@ -329,8 +330,8 @@ export async function scoreSessions(
     try {
       const response = await withRetry(
         () => client.messages.create({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1024,
+          model: getConfig<string>('scoring.model'),
+          max_tokens: getConfig<number>('scoring.maxTokens'),
           messages: [{ role: 'user', content: prompt }],
         }),
         `scoreSession(${sid})`,
@@ -586,8 +587,8 @@ export async function optimizePrompt(
 
   const response = await withRetry(
     () => client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 2048,
+      model: getConfig<string>('optimizer.model'),
+      max_tokens: getConfig<number>('optimizer.maxTokens'),
       messages: [{ role: 'user', content: prompt }],
     }),
     'optimizePrompt',
@@ -612,8 +613,8 @@ export async function scoreSinglePrompt(
 
   const response = await withRetry(
     () => client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
+      model: getConfig<string>('scoring.model'),
+      max_tokens: getConfig<number>('scoring.maxTokens'),
       messages: [{ role: 'user', content: prompt }],
     }),
     'scoreSinglePrompt',

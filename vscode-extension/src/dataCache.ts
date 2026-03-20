@@ -1,13 +1,14 @@
 import * as vscode from 'vscode'
 import * as fs from 'fs'
 import * as path from 'path'
+import { getConfig } from './config'
 
 interface CacheEntry<T> {
   data: T
   timestamp: number
 }
 
-const TTL_MS = 5 * 60 * 1000 // 5 minutes
+const TTL_MS = getConfig<number>('display.dataCacheTtlMinutes') * 60 * 1000
 
 export class DataCache {
   private readonly usagePath: string

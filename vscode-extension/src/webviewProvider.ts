@@ -10,6 +10,7 @@ import { ScoreCache } from './cache'
 import { DataCache } from './dataCache'
 import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
 import { buildSessionAnalytics } from './analytics'
+import { getConfig, getDisplayConfig } from './config'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codefluent.dashboard'
@@ -176,6 +177,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getSessionAnalytics':
           data = await this.handleGetSessionAnalytics(payload)
           break
+        case 'getConfig':
+          data = this.handleGetConfig()
+          break
         default:
           return
       }
@@ -307,6 +311,10 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     return data.benchmarks
   }
 
+  private handleGetConfig() {
+    return getDisplayConfig()
+  }
+
   private async handleOptimizePrompt(payload?: { prompt?: string }): Promise<OptimizeResponse> {
     const inputPrompt = payload?.prompt?.trim()
     if (!inputPrompt) {
@@ -343,7 +351,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     )
 
     // No-op: already good (check effective score including config)
-    if (effectiveInputScore >= 90 || !optimizerResult.optimized_prompt) {
+    if (effectiveInputScore >= getConfig<number>('optimizer.alreadyGoodThreshold') || !optimizerResult.optimized_prompt) {
       const response: OptimizeResponse = {
         already_good: true,
         input_score: effectiveInputScore,

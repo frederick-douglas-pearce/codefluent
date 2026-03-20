@@ -68,13 +68,37 @@
           "default": "",
           "markdownDescription": "Custom path to Claude Code session data directory. Leave empty to use the default (`~/.claude/projects/`).",
           "scope": "machine"
+        },
+        "codefluent.scoring.model": {
+          "type": "string",
+          "default": "claude-sonnet-4-20250514",
+          "markdownDescription": "Model ID for fluency scoring API calls.",
+          "scope": "machine"
+        },
+        "codefluent.scoring.maxPromptsPerConversation": {
+          "type": "number",
+          "default": 20,
+          "markdownDescription": "Maximum prompts per conversation sent for scoring.",
+          "scope": "machine"
+        },
+        "codefluent.optimizer.alreadyGoodThreshold": {
+          "type": "number",
+          "default": 90,
+          "markdownDescription": "Score (0–100) at or above which prompts are considered already effective.",
+          "scope": "machine"
+        },
+        "codefluent.conversation.inactivityGapMinutes": {
+          "type": "number",
+          "default": 60,
+          "markdownDescription": "Minutes of inactivity that defines a conversation boundary.",
+          "scope": "machine"
         }
       }
     }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./ && mkdir -p shared && cp ../shared/benchmarks.json shared/ && cp ../shared/pricing.json shared/ && cp -r ../shared/prompts shared/",
+    "compile": "tsc -p ./ && mkdir -p shared && cp ../shared/benchmarks.json shared/ && cp ../shared/pricing.json shared/ && cp ../shared/defaults.json shared/ && cp -r ../shared/prompts shared/",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile",
     "test": "jest --verbose"

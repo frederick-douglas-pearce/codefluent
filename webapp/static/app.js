@@ -14,7 +14,23 @@ let state = {
 // --- Chart instances (destroy before re-creating) ---
 let charts = {}
 
-const SPARKLINE_MAX_WEEKS = 12
+// --- Config (display defaults, overridden by /api/config) ---
+let DISPLAY_CONFIG = {
+  'display.scoreColorGreen': 70,
+  'display.scoreColorAmber': 50,
+  'display.sparklineMaxWeeks': 12,
+  'display.dataCacheTtlMinutes': 5
+}
+const SPARKLINE_MAX_WEEKS = () => DISPLAY_CONFIG['display.sparklineMaxWeeks']
+const SCORE_GREEN = () => DISPLAY_CONFIG['display.scoreColorGreen']
+const SCORE_AMBER = () => DISPLAY_CONFIG['display.scoreColorAmber']
+
+async function loadConfig() {
+  try {
+    const resp = await fetch('/api/config')
+    if (resp.ok) DISPLAY_CONFIG = await resp.json()
+  } catch (e) { /* use defaults */ }
+}
 
 // --- Anthropic Benchmarks (loaded from /api/benchmarks) ---
 let BENCHMARKS = {}
@@ -1236,7 +1252,7 @@ function renderSparkline(history) {
   const polyline = points.join(' ')
   const fillPoints = `${points[0].split(',')[0]},${h - pad} ${polyline} ${points[points.length - 1].split(',')[0]},${h - pad}`
   const last = scores[scores.length - 1]
-  const color = last >= 70 ? 'var(--success)' : last >= 50 ? 'var(--warning)' : 'var(--danger)'
+  const color = last >= SCORE_GREEN() ? 'var(--success)' : last >= SCORE_AMBER() ? 'var(--warning)' : 'var(--danger)'
   return `<svg class="sparkline" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">` +
     `<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="4" fill="var(--bg-card)" stroke="var(--border)" stroke-width="1"/>` +
     `<polygon points="${fillPoints}" fill="${color}" opacity="0.12"/>` +
@@ -1249,7 +1265,7 @@ function renderTrajectoryText(history) {
   const current = history[history.length - 1]
   const previous = history[history.length - 2]
   const diff = current.score - previous.score
-  const sparkline = renderSparkline(history.slice(-SPARKLINE_MAX_WEEKS))
+  const sparkline = renderSparkline(history.slice(-SPARKLINE_MAX_WEEKS()))
   let text
   if (diff > 0) {
     text = `<span class="trend-up">&#9650; Up from ${previous.score} last week</span>`
@@ -1273,7 +1289,7 @@ function renderFluencyScore() {
   const circumference = 2 * Math.PI * 52
   const offset = circumference * (1 - score / 100)
 
-  const scoreColor = score >= 70 ? 'var(--success)' : score >= 50 ? 'var(--warning)' : 'var(--danger)'
+  const scoreColor = score >= SCORE_GREEN() ? 'var(--success)' : score >= SCORE_AMBER() ? 'var(--warning)' : 'var(--danger)'
 
   let html = `
     <div class="score-ring-container">
@@ -1357,7 +1373,7 @@ function renderFluencyScore() {
       </div>`
   })
 
-  const qualityClass = highQualityPct >= 50 ? 'quality-good' : 'quality-bad'
+  const qualityClass = highQualityPct >= SCORE_AMBER() ? 'quality-good' : 'quality-bad'
   html += `
         </div>
       </div>
@@ -1381,7 +1397,7 @@ function renderFluencyScore() {
       <div class="session-item"${hidden}>
         <div class="session-header">
           <span class="session-id">${escapeHtml(project)} (${date})</span>
-          <span class="session-score" style="color: ${effectiveScore >= 70 ? 'var(--success)' : effectiveScore >= 50 ? 'var(--warning)' : 'var(--danger)'}">
+          <span class="session-score" style="color: ${effectiveScore >= SCORE_GREEN() ? 'var(--success)' : effectiveScore >= SCORE_AMBER() ? 'var(--warning)' : 'var(--danger)'}">
             ${effectiveScore}/100
           </span>
         </div>
@@ -1476,7 +1492,7 @@ function renderOptimizerResults(inputPrompt) {
   const data = state.optimizer
   if (!data) return
 
-  const scoreColor = s => s >= 70 ? 'var(--success)' : s >= 50 ? 'var(--warning)' : 'var(--danger)'
+  const scoreColor = s => s >= SCORE_GREEN() ? 'var(--success)' : s >= SCORE_AMBER() ? 'var(--warning)' : 'var(--danger)'
 
   // Already good — no-op card
   if (data.already_good) {
@@ -1768,7 +1784,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (pathInput) pathInput.value = savedPath
   }
 
-  await loadBenchmarks()
+  await Promise.all([loadBenchmarks(), loadConfig()])
   loadData()
   loadCachedScores()
 })
