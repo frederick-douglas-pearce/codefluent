@@ -114,6 +114,11 @@ const PATTERN_COLORS = ['#D97706', '#059669', '#2563EB', '#DC2626', '#7C3AED', '
 
 const TOTAL_BEHAVIORS = 11
 
+// Only these behaviors can be credited from CLAUDE.md config (meta-interaction rules).
+const CONFIG_ELIGIBLE = new Set([
+  'setting_interaction_terms', 'identifying_missing_context', 'questioning_reasoning'
+])
+
 function computeEffectiveScore(fluencyBehaviors, configBehaviors) {
   const allKeys = new Set([
     ...Object.keys(fluencyBehaviors || {}),
@@ -121,7 +126,7 @@ function computeEffectiveScore(fluencyBehaviors, configBehaviors) {
   ])
   let count = 0
   for (const key of allKeys) {
-    if (fluencyBehaviors?.[key] || configBehaviors?.[key]) count++
+    if (fluencyBehaviors?.[key] || (CONFIG_ELIGIBLE.has(key) && configBehaviors?.[key])) count++
   }
   return Math.round(count / TOTAL_BEHAVIORS * 100)
 }
@@ -794,7 +799,7 @@ function renderFluencyScore() {
     if (userPct < benchPct - 15) colorClass = 'color-danger'
     else if (userPct < benchPct) colorClass = 'color-warning'
 
-    const configTag = configBehaviors[key] ? ' <span class="config-tag">CLAUDE.md</span>' : ''
+    const configTag = (CONFIG_ELIGIBLE.has(key) && configBehaviors[key]) ? ' <span class="config-tag">CLAUDE.md</span>' : ''
 
     html += `
       <div class="behavior-bar">

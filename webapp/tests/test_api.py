@@ -426,6 +426,58 @@ class TestPostOptimize:
         assert resp.status_code == 429
 
 
+class TestMergeWithConfig:
+    def test_eligible_behaviors_are_merged(self):
+        prompt_behaviors = {b: False for b in main.BEHAVIORS}
+        config_behaviors = {
+            "setting_interaction_terms": True,
+            "identifying_missing_context": True,
+            "questioning_reasoning": True,
+        }
+        result = main._merge_with_config(prompt_behaviors, config_behaviors)
+        assert result["setting_interaction_terms"] is True
+        assert result["identifying_missing_context"] is True
+        assert result["questioning_reasoning"] is True
+
+    def test_non_eligible_behaviors_are_filtered(self):
+        prompt_behaviors = {b: False for b in main.BEHAVIORS}
+        config_behaviors = {
+            "clarifying_goals": True,
+            "specifying_format": True,
+            "providing_examples": True,
+            "checking_facts": True,
+        }
+        result = main._merge_with_config(prompt_behaviors, config_behaviors)
+        assert result["clarifying_goals"] is False
+        assert result["specifying_format"] is False
+        assert result["providing_examples"] is False
+        assert result["checking_facts"] is False
+
+    def test_all_true_config_only_merges_3(self):
+        prompt_behaviors = {b: False for b in main.BEHAVIORS}
+        config_behaviors = {b: True for b in main.BEHAVIORS}
+        result = main._merge_with_config(prompt_behaviors, config_behaviors)
+        merged_count = sum(1 for v in result.values() if v)
+        assert merged_count == 3
+
+
+class TestBuildConfigBehaviorsContext:
+    def test_filters_non_eligible_behaviors(self):
+        result = main._build_config_behaviors_context({
+            "checking_facts": True,
+            "providing_examples": True,
+        })
+        assert result == ""
+
+    def test_includes_eligible_behaviors(self):
+        result = main._build_config_behaviors_context({
+            "setting_interaction_terms": True,
+            "checking_facts": True,
+        })
+        assert "setting_interaction_terms" in result
+        assert "checking_facts" not in result
+
+
 class TestGetQuickwins:
     def test_returns_suggestions(self, client, mock_anthropic):
         suggestions = [

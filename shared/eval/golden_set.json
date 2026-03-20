@@ -5,7 +5,7 @@
   "prompt_versions_tested": {
     "scoring": "scoring-v1.0",
     "single_scoring": "single_scoring-v1.0",
-    "config": "config-v1.0",
+    "config": "config-v1.1",
     "optimizer": "optimizer-v1.1"
   },
   "single_scoring": [
@@ -1197,16 +1197,16 @@
       "expected": {
         "fluency_behaviors": {
           "iteration_and_refinement": false,
-          "clarifying_goals": true,
-          "specifying_format": true,
-          "providing_examples": true,
+          "clarifying_goals": false,
+          "specifying_format": false,
+          "providing_examples": false,
           "setting_interaction_terms": true,
           "checking_facts": false,
           "questioning_reasoning": true,
           "identifying_missing_context": true,
           "adjusting_approach": false,
           "building_on_responses": false,
-          "providing_feedback": true
+          "providing_feedback": false
         }
       },
       "rationale": {
@@ -1233,7 +1233,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": false,
           "clarifying_goals": false,
-          "specifying_format": true,
+          "specifying_format": false,
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
@@ -1270,7 +1270,7 @@
           "identifying_missing_context": false,
           "adjusting_approach": false,
           "building_on_responses": false,
-          "providing_feedback": true
+          "providing_feedback": false
         }
       },
       "rationale": {
@@ -1348,9 +1348,9 @@
       "expected": {
         "fluency_behaviors": {
           "iteration_and_refinement": false,
-          "clarifying_goals": true,
-          "specifying_format": true,
-          "providing_examples": true,
+          "clarifying_goals": false,
+          "specifying_format": false,
+          "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
           "questioning_reasoning": false,
