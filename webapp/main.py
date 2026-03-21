@@ -633,8 +633,10 @@ async def get_scores(project: str = Query(default=None, max_length=500)):
 
     aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
     if isinstance(last_ids, list) and last_ids:
-        aggregate["sessions_requested"] = len(last_ids)
-        aggregate["sessions_skipped"] = len(last_ids) - len(scored)
+        aggregate["conversations_requested"] = len(last_ids)
+        aggregate["conversations_skipped"] = len(last_ids) - len(scored)
+        aggregate["sessions_requested"] = len(last_ids)  # deprecated alias
+        aggregate["sessions_skipped"] = len(last_ids) - len(scored)  # deprecated alias
 
     # Attach score history scoped to project
     data_dir = _resolve_data_dir()
