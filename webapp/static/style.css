@@ -958,10 +958,12 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   color: var(--accent);
 }
 .conversation-token-table td {
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: left;
 }
 .conversation-token-table tbody tr:hover {
   background: var(--bg-hover);

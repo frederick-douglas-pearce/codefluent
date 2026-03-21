@@ -905,6 +905,7 @@ function renderConversationTokenTable() {
   }
 
   let html = `
+    <h3>Conversation Token Details</h3>
     <div class="conversation-table-wrapper">
       <table class="conversation-token-table">
         <thead>
