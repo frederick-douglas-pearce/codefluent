@@ -429,6 +429,35 @@ class TestBuildConversations:
         ]
         result = build_conversations(messages, "proj", "enc", 60)
         assert result[0]["tokens_per_prompt"] == 200
+        assert result[0]["prompt_count"] == 2
+
+    def test_prompt_count_excludes_contentless_user_messages(self):
+        """Tool result messages are type 'user' but have no content — they should not count as prompts."""
+        messages = [
+            _make_user_message("2026-03-01T10:00:00.000Z", "Real prompt", pos=0),
+            _make_assistant_message("2026-03-01T10:00:05.000Z", usage={
+                "input_tokens": 50, "output_tokens": 50,
+                "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+            }, pos=1),
+            # Tool result messages — type 'user' with no content
+            {"type": "user", "timestamp": "2026-03-01T10:00:10.000Z", "session_id": "sess-1", "file_position": 2, "used_plan_mode": False},
+            {"type": "user", "timestamp": "2026-03-01T10:00:15.000Z", "session_id": "sess-1", "file_position": 3, "used_plan_mode": False},
+            {"type": "user", "timestamp": "2026-03-01T10:00:20.000Z", "session_id": "sess-1", "file_position": 4, "used_plan_mode": False},
+            _make_assistant_message("2026-03-01T10:00:25.000Z", usage={
+                "input_tokens": 50, "output_tokens": 50,
+                "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+            }, pos=5),
+            _make_user_message("2026-03-01T10:05:00.000Z", "Another real prompt", pos=6),
+            _make_assistant_message("2026-03-01T10:05:05.000Z", usage={
+                "input_tokens": 50, "output_tokens": 50,
+                "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+            }, pos=7),
+        ]
+        result = build_conversations(messages, "proj", "enc", 60)
+        assert len(result) == 1
+        assert result[0]["user_message_count"] == 5  # all type 'user' messages
+        assert result[0]["prompt_count"] == 2  # only messages with content
+        assert result[0]["tokens_per_prompt"] == 150  # 300 total / 2 prompts
 
     def test_cache_hit_rate(self):
         messages = [

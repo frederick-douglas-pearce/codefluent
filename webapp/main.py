@@ -494,7 +494,7 @@ async def get_conversation_analytics(
                 "project": s.get("project", ""),
                 "started_at": s.get("started_at"),
                 "model": s.get("model"),
-                "prompt_count": len(s.get("user_prompts", [])),
+                "prompt_count": s.get("prompt_count", len(s.get("user_prompts", []))),
                 "total_tokens": s.get("total_tokens", 0),
                 "total_input_tokens": s.get("total_input_tokens", 0),
                 "total_output_tokens": s.get("total_output_tokens", 0),

@@ -11,6 +11,7 @@ export interface ParsedConversation {
   started_at: string | null
   ended_at: string | null
   user_prompts: string[]
+  prompt_count: number
   user_message_count: number
   assistant_message_count: number
   tool_use_count: number
@@ -132,7 +133,8 @@ export function buildConversations(
 
     timestamps.sort()
     const totalTokens = totalInputTokens + totalOutputTokens + totalCacheCreationTokens + totalCacheReadTokens
-    const tokensPerPrompt = userMsgCount > 0 ? totalTokens / userMsgCount : 0
+    const promptCount = userPrompts.length
+    const tokensPerPrompt = promptCount > 0 ? totalTokens / promptCount : 0
     const cacheHitDenom = totalCacheReadTokens + totalInputTokens + totalCacheCreationTokens
     const cacheHitRate = cacheHitDenom > 0 ? totalCacheReadTokens / cacheHitDenom : 0
 
@@ -144,6 +146,7 @@ export function buildConversations(
       started_at: timestamps[0] || null,
       ended_at: timestamps[timestamps.length - 1] || null,
       user_prompts: userPrompts,
+      prompt_count: promptCount,
       user_message_count: userMsgCount,
       assistant_message_count: assistantMsgCount,
       tool_use_count: toolUseCount,
