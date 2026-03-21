@@ -37,6 +37,31 @@ export interface SessionsResult {
   }
 }
 
+export interface TimestampedMessage {
+  type: string                  // 'user' | 'assistant' | 'tool_use' | 'thinking'
+  timestamp: string | null
+  session_id: string
+  file_position: number         // line index within source file (for stable sort)
+  // User message fields
+  content?: string              // extracted text (truncated to 2000 chars)
+  used_plan_mode?: boolean      // true if planContent present
+  // Assistant message fields
+  usage?: { input_tokens: number; output_tokens: number;
+            cache_creation_input_tokens: number; cache_read_input_tokens: number }
+  tool_names?: string[]         // tool names from assistant content blocks
+  model?: string
+  // Metadata (from first message that has it)
+  claude_code_version?: string
+  git_branch?: string
+}
+
+export interface SessionMessagesResult {
+  messages: TimestampedMessage[]
+  session_id: string
+  project: string
+  project_path_encoded: string
+}
+
 const SKIP_TYPES = new Set([
   'file-history-snapshot', 'tool_result', 'progress',
   'hook_progress', 'bash_progress', 'system', 'create',
@@ -206,6 +231,149 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     total_tokens: totalTokens,
     tokens_per_prompt: tokensPerPrompt,
     cache_hit_rate: cacheHitRate,
+  }
+}
+
+export function parseSessionMessages(filepath: string): SessionMessagesResult | null {
+  let raw: string
+  try {
+    raw = fs.readFileSync(filepath, 'utf8')
+  } catch {
+    return null
+  }
+
+  const lines: any[] = []
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      lines.push(JSON.parse(trimmed))
+    } catch {
+      continue
+    }
+  }
+
+  if (lines.length === 0) return null
+
+  let sessionId: string | null = null
+  let projectCwd: string | null = null
+  let isSidechain = false
+  let version: string | null = null
+  let gitBranch: string | null = null
+
+  const messages: TimestampedMessage[] = []
+
+  for (let i = 0; i < lines.length; i++) {
+    const msg = lines[i]
+    const msgType = msg.type || ''
+
+    if (SKIP_TYPES.has(msgType)) continue
+
+    if (!sessionId && msg.sessionId) sessionId = msg.sessionId
+    if (!projectCwd && msg.cwd) projectCwd = msg.cwd
+    if (!version && msg.version) version = msg.version
+    if (!gitBranch && msg.gitBranch) gitBranch = msg.gitBranch
+    if (msg.isSidechain === true) isSidechain = true
+
+    if (msgType === 'user') {
+      const content = msg.message?.content ?? ''
+      const text = extractUserText(content)
+      const isInterrupted = text === '[Request interrupted by user for tool use]'
+      const extracted: TimestampedMessage = {
+        type: 'user',
+        timestamp: msg.timestamp || null,
+        session_id: '', // filled after loop
+        file_position: i,
+        content: (!text || isInterrupted) ? undefined : text.slice(0, 2000),
+        used_plan_mode: !!msg.planContent,
+      }
+      if (!version && msg.version) extracted.claude_code_version = msg.version
+      if (!gitBranch && msg.gitBranch) extracted.git_branch = msg.gitBranch
+      messages.push(extracted)
+    } else if (msgType === 'assistant') {
+      const toolNames: string[] = []
+      const content = msg.message?.content
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block && typeof block === 'object' && block.type === 'tool_use') {
+            if (block.name) toolNames.push(block.name)
+          }
+        }
+      }
+      const usage = msg.message?.usage
+      const extracted: TimestampedMessage = {
+        type: 'assistant',
+        timestamp: msg.timestamp || null,
+        session_id: '',
+        file_position: i,
+        model: msg.message?.model || undefined,
+        tool_names: toolNames.length > 0 ? toolNames : undefined,
+      }
+      if (usage) {
+        extracted.usage = {
+          input_tokens: usage.input_tokens || 0,
+          output_tokens: usage.output_tokens || 0,
+          cache_creation_input_tokens: usage.cache_creation_input_tokens || 0,
+          cache_read_input_tokens: usage.cache_read_input_tokens || 0,
+        }
+      }
+      messages.push(extracted)
+    } else if (msgType === 'tool_use') {
+      let name = msg.name || msg.message?.name
+      if (!name) {
+        const content = msg.message?.content
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block && typeof block === 'object' && block.type === 'tool_use') {
+              name = block.name
+              break
+            }
+          }
+        }
+      }
+      messages.push({
+        type: 'tool_use',
+        timestamp: msg.timestamp || null,
+        session_id: '',
+        file_position: i,
+        tool_names: name ? [name] : undefined,
+      })
+    } else if (msgType === 'thinking') {
+      messages.push({
+        type: 'thinking',
+        timestamp: msg.timestamp || null,
+        session_id: '',
+        file_position: i,
+      })
+    }
+  }
+
+  if (isSidechain) return null
+
+  if (!sessionId) sessionId = path.basename(filepath, '.jsonl')
+
+  const projectName = projectCwd
+    ? path.basename(projectCwd)
+    : path.basename(path.dirname(filepath))
+
+  const parentDirName = path.basename(path.dirname(filepath))
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+  const projectPathEncoded = uuidPattern.test(parentDirName)
+    ? path.basename(path.dirname(path.dirname(filepath)))
+    : parentDirName
+
+  // Backfill session_id and metadata on all messages
+  for (const m of messages) {
+    m.session_id = sessionId
+    if (!m.claude_code_version && version) m.claude_code_version = version
+    if (!m.git_branch && gitBranch) m.git_branch = gitBranch
+  }
+
+  return {
+    messages,
+    session_id: sessionId,
+    project: projectName,
+    project_path_encoded: projectPathEncoded,
   }
 }
 
