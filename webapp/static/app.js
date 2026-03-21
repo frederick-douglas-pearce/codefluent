@@ -425,6 +425,7 @@ function updateTimeScopeCounts() {
   if (!state.conversations?.conversations) return
   const conversations = getFilteredConversations()
   const select = document.getElementById('conversation-scope')
+  if (!select) return
   for (const option of select.options) {
     if (!option.value.startsWith('days:')) continue
     const { description } = resolveConversationIds(option.value, conversations)
