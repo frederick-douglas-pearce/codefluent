@@ -1228,7 +1228,7 @@ function renderConversationEfficiencyCards(analytics) {
   // Find most efficient conversation (lowest tokens_per_prompt among conversations with prompts)
   let mostEfficient = null
   for (const s of conversations) {
-    if (s.user_message_count > 0 && s.total_tokens > 0) {
+    if ((s.prompt_count || s.user_message_count) > 0 && s.total_tokens > 0) {
       if (!mostEfficient || s.tokens_per_prompt < mostEfficient.tokens_per_prompt) {
         mostEfficient = s
       }
@@ -1246,7 +1246,7 @@ function renderConversationEfficiencyCards(analytics) {
 
   const totalCost = agg.total_estimated_cost != null ? agg.total_estimated_cost : conversations.reduce((s, sess) => s + (sess.estimated_cost || 0), 0)
 
-  const totalPrompts = conversations.reduce((s, sess) => s + sess.user_message_count, 0)
+  const totalPrompts = conversations.reduce((s, sess) => s + (sess.prompt_count || sess.user_message_count), 0)
 
   // Compute avg cache read/creation ratio and output/input ratio
   const totalCacheRead = conversations.reduce((sum, s) => sum + (s.total_cache_read_tokens || 0), 0)
@@ -1334,7 +1334,7 @@ function renderConversationTokenTable(conversations) {
         vb = (b.project || '').toLowerCase()
         return va < vb ? -dir : va > vb ? dir : 0
       case 'prompts':
-        return (a.user_message_count - b.user_message_count) * dir
+        return ((a.prompt_count || a.user_message_count) - (b.prompt_count || b.user_message_count)) * dir
       case 'total_tokens':
         return (a.total_tokens - b.total_tokens) * dir
       case 'estimated_cost':
@@ -1342,8 +1342,8 @@ function renderConversationTokenTable(conversations) {
       case 'tokens_per_prompt':
         return (a.tokens_per_prompt - b.tokens_per_prompt) * dir
       case 'cost_per_prompt':
-        va = a.user_message_count > 0 && a.estimated_cost > 0 ? a.estimated_cost / a.user_message_count : 0
-        vb = b.user_message_count > 0 && b.estimated_cost > 0 ? b.estimated_cost / b.user_message_count : 0
+        va = (a.prompt_count || a.user_message_count) > 0 && a.estimated_cost > 0 ? a.estimated_cost / (a.prompt_count || a.user_message_count) : 0
+        vb = (b.prompt_count || b.user_message_count) > 0 && b.estimated_cost > 0 ? b.estimated_cost / (b.prompt_count || b.user_message_count) : 0
         return (va - vb) * dir
       case 'cache_hit_rate':
         return (a.cache_hit_rate - b.cache_hit_rate) * dir
@@ -1369,11 +1369,12 @@ function renderConversationTokenTable(conversations) {
   const rows = visible.map(s => {
     const date = s.started_at ? new Date(s.started_at).toLocaleDateString() : '-'
     const project = s.project || '-'
-    const prompts = s.user_message_count || 0
+    const pc = s.prompt_count || s.user_message_count || 0
+    const prompts = pc
     const totalTokens = formatTokens(s.total_tokens || 0)
     const cost = s.estimated_cost > 0 ? formatCost(s.estimated_cost) : '-'
-    const tokensPerPrompt = s.user_message_count > 0 ? formatTokens(Math.round(s.tokens_per_prompt)) : '-'
-    const costPerPrompt = s.user_message_count > 0 && s.estimated_cost > 0 ? formatCost(s.estimated_cost / s.user_message_count) : '-'
+    const tokensPerPrompt = pc > 0 ? formatTokens(Math.round(s.tokens_per_prompt)) : '-'
+    const costPerPrompt = pc > 0 && s.estimated_cost > 0 ? formatCost(s.estimated_cost / pc) : '-'
     const cacheHit = Math.round((s.cache_hit_rate || 0) * 100) + '%'
     const cacheRC = s.total_cache_creation_tokens > 0
       ? (s.total_cache_read_tokens / s.total_cache_creation_tokens).toFixed(1) + 'x' : '-'
@@ -1454,7 +1455,7 @@ function renderScoreCorrelation(conversations) {
 
   // --- Compute derived features for all conversations ---
   const enriched = allConversations.map(s => {
-    const promptCount = s.user_message_count || 1
+    const promptCount = s.prompt_count || s.user_message_count || 1
     const costPerPrompt = s.estimated_cost / promptCount
     const cacheReadCreation = s.total_cache_creation_tokens > 0
       ? s.total_cache_read_tokens / s.total_cache_creation_tokens : null

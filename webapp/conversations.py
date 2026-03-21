@@ -112,7 +112,8 @@ def build_conversations(
 
         timestamps.sort()
         total_tokens = total_input_tokens + total_output_tokens + total_cache_creation_tokens + total_cache_read_tokens
-        tokens_per_prompt = total_tokens / user_msg_count if user_msg_count > 0 else 0
+        prompt_count = len(user_prompts)
+        tokens_per_prompt = total_tokens / prompt_count if prompt_count > 0 else 0
         cache_hit_denom = total_cache_read_tokens + total_input_tokens + total_cache_creation_tokens
         cache_hit_rate = total_cache_read_tokens / cache_hit_denom if cache_hit_denom > 0 else 0
 
@@ -124,6 +125,7 @@ def build_conversations(
             "started_at": timestamps[0] if timestamps else None,
             "ended_at": timestamps[-1] if timestamps else None,
             "user_prompts": user_prompts,
+            "prompt_count": prompt_count,
             "user_message_count": user_msg_count,
             "assistant_message_count": assistant_msg_count,
             "tool_use_count": tool_use_count,

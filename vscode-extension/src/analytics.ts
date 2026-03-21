@@ -3,6 +3,11 @@ import { ParsedConversation } from './conversation'
 import { ScoreResult, getISOWeekKey, BEHAVIORS } from './scoring'
 import { estimateSessionCost, loadPricing, PricingData } from './pricing'
 
+/** Get the actual prompt count (messages with content), falling back to user_message_count for legacy ParsedSession */
+function getPromptCount(c: ParsedConversation | ParsedSession): number {
+  return 'prompt_count' in c ? (c as ParsedConversation).prompt_count : c.user_message_count
+}
+
 export interface WeeklyTokenAggregation {
   week: string
   total_tokens: number
@@ -114,14 +119,14 @@ export function computeConversationEfficiency(conversations: (ParsedConversation
   }
 
   const totalTokens = conversations.reduce((sum, c) => sum + c.total_tokens, 0)
-  const totalPrompts = conversations.reduce((sum, c) => sum + c.user_message_count, 0)
+  const totalPrompts = conversations.reduce((sum, c) => sum + getPromptCount(c), 0)
   const avgTokensPerPrompt = totalPrompts > 0 ? totalTokens / totalPrompts : 0
   const avgCacheHitRate = conversations.reduce((sum, c) => sum + c.cache_hit_rate, 0) / conversations.length
 
   // Most efficient = lowest tokens_per_prompt among conversations that have prompts
   let mostEfficient: { id: string; tokens_per_prompt: number } | null = null
   for (const c of conversations) {
-    if (c.user_message_count > 0 && c.total_tokens > 0) {
+    if (getPromptCount(c) > 0 && c.total_tokens > 0) {
       if (!mostEfficient || c.tokens_per_prompt < mostEfficient.tokens_per_prompt) {
         mostEfficient = { id: c.id, tokens_per_prompt: Math.round(c.tokens_per_prompt) }
       }

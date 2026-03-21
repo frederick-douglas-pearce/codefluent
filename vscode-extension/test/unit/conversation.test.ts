@@ -504,6 +504,36 @@ describe('buildConversations', () => {
     ]
     const result = buildConversations(messages, 'proj', 'enc', 60)
     expect(result[0].tokens_per_prompt).toBe(200) // 400 / 2
+    expect(result[0].prompt_count).toBe(2) // both have content
+  })
+
+  it('distinguishes prompt_count from user_message_count', () => {
+    // Simulate tool_result messages: type 'user' but no content
+    const messages = [
+      makeUserMessage('2026-03-01T10:00:00.000Z', 'Real prompt', 'sess-1', 0),
+      makeAssistantMessage('2026-03-01T10:00:05.000Z', {
+        input_tokens: 50, output_tokens: 50,
+        cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+      }, 'sess-1', 1),
+      // Tool result messages — type 'user' with no content
+      { type: 'user', timestamp: '2026-03-01T10:00:10.000Z', session_id: 'sess-1', file_position: 2, used_plan_mode: false } as TimestampedMessage,
+      { type: 'user', timestamp: '2026-03-01T10:00:15.000Z', session_id: 'sess-1', file_position: 3, used_plan_mode: false } as TimestampedMessage,
+      { type: 'user', timestamp: '2026-03-01T10:00:20.000Z', session_id: 'sess-1', file_position: 4, used_plan_mode: false } as TimestampedMessage,
+      makeAssistantMessage('2026-03-01T10:00:25.000Z', {
+        input_tokens: 50, output_tokens: 50,
+        cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+      }, 'sess-1', 5),
+      makeUserMessage('2026-03-01T10:05:00.000Z', 'Another real prompt', 'sess-1', 6),
+      makeAssistantMessage('2026-03-01T10:05:05.000Z', {
+        input_tokens: 50, output_tokens: 50,
+        cache_creation_input_tokens: 0, cache_read_input_tokens: 0,
+      }, 'sess-1', 7),
+    ]
+    const result = buildConversations(messages, 'proj', 'enc', 60)
+    expect(result).toHaveLength(1)
+    expect(result[0].user_message_count).toBe(5) // all type 'user' messages
+    expect(result[0].prompt_count).toBe(2) // only messages with content
+    expect(result[0].tokens_per_prompt).toBe(150) // 300 total / 2 prompts (not / 5)
   })
 
   it('computes cache_hit_rate correctly', () => {
