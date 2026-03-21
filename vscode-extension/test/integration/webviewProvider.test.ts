@@ -21,12 +21,16 @@ jest.mock('fs', () => {
   }
 })
 
-jest.mock('../../src/parser')
+jest.mock('../../src/conversation', () => ({
+  getAllConversations: jest.fn(),
+  buildConversations: jest.fn(),
+}))
 jest.mock('../../src/usage')
 jest.mock('../../src/scoring', () => {
   const actual = jest.requireActual('../../src/scoring')
   return {
     ...actual,
+    scoreConversations: jest.fn().mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } }),
     scoreSessions: jest.fn().mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } }),
     computeAggregate: jest.fn(),
     scoreClaudeMd: jest.fn(),
@@ -40,6 +44,7 @@ jest.mock('../../src/analytics', () => {
   const actual = jest.requireActual('../../src/analytics')
   return {
     ...actual,
+    buildConversationAnalytics: jest.fn(),
     buildSessionAnalytics: jest.fn(),
   }
 })
@@ -47,11 +52,11 @@ jest.mock('@anthropic-ai/sdk')
 
 import { getDefaultShell, getShellArgs, getClaudeCommand, escapePromptForShell } from '../../src/platform'
 
-import { getAllSessions } from '../../src/parser'
+import { getAllConversations } from '../../src/conversation'
 import { getUsageData } from '../../src/usage'
-import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt } from '../../src/scoring'
+import { scoreConversations, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt } from '../../src/scoring'
 import { getQuickWins } from '../../src/quickwins'
-import { buildSessionAnalytics } from '../../src/analytics'
+import { buildConversationAnalytics } from '../../src/analytics'
 
 function makeContext(overrides: Partial<Record<string, any>> = {}): any {
   return {
@@ -114,6 +119,7 @@ describe('CodeFluentViewProvider', () => {
     const actualFs = jest.requireActual('fs') as typeof import('fs')
     try { actualFs.unlinkSync('/tmp/codefluent-test-storage/usage_cache.json') } catch {}
     try { actualFs.unlinkSync('/tmp/codefluent-test-storage/sessions_cache.json') } catch {}
+    try { actualFs.unlinkSync('/tmp/codefluent-test-storage/conversations_cache.json') } catch {}
     context = makeContext()
     statusBar = makeStatusBar()
     provider = new CodeFluentViewProvider(context, statusBar)
@@ -327,14 +333,14 @@ describe('CodeFluentViewProvider', () => {
   describe('message handling: getSessions', () => {
     it('fetches sessions with default limit', async () => {
       const mockSessions = {
-        sessions: [{ id: 's1', project: 'proj', user_prompts: ['hi'] }],
+        conversations: [{ id: 's1', project: 'proj', user_prompts: ['hi'] }],
         metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
 
       await sendMessage({ type: 'getSessions', requestId: 'req-3' })
 
-      expect(getAllSessions).toHaveBeenCalledWith(undefined, undefined, undefined, 200)
+      expect(getAllConversations).toHaveBeenCalledWith(undefined, undefined, undefined, 200)
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getSessions',
         requestId: 'req-3',
@@ -347,13 +353,13 @@ describe('CodeFluentViewProvider', () => {
 
     it('filters by project from payload', async () => {
       const mockSessions = {
-        sessions: [
+        conversations: [
           { id: 's1', project: 'my-project', user_prompts: ['hi'] },
           { id: 's2', project: 'other-project', user_prompts: ['bye'] },
         ],
         metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
 
       await sendMessage({
         type: 'getSessions',
@@ -362,7 +368,7 @@ describe('CodeFluentViewProvider', () => {
       })
 
       // getAllSessions is called without args (full result cached)
-      expect(getAllSessions).toHaveBeenCalledWith(undefined, undefined, undefined, 200)
+      expect(getAllConversations).toHaveBeenCalledWith(undefined, undefined, undefined, 200)
       // But the response is filtered
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getSessions',
@@ -379,13 +385,13 @@ describe('CodeFluentViewProvider', () => {
         { uri: vscode.Uri.file('/home/user/my-project') },
       ]
       const mockSessions = {
-        sessions: [
+        conversations: [
           { id: 's1', project: 'my-project', user_prompts: ['hi'] },
           { id: 's2', project: 'other-project', user_prompts: ['bye'] },
         ],
         metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
 
       await sendMessage({ type: 'getSessions', requestId: 'req-scope-1' })
 
@@ -404,13 +410,13 @@ describe('CodeFluentViewProvider', () => {
     it('returns all projects when no workspace is open', async () => {
       ;(vscode.workspace as any).workspaceFolders = undefined
       const mockSessions = {
-        sessions: [
+        conversations: [
           { id: 's1', project: 'proj-a', user_prompts: ['hi'] },
           { id: 's2', project: 'proj-b', user_prompts: ['bye'] },
         ],
         metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
 
       await sendMessage({ type: 'getSessions', requestId: 'req-scope-2' })
 
@@ -455,8 +461,8 @@ describe('CodeFluentViewProvider', () => {
           coding_pattern: 'hybrid_code_explanation',
         },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [fakeSession] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: scoreResult, stats: { scored: 1, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [fakeSession] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: scoreResult, stats: { scored: 1, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({
         average_score: 75,
         sessions_scored: 1,
@@ -468,7 +474,7 @@ describe('CodeFluentViewProvider', () => {
         payload: { session_ids: ['sess-1'] },
       })
 
-      expect(scoreSessions).toHaveBeenCalledWith(
+      expect(scoreConversations).toHaveBeenCalledWith(
         ['sess-1'],
         { 'sess-1': fakeSession },
         expect.any(Object),
@@ -480,14 +486,28 @@ describe('CodeFluentViewProvider', () => {
         requestId: 'req-5',
         data: {
           scores: scoreResult,
-          aggregate: { average_score: 75, sessions_scored: 1, sessions_requested: 1, sessions_skipped: 0, sessions_errored: 0, sessions_cached: 0, score_history: [] },
+          aggregate: expect.objectContaining({
+            average_score: 75,
+            conversations_requested: 1,
+            conversations_scored: 1,
+            conversations_skipped: 0,
+            conversations_errored: 0,
+            conversations_cached: 0,
+            // Deprecated aliases
+            sessions_requested: 1,
+            sessions_scored: 1,
+            sessions_skipped: 0,
+            sessions_errored: 0,
+            sessions_cached: 0,
+            score_history: [],
+          }),
         },
       })
     })
 
     it('updates status bar with aggregate score', async () => {
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [fakeSession] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [fakeSession] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {
         'sess-1': {
           session_id: 'sess-1',
           overall_score: 82,
@@ -526,8 +546,8 @@ describe('CodeFluentViewProvider', () => {
     })
 
     it('passes force_rescore flag through', async () => {
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [fakeSession] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [fakeSession] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
       await sendMessage({
@@ -536,7 +556,7 @@ describe('CodeFluentViewProvider', () => {
         payload: { session_ids: ['sess-1'], force_rescore: true },
       })
 
-      expect(scoreSessions).toHaveBeenCalledWith(
+      expect(scoreConversations).toHaveBeenCalledWith(
         ['sess-1'],
         expect.any(Object),
         expect.any(Object),
@@ -553,8 +573,8 @@ describe('CodeFluentViewProvider', () => {
         { id: 'sess-1', project: 'my-project', user_prompts: ['hi'], started_at: '2026-03-01T00:00:00Z' },
         { id: 'sess-2', project: 'other-project', user_prompts: ['bye'], started_at: '2026-02-15T00:00:00Z' },
       ]
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: sessions })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {
         'sess-1': { session_id: 'sess-1', fluency_behaviors: { clarifying_goals: true } },
       }, stats: { scored: 1, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({ average_score: 80, sessions_scored: 1 })
@@ -654,10 +674,13 @@ describe('CodeFluentViewProvider', () => {
       fsMock.readFileSync.mockImplementation((...args: any[]) => {
         if (String(args[0]).endsWith('scores.json')) {
           return JSON.stringify({
-            'sess-1': {
-              session_id: 'sess-1',
-              overall_score: 90,
-              fluency_behaviors: { clarifying_goals: true },
+            cache_format: 'conversations',
+            scores: {
+              'sess-1': {
+                session_id: 'sess-1',
+                overall_score: 90,
+                fluency_behaviors: { clarifying_goals: true },
+              },
             },
           })
         }
@@ -707,8 +730,8 @@ describe('CodeFluentViewProvider', () => {
   describe('API key resolution', () => {
     it('uses env variable first', async () => {
       process.env.ANTHROPIC_API_KEY = 'sk-from-env'
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
       await sendMessage({
@@ -726,8 +749,8 @@ describe('CodeFluentViewProvider', () => {
     it('falls back to secrets storage when env is not set', async () => {
       delete process.env.ANTHROPIC_API_KEY
       context.secrets.get.mockResolvedValue('sk-from-secrets')
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
       await sendMessage({
@@ -746,8 +769,8 @@ describe('CodeFluentViewProvider', () => {
       delete process.env.ANTHROPIC_API_KEY
       context.secrets.get.mockResolvedValue(undefined)
       ;(vscode.window.showInputBox as jest.Mock).mockResolvedValue('sk-user-input')
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
       await sendMessage({
@@ -890,32 +913,32 @@ describe('CodeFluentViewProvider', () => {
 
     it('second getSessions call returns cached data without re-parsing', async () => {
       const mockSessions = {
-        sessions: [{ id: 's1', project: 'proj', user_prompts: ['hi'] }],
+        conversations: [{ id: 's1', project: 'proj', user_prompts: ['hi'] }],
         metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
 
       await sendMessage({ type: 'getSessions', requestId: 'req-cache-3' })
-      expect(getAllSessions).toHaveBeenCalledTimes(1)
+      expect(getAllConversations).toHaveBeenCalledTimes(1)
 
-      ;(getAllSessions as jest.Mock).mockClear()
+      ;(getAllConversations as jest.Mock).mockClear()
       await sendMessage({ type: 'getSessions', requestId: 'req-cache-4' })
-      expect(getAllSessions).not.toHaveBeenCalled()
+      expect(getAllConversations).not.toHaveBeenCalled()
     })
 
     it('refreshData message invalidates cache and triggers background refresh', async () => {
       const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
       ;(getUsageData as jest.Mock).mockResolvedValue(mockUsage)
       const mockSessions = {
-        sessions: [],
+        conversations: [],
         metadata: { total_sessions: 0, total_projects: 0, total_prompts: 0, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
 
       // Prime the cache
       await sendMessage({ type: 'getUsage', requestId: 'req-cache-5' })
       ;(getUsageData as jest.Mock).mockClear()
-      ;(getAllSessions as jest.Mock).mockClear()
+      ;(getAllConversations as jest.Mock).mockClear()
 
       // Send refreshData (fire-and-forget, no requestId)
       await sendMessage({ type: 'refreshData' })
@@ -926,22 +949,22 @@ describe('CodeFluentViewProvider', () => {
 
       // Background refresh should have called getUsageData and getAllSessions
       expect(getUsageData).toHaveBeenCalledTimes(1)
-      expect(getAllSessions).toHaveBeenCalledTimes(1)
+      expect(getAllConversations).toHaveBeenCalledTimes(1)
     })
 
     it('runScoring uses session cache instead of re-parsing', async () => {
       process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key'
       const mockSessions = {
-        sessions: [{ id: 's1', user_prompts: ['hi'], used_plan_mode: false, thinking_count: 0, tools_used: [] }],
+        conversations: [{ id: 's1', user_prompts: ['hi'], used_plan_mode: false, thinking_count: 0, tools_used: [] }],
         metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
       // Prime session cache
       await sendMessage({ type: 'getSessions', requestId: 'req-cache-6' })
-      ;(getAllSessions as jest.Mock).mockClear()
+      ;(getAllConversations as jest.Mock).mockClear()
 
       // Now run scoring — should use cached sessions
       await sendMessage({
@@ -951,7 +974,7 @@ describe('CodeFluentViewProvider', () => {
       })
 
       // getAllSessions should NOT have been called again
-      expect(getAllSessions).not.toHaveBeenCalled()
+      expect(getAllConversations).not.toHaveBeenCalled()
 
       delete process.env.ANTHROPIC_API_KEY
     })
@@ -963,8 +986,8 @@ describe('CodeFluentViewProvider', () => {
       provider.setStatusBar(newStatusBar)
 
       process.env.ANTHROPIC_API_KEY = 'sk-test'
-      ;(getAllSessions as jest.Mock).mockReturnValue({
-        sessions: [{
+      ;(getAllConversations as jest.Mock).mockReturnValue({
+        conversations: [{
           id: 's1',
           user_prompts: ['hi'],
           used_plan_mode: false,
@@ -972,7 +995,7 @@ describe('CodeFluentViewProvider', () => {
           tools_used: [],
         }],
       })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {
         s1: { session_id: 's1', overall_score: 65, fluency_behaviors: { clarifying_goals: true } },
       }, stats: { scored: 1, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({ average_score: 65, sessions_scored: 1 })
@@ -1022,8 +1045,8 @@ describe('CodeFluentViewProvider', () => {
         return origImpl(...args)
       })
 
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [{ id: 's1', user_prompts: ['hi'] }] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [{ id: 's1', user_prompts: ['hi'] }] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
       await sendMessage({
@@ -1059,8 +1082,8 @@ describe('CodeFluentViewProvider', () => {
         fluency_behaviors: { clarifying_goals: true, specifying_format: true },
         one_line_summary: 'Updated config.',
       })
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [{ id: 's1', user_prompts: ['hi'] }] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [{ id: 's1', user_prompts: ['hi'] }] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
       await sendMessage({
@@ -1095,8 +1118,8 @@ describe('CodeFluentViewProvider', () => {
         fluency_behaviors: { clarifying_goals: true },
         one_line_summary: 'Re-scored.',
       })
-      ;(getAllSessions as jest.Mock).mockReturnValue({ sessions: [{ id: 's1', user_prompts: ['hi'] }] })
-      ;(scoreSessions as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [{ id: 's1', user_prompts: ['hi'] }] })
+      ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
       await sendMessage({
@@ -1413,23 +1436,24 @@ describe('CodeFluentViewProvider', () => {
   describe('message handling: getSessionAnalytics', () => {
     it('returns analytics data from buildSessionAnalytics', async () => {
       const mockSessions = {
-        sessions: [
+        conversations: [
           { id: 's1', project: 'proj', user_prompts: ['hi'], total_tokens: 1000 },
         ],
         metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
 
       const mockAnalytics = {
+        conversations: [{ id: 's1', project: 'proj', overall_score: null, total_tokens: 1000 }],
         sessions: [{ id: 's1', project: 'proj', overall_score: null, total_tokens: 1000 }],
         aggregates: { avg_tokens_per_session: 1000, avg_tokens_per_prompt: 500, avg_cache_hit_rate: 0.3, total_sessions: 1 },
         weekly: [{ week: '2026-W02', total_tokens: 1000, avg_tokens_per_session: 1000, avg_cache_hit_rate: 0.3, session_count: 1 }],
       }
-      ;(buildSessionAnalytics as jest.Mock).mockReturnValue(mockAnalytics)
+      ;(buildConversationAnalytics as jest.Mock).mockReturnValue(mockAnalytics)
 
       await sendMessage({ type: 'getSessionAnalytics', requestId: 'req-analytics-1' })
 
-      expect(buildSessionAnalytics).toHaveBeenCalled()
+      expect(buildConversationAnalytics).toHaveBeenCalled()
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getSessionAnalytics',
         requestId: 'req-analytics-1',
@@ -1439,15 +1463,15 @@ describe('CodeFluentViewProvider', () => {
 
     it('filters sessions by project from payload', async () => {
       const mockSessions = {
-        sessions: [
+        conversations: [
           { id: 's1', project: 'proj-a', user_prompts: ['hi'], total_tokens: 1000 },
           { id: 's2', project: 'proj-b', user_prompts: ['bye'], total_tokens: 2000 },
         ],
         metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
-      ;(buildSessionAnalytics as jest.Mock).mockReturnValue({
-        sessions: [], aggregates: {}, weekly: [],
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
+      ;(buildConversationAnalytics as jest.Mock).mockReturnValue({
+        conversations: [], sessions: [], aggregates: {}, weekly: [],
       })
 
       await sendMessage({
@@ -1457,7 +1481,7 @@ describe('CodeFluentViewProvider', () => {
       })
 
       // buildSessionAnalytics should only receive proj-a sessions
-      expect(buildSessionAnalytics).toHaveBeenCalledWith(
+      expect(buildConversationAnalytics).toHaveBeenCalledWith(
         [expect.objectContaining({ id: 's1', project: 'proj-a' })],
         expect.any(Array),
         undefined,
@@ -1469,20 +1493,20 @@ describe('CodeFluentViewProvider', () => {
         { uri: vscode.Uri.file('/home/user/my-project') },
       ]
       const mockSessions = {
-        sessions: [
+        conversations: [
           { id: 's1', project: 'my-project', user_prompts: ['hi'] },
           { id: 's2', project: 'other', user_prompts: ['bye'] },
         ],
         metadata: { total_sessions: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
       }
-      ;(getAllSessions as jest.Mock).mockReturnValue(mockSessions)
-      ;(buildSessionAnalytics as jest.Mock).mockReturnValue({
-        sessions: [], aggregates: {}, weekly: [],
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
+      ;(buildConversationAnalytics as jest.Mock).mockReturnValue({
+        conversations: [], sessions: [], aggregates: {}, weekly: [],
       })
 
       await sendMessage({ type: 'getSessionAnalytics', requestId: 'req-analytics-3' })
 
-      expect(buildSessionAnalytics).toHaveBeenCalledWith(
+      expect(buildConversationAnalytics).toHaveBeenCalledWith(
         [expect.objectContaining({ id: 's1', project: 'my-project' })],
         expect.any(Array),
         undefined,

@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { ParsedSession } from './parser'
+import { ParsedConversation } from './conversation'
 import { loadScoringPrompt, loadConfigPrompt, loadOptimizerPrompt, loadSingleScoringPrompt, fillTemplate } from './prompts'
 import { getConfig } from './config'
 
@@ -25,21 +26,26 @@ export interface ScoreResult {
 }
 
 export interface AggregateResult {
-  sessions_scored: number
-  sessions_requested?: number
-  sessions_skipped?: number
+  conversations_scored: number
+  conversations_requested?: number
+  conversations_skipped?: number
   average_score: number
   behavior_prevalence: Record<string, number>
   pattern_distribution: Record<string, number>
   config_behaviors?: Record<string, boolean>
   score_history?: ScoreHistoryEntry[]
+  // Deprecated aliases (backward compat for Phase 3 transition)
+  sessions_scored?: number
+  sessions_requested?: number
+  sessions_skipped?: number
 }
 
 export interface ScoreHistoryEntry {
   period: string          // "2026-W04" (YYYY-Www) — ISO week
   period_start: string    // "2026-01-20" — Monday of that week (for display)
   score: number           // average effective score for that week (0-100)
-  sessions_scored: number
+  conversations_scored: number
+  sessions_scored?: number // deprecated alias
 }
 
 export interface ConfigScoreResult {
@@ -292,9 +298,9 @@ export interface ScoringStats {
   errored: number
 }
 
-export async function scoreSessions(
-  sessionIds: string[],
-  allSessions: Record<string, ParsedSession>,
+export async function scoreConversations(
+  conversationIds: string[],
+  allConversations: Record<string, ParsedConversation | ParsedSession>,
   cached: Record<string, any>,
   client: Anthropic,
   forceRescore = false,
@@ -303,27 +309,27 @@ export async function scoreSessions(
   const results: Record<string, ScoreResult> = {}
   const stats: ScoringStats = { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 }
 
-  for (const sid of sessionIds) {
-    if (cached[sid] && !forceRescore && cached[sid].prompt_version === SCORING_PROMPT_VERSION) {
-      results[sid] = cached[sid]
+  for (const cid of conversationIds) {
+    if (cached[cid] && !forceRescore && cached[cid].prompt_version === SCORING_PROMPT_VERSION) {
+      results[cid] = cached[cid]
       stats.cached++
       continue
     }
 
-    const session = allSessions[sid]
-    if (!session || !session.user_prompts.length) {
+    const conversation = allConversations[cid]
+    if (!conversation || !conversation.user_prompts.length) {
       stats.skipped_no_prompts++
       continue
     }
 
-    const promptsText = session.user_prompts.slice(0, getConfig<number>('scoring.maxPromptsPerConversation'))
+    const promptsText = conversation.user_prompts.slice(0, getConfig<number>('scoring.maxPromptsPerConversation'))
       .map((p, i) => `<user_prompt index="${i + 1}">${p}</user_prompt>`)
       .join('\n\n')
 
     const prompt = fillTemplate(SCORING_PROMPT_TEMPLATE, {
-      USED_PLAN_MODE: String(session.used_plan_mode),
-      THINKING_COUNT: String(session.thinking_count),
-      TOOLS_USED: session.tools_used.join(', '),
+      USED_PLAN_MODE: String(conversation.used_plan_mode),
+      THINKING_COUNT: String(conversation.thinking_count),
+      TOOLS_USED: conversation.tools_used.join(', '),
       PROMPTS: promptsText,
     })
 
@@ -334,27 +340,30 @@ export async function scoreSessions(
           max_tokens: getConfig<number>('scoring.maxTokens'),
           messages: [{ role: 'user', content: prompt }],
         }),
-        `scoreSession(${sid})`,
+        `scoreConversation(${cid})`,
         retryOptions,
       )
       let text = extractTextFromResponse(response)
       if (text.startsWith('```')) {
         text = text.split('\n').slice(1).join('\n').replace(/```\s*$/, '').trim()
       }
-      const score = validateScoreResult(JSON.parse(text), sid, session.user_prompts.length)
+      const score = validateScoreResult(JSON.parse(text), cid, conversation.user_prompts.length)
       score.prompt_version = SCORING_PROMPT_VERSION
-      results[sid] = score
-      cached[sid] = score
+      results[cid] = score
+      cached[cid] = score
       stats.scored++
     } catch (e: any) {
-      console.error(`[CodeFluent] Failed to score session ${sid}: ${sanitizeError(e.message || String(e))}`)
-      results[sid] = { error: sanitizeError(e.message || String(e)), session_id: sid }
+      console.error(`[CodeFluent] Failed to score conversation ${cid}: ${sanitizeError(e.message || String(e))}`)
+      results[cid] = { error: sanitizeError(e.message || String(e)), session_id: cid }
       stats.errored++
     }
   }
 
   return { results, stats }
 }
+
+/** @deprecated Use scoreConversations instead */
+export const scoreSessions = scoreConversations
 
 export function computeAggregate(
   scoredSessions: any[],
@@ -397,7 +406,8 @@ export function computeAggregate(
   const avgScore = n ? Math.round(scoreSum / n) : 0
 
   const result: AggregateResult = {
-    sessions_scored: n,
+    conversations_scored: n,
+    sessions_scored: n, // deprecated alias
     average_score: avgScore,
     behavior_prevalence: prevalence,
     pattern_distribution: patterns,
@@ -436,22 +446,22 @@ export function getISOWeekKey(dateStr: string): { key: string; monday: string } 
 
 export function computeScoreHistory(
   scores: Record<string, ScoreResult>,
-  sessions: ParsedSession[],
+  conversations: (ParsedConversation | ParsedSession)[],
   configBehaviors?: Record<string, boolean>,
 ): ScoreHistoryEntry[] {
-  const sessionTimestamps = new Map<string, string>()
-  for (const s of sessions) {
-    if (s.started_at) {
-      sessionTimestamps.set(s.id, s.started_at)
+  const timestamps = new Map<string, string>()
+  for (const c of conversations) {
+    if (c.started_at) {
+      timestamps.set(c.id, c.started_at)
     }
   }
 
-  // Group scored sessions by ISO week
+  // Group scored conversations by ISO week
   const weekGroups = new Map<string, { monday: string; sessions: ScoreResult[] }>()
 
   for (const [sid, score] of Object.entries(scores)) {
     if (!score.fluency_behaviors) continue
-    const timestamp = sessionTimestamps.get(sid)
+    const timestamp = timestamps.get(sid)
     if (!timestamp) continue
 
     const weekInfo = getISOWeekKey(timestamp)
@@ -482,7 +492,8 @@ export function computeScoreHistory(
       period,
       period_start: monday,
       score: Math.round(scoreSum / weekSessions.length),
-      sessions_scored: weekSessions.length,
+      conversations_scored: weekSessions.length,
+      sessions_scored: weekSessions.length, // deprecated alias
     })
   }
 

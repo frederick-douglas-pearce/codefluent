@@ -2,14 +2,14 @@ import * as vscode from 'vscode'
 import * as fs from 'fs'
 import * as path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
-import { getAllSessions } from './parser'
+import { getAllConversations } from './conversation'
 import { getUsageData } from './usage'
-import { scoreSessions, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, OptimizeResponse } from './scoring'
+import { scoreConversations, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, OptimizeResponse } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 import { DataCache } from './dataCache'
 import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
-import { buildSessionAnalytics } from './analytics'
+import { buildConversationAnalytics } from './analytics'
 import { getConfig, getDisplayConfig } from './config'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
@@ -156,8 +156,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getUsage':
           data = await this.handleGetUsage()
           break
-        case 'getSessions':
-          data = await this.handleGetSessions(payload)
+        case 'getConversations':
+        case 'getSessions': // deprecated alias
+          data = await this.handleGetConversations(payload)
           break
         case 'runScoring':
           data = await this.handleRunScoring(payload)
@@ -174,8 +175,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'optimizePrompt':
           data = await this.handleOptimizePrompt(payload)
           break
-        case 'getSessionAnalytics':
-          data = await this.handleGetSessionAnalytics(payload)
+        case 'getConversationAnalytics':
+        case 'getSessionAnalytics': // deprecated alias
+          data = await this.handleGetConversationAnalytics(payload)
           break
         case 'getConfig':
           data = this.handleGetConfig()
@@ -208,42 +210,46 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     return workspacePath ? path.basename(workspacePath) : undefined
   }
 
-  private async handleGetSessions(payload?: { limit?: number; project?: string }) {
+  private async handleGetConversations(payload?: { limit?: number; project?: string }) {
     const limit = payload?.limit ?? 1000
     const project = payload?.project ?? this.getWorkspaceProjectName()
-    const { data, isStale } = this.dataCache.getSessions()
-    if (data && !isStale) return this.filterSessions(data, limit, project)
+    const { data, isStale } = this.dataCache.getConversations()
+    if (data && !isStale) return this.filterConversations(data, limit, project)
     if (data && isStale) {
-      this.refreshSessionsInBackground()
-      return this.filterSessions(data, limit, project)
+      this.refreshConversationsInBackground()
+      return this.filterConversations(data, limit, project)
     }
-    const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
-    this.dataCache.setSessions(fresh)
-    return this.filterSessions(fresh, limit, project)
+    const fresh = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+    this.dataCache.setConversations(fresh)
+    return this.filterConversations(fresh, limit, project)
   }
 
-  private filterSessions(result: any, limit?: number, project?: string): any {
-    let sessions = result.sessions || []
+  private filterConversations(result: any, limit?: number, project?: string): any {
+    let conversations = result.conversations || []
     if (project) {
-      sessions = sessions.filter((s: any) => s.project === project)
+      conversations = conversations.filter((c: any) => c.project === project)
     }
-    const total = sessions.length
+    const total = conversations.length
     if (limit) {
-      sessions = sessions.slice(0, limit)
+      conversations = conversations.slice(0, limit)
     }
     return {
-      sessions,
+      conversations,
+      // Deprecated alias for backward compat
+      sessions: conversations,
       metadata: {
         ...result.metadata,
-        total_sessions: total,
-        total_projects: new Set(sessions.map((s: any) => s.project)).size,
-        total_prompts: sessions.reduce((sum: number, s: any) => sum + (s.user_prompts?.length || 0), 0),
+        total_conversations: total,
+        total_sessions: total, // deprecated alias
+        total_projects: new Set(conversations.map((c: any) => c.project)).size,
+        total_prompts: conversations.reduce((sum: number, c: any) => sum + (c.user_prompts?.length || 0), 0),
       },
     }
   }
 
-  private async handleRunScoring(payload?: { session_ids?: string[]; force_rescore?: boolean }) {
-    const sessionIds = payload?.session_ids || []
+  private async handleRunScoring(payload?: { conversation_ids?: string[]; session_ids?: string[]; force_rescore?: boolean }) {
+    // Accept both conversation_ids (new) and session_ids (deprecated)
+    const conversationIds = payload?.conversation_ids || payload?.session_ids || []
     const force = payload?.force_rescore || false
 
     const apiKey = await this.getApiKey()
@@ -253,30 +259,36 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     const client = new Anthropic({ apiKey })
     const cached = this.cache.read()
-    const sessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
-    const { sessions } = sessionData as { sessions: any[] }
-    const allSessions = Object.fromEntries(sessions.map((s: any) => [s.id, s]))
+    const convData = this.dataCache.getConversations().data || getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+    const conversations = convData.conversations || convData.sessions || []
+    const allConversations = Object.fromEntries(conversations.map((c: any) => [c.id, c]))
 
-    const { results, stats } = await scoreSessions(sessionIds, allSessions, cached, client, force)
+    const { results, stats } = await scoreConversations(conversationIds, allConversations, cached, client, force)
 
     this.cache.write(cached)
-    this.cache.writeLastScoredIds(sessionIds)
+    this.cache.writeLastScoredIds(conversationIds)
 
     // Score CLAUDE.md if present in workspace
     const configBehaviors = await this.scoreWorkspaceClaudeMd(client, force)
 
     const scored = Object.values(results).filter((r: any) => r.fluency_behaviors)
     const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
-    aggregate.sessions_requested = sessionIds.length
+    aggregate.conversations_requested = conversationIds.length
+    aggregate.conversations_scored = scored.length
+    aggregate.conversations_skipped = stats.skipped_no_prompts
+    aggregate.conversations_errored = stats.errored
+    aggregate.conversations_cached = stats.cached
+    // Deprecated aliases
+    aggregate.sessions_requested = conversationIds.length
     aggregate.sessions_scored = scored.length
     aggregate.sessions_skipped = stats.skipped_no_prompts
     aggregate.sessions_errored = stats.errored
     aggregate.sessions_cached = stats.cached
     const projectName = this.getWorkspaceProjectName()
-    const projectSessions = projectName
-      ? sessions.filter((s: any) => s.project === projectName)
-      : sessions
-    aggregate.score_history = computeScoreHistory(cached, projectSessions, configBehaviors)
+    const projectConvs = projectName
+      ? conversations.filter((c: any) => c.project === projectName)
+      : conversations
+    aggregate.score_history = computeScoreHistory(cached, projectConvs, configBehaviors)
 
     this.updateStatusBar(aggregate)
 
@@ -394,12 +406,12 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     return response
   }
 
-  private async handleGetSessionAnalytics(payload?: { project?: string }) {
+  private async handleGetConversationAnalytics(payload?: { project?: string }) {
     const project = payload?.project ?? this.getWorkspaceProjectName()
-    const sessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
-    let sessions = sessionData.sessions || []
+    const convData = this.dataCache.getConversations().data || getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+    let conversations = convData.conversations || convData.sessions || []
     if (project) {
-      sessions = sessions.filter((s: any) => s.project === project)
+      conversations = conversations.filter((c: any) => c.project === project)
     }
 
     const cached = this.cache.read()
@@ -411,7 +423,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const configEntry = workspacePath ? configCache[workspacePath] : undefined
     const configBehaviors = configEntry?.fluency_behaviors as Record<string, boolean> | undefined
 
-    return buildSessionAnalytics(sessions, scores as any[], configBehaviors)
+    return buildConversationAnalytics(conversations, scores as any[], configBehaviors)
   }
 
   private mergeWithConfig(
@@ -430,19 +442,20 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const cached = this.cache.read()
     const lastScoredIds = this.cache.readLastScoredIds()
 
-    // Scope to last-scored session IDs if available, otherwise fall back to all
+    // Scope to last-scored conversation IDs if available, otherwise fall back to all
     const scopedScores: Record<string, any> = lastScoredIds.length
       ? Object.fromEntries(lastScoredIds.filter(id => id in cached).map(id => [id, cached[id]]))
       : cached
 
-    // Filter to workspace project sessions only
+    // Filter to workspace project conversations only
     const projectName = this.getWorkspaceProjectName()
-    const sessionData = this.dataCache.getSessions().data || getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
-    const workspaceSessionIds = projectName
-      ? new Set(sessionData.sessions.filter((s: any) => s.project === projectName).map((s: any) => s.id))
+    const convData = this.dataCache.getConversations().data || getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+    const conversations = convData.conversations || convData.sessions || []
+    const workspaceConvIds = projectName
+      ? new Set(conversations.filter((c: any) => c.project === projectName).map((c: any) => c.id))
       : null
-    const projectScores: Record<string, any> = workspaceSessionIds
-      ? Object.fromEntries(Object.entries(scopedScores).filter(([id]) => workspaceSessionIds.has(id)))
+    const projectScores: Record<string, any> = workspaceConvIds
+      ? Object.fromEntries(Object.entries(scopedScores).filter(([id]) => workspaceConvIds.has(id)))
       : scopedScores
     const scored = Object.values(projectScores).filter((r: any) => r.fluency_behaviors)
 
@@ -450,17 +463,21 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const configBehaviors = this.getCachedConfigBehaviors()
     const aggregate = scored.length ? computeAggregate(scored, configBehaviors) : {} as any
     if (lastScoredIds.length) {
-      const workspaceLastScoredIds = workspaceSessionIds
-        ? lastScoredIds.filter(id => workspaceSessionIds.has(id))
+      const workspaceLastScoredIds = workspaceConvIds
+        ? lastScoredIds.filter(id => workspaceConvIds.has(id))
         : lastScoredIds
-      aggregate.sessions_requested = workspaceLastScoredIds.length
-      aggregate.sessions_scored = scored.length
-      // For cached display, we can't distinguish skip reasons, so just show the gap
+      aggregate.conversations_requested = workspaceLastScoredIds.length
+      aggregate.conversations_scored = scored.length
       const gap = workspaceLastScoredIds.length - scored.length
-      aggregate.sessions_skipped = gap > 0 ? gap : 0
+      aggregate.conversations_skipped = gap > 0 ? gap : 0
+      aggregate.conversations_errored = 0
+      // Deprecated aliases
+      aggregate.sessions_requested = aggregate.conversations_requested
+      aggregate.sessions_scored = aggregate.conversations_scored
+      aggregate.sessions_skipped = aggregate.conversations_skipped
       aggregate.sessions_errored = 0
     }
-    aggregate.score_history = computeScoreHistory(cached, sessionData.sessions.filter((s: any) => !projectName || s.project === projectName), configBehaviors)
+    aggregate.score_history = computeScoreHistory(cached, conversations.filter((c: any) => !projectName || c.project === projectName), configBehaviors)
 
     this.updateStatusBar(aggregate)
 
@@ -537,22 +554,22 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     })
   }
 
-  private refreshSessionsInBackground(): void {
+  private refreshConversationsInBackground(): void {
     setImmediate(() => {
       try {
-        const fresh = getAllSessions(undefined, undefined, this.getSessionDataPath(), 200)
-        this.dataCache.setSessions(fresh)
-        const filtered = this.filterSessions(fresh, undefined, this.getWorkspaceProjectName())
-        this.view?.webview.postMessage({ type: 'sessionsUpdated', data: filtered })
+        const fresh = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+        this.dataCache.setConversations(fresh)
+        const filtered = this.filterConversations(fresh, undefined, this.getWorkspaceProjectName())
+        this.view?.webview.postMessage({ type: 'conversationsUpdated', data: filtered })
       } catch (err: any) {
-        console.error('[CodeFluent] Background sessions refresh failed:', err?.message || err)
+        console.error('[CodeFluent] Background conversations refresh failed:', err?.message || err)
       }
     })
   }
 
   private refreshInBackground(): void {
     this.refreshUsageInBackground()
-    this.refreshSessionsInBackground()
+    this.refreshConversationsInBackground()
   }
 
   private getHtmlContent(): string {
