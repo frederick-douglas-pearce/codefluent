@@ -530,14 +530,16 @@ async def get_session_analytics_deprecated(
 
 
 def _compute_session_aggregates(sessions: list) -> dict:
-    """Compute aggregate token metrics across sessions."""
+    """Compute aggregate token metrics across conversations."""
     n = len(sessions)
     if n == 0:
         return {
-            "avg_tokens_per_session": 0,
+            "avg_tokens_per_conversation": 0,
+            "avg_tokens_per_session": 0,  # deprecated alias
             "avg_tokens_per_prompt": 0,
             "avg_cache_hit_rate": 0,
-            "total_sessions": 0,
+            "total_conversations": 0,
+            "total_sessions": 0,  # deprecated alias
             "total_estimated_cost": 0,
         }
 
@@ -547,10 +549,12 @@ def _compute_session_aggregates(sessions: list) -> dict:
     total_cost = sum(s.get("estimated_cost", 0) for s in sessions)
 
     return {
-        "avg_tokens_per_session": round(total_tokens_sum / n),
+        "avg_tokens_per_conversation": round(total_tokens_sum / n),
+        "avg_tokens_per_session": round(total_tokens_sum / n),  # deprecated alias
         "avg_tokens_per_prompt": round(total_tokens_sum / total_prompts) if total_prompts > 0 else 0,
         "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
-        "total_sessions": n,
+        "total_conversations": n,
+        "total_sessions": n,  # deprecated alias
         "total_estimated_cost": round(total_cost, 2),
     }
 
@@ -580,9 +584,11 @@ def _compute_weekly_analytics(sessions: list) -> list:
         weekly.append({
             "week": week_key,
             "total_tokens": total_tokens,
-            "avg_tokens_per_session": round(total_tokens / n) if n else 0,
+            "avg_tokens_per_conversation": round(total_tokens / n) if n else 0,
+            "avg_tokens_per_session": round(total_tokens / n) if n else 0,  # deprecated alias
             "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
-            "session_count": n,
+            "conversation_count": n,
+            "session_count": n,  # deprecated alias
         })
 
     weekly.sort(key=lambda w: w["week"])
