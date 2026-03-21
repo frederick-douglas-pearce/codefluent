@@ -476,9 +476,9 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .quality-good { background: var(--success-light); color: var(--success); }
 .quality-bad { background: var(--danger-light); color: var(--danger); }
 
-/* Session Breakdown */
-.session-list { margin-top: 24px; }
-.session-item {
+/* Conversation Breakdown */
+.conversation-list { margin-top: 24px; }
+.conversation-item {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -487,23 +487,23 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   cursor: pointer;
   transition: box-shadow 0.15s;
 }
-.session-item:hover { box-shadow: var(--shadow-md); }
-.session-header {
+.conversation-item:hover { box-shadow: var(--shadow-md); }
+.conversation-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.session-id { font-weight: 600; font-size: 14px; }
-.session-score { font-weight: 700; }
-.session-detail {
+.conversation-id { font-weight: 600; font-size: 14px; }
+.conversation-score { font-weight: 700; }
+.conversation-detail {
   margin-top: 8px;
   font-size: 13px;
   color: var(--text-secondary);
   display: none;
 }
-.session-item.expanded .session-detail { display: block; }
+.conversation-item.expanded .conversation-detail { display: block; }
 .show-more-btn,
-.session-show-more-btn {
+.conversation-show-more-btn {
   width: 100%;
   padding: 10px;
   margin-top: 8px;
@@ -516,7 +516,7 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   transition: color 0.15s, border-color 0.15s;
 }
 .show-more-btn:hover,
-.session-show-more-btn:hover {
+.conversation-show-more-btn:hover {
   color: var(--accent);
   border-color: var(--accent);
 }
@@ -913,8 +913,8 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   font-weight: 500;
 }
 
-/* Session Analytics Heading */
-.session-analytics-heading {
+/* Conversation Analytics Heading */
+.conversation-analytics-heading {
   font-size: 18px;
   font-weight: 700;
   margin: 32px 0 16px;
@@ -922,12 +922,12 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   border-top: 2px solid var(--border);
 }
 
-/* Session Token Table */
-.session-table-wrapper {
+/* Conversation Token Table */
+.conversation-table-wrapper {
   margin-top: 24px;
   overflow-x: auto;
 }
-.session-token-table {
+.conversation-token-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
@@ -936,10 +936,10 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   border-radius: var(--radius-md);
   overflow: hidden;
 }
-.session-token-table thead {
+.conversation-token-table thead {
   background: var(--bg-hover);
 }
-.session-token-table th {
+.conversation-token-table th {
   padding: 10px 12px;
   text-align: left;
   font-weight: 600;
@@ -950,20 +950,20 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   border-bottom: 2px solid var(--border);
   white-space: nowrap;
 }
-.session-table-sortable {
+.conversation-table-sortable {
   cursor: pointer;
   user-select: none;
 }
-.session-table-sortable:hover {
+.conversation-table-sortable:hover {
   color: var(--accent);
 }
-.session-token-table td {
+.conversation-token-table td {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
-.session-token-table tbody tr:hover {
+.conversation-token-table tbody tr:hover {
   background: var(--bg-hover);
 }
 
@@ -987,6 +987,6 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   .tabs { overflow-x: auto; }
   .optimizer-comparison { grid-template-columns: 1fr; }
   .optimizer-arrow { display: none; }
-  .session-table-wrapper { overflow-x: auto; }
+  .conversation-table-wrapper { overflow-x: auto; }
   .pace-grid { grid-template-columns: repeat(2, 1fr); }
 }

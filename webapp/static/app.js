@@ -3,11 +3,11 @@
 // --- State ---
 let state = {
   usage: null,
-  sessions: null,
+  conversations: null,
   scores: null,
   quickwins: null,
   optimizer: null,
-  sessionAnalytics: null,
+  conversationAnalytics: null,
   activeTab: 'fluency'
 }
 
@@ -77,7 +77,7 @@ const PATTERN_DESCRIPTIONS = {
   generation_then_comprehension: 'Generates code with AI first, then asks follow-up questions to understand what was produced.',
   hybrid_code_explanation: 'Requests code and explanations simultaneously — "Write X and explain how it works."',
   ai_delegation: 'Entirely delegates tasks to AI with minimal engagement or understanding. Lowest comprehension scores (<40%).',
-  progressive_ai_reliance: 'Starts sessions engaged and asking questions, but gradually offloads more work to AI without checking understanding.',
+  progressive_ai_reliance: 'Starts conversations engaged and asking questions, but gradually offloads more work to AI without checking understanding.',
   iterative_ai_debugging: 'Uses AI to debug code without trying to understand the root cause — repeatedly asks "fix this" without learning.',
 }
 
@@ -207,7 +207,7 @@ const PATTERN_RECOMMENDATIONS = {
   progressive_ai_reliance: {
     impact: 'high',
     title: 'You Start Engaged But Drift',
-    advice: 'You begin sessions asking good questions but gradually let Claude drive. Set a rule: every 3rd prompt should be a comprehension question.',
+    advice: 'You begin conversations asking good questions but gradually let Claude drive. Set a rule: every 3rd prompt should be a comprehension question.',
     source: 'Anthropic Coding Skills Formation Study (Jan 2026)',
     prompt: "Pause — before we continue, explain what the last change you made actually does and why it works. I want to make sure I understand before moving on.",
   },
@@ -246,7 +246,7 @@ function switchTab(tabName) {
     renderRecommendations()
   }
   if (tabName === 'usage') {
-    loadSessionAnalytics()
+    loadConversationAnalytics()
   }
 }
 
@@ -272,23 +272,23 @@ function getSelectedProject() {
 function getSelectedProjectEncoded() {
   const project = getSelectedProject()
   if (!project) return ''
-  const sessions = state.sessions?.sessions || []
-  const match = sessions.find(s => s.project === project && s.project_path_encoded)
+  const conversations = state.conversations?.conversations || []
+  const match = conversations.find(s => s.project === project && s.project_path_encoded)
   return match ? match.project_path_encoded : ''
 }
 
-function getFilteredSessions() {
-  const sessions = state.sessions?.sessions || []
+function getFilteredConversations() {
+  const conversations = state.conversations?.conversations || []
   const project = getSelectedProject()
-  if (!project) return sessions
-  return sessions.filter(s => s.project === project)
+  if (!project) return conversations
+  return conversations.filter(s => s.project === project)
 }
 
 function populateProjectDropdown() {
   const select = document.getElementById('project-filter')
-  const sessions = state.sessions?.sessions || []
+  const conversations = state.conversations?.conversations || []
   const projectCounts = {}
-  for (const s of sessions) {
+  for (const s of conversations) {
     const p = s.project || '(unknown)'
     projectCounts[p] = (projectCounts[p] || 0) + 1
   }
@@ -298,7 +298,7 @@ function populateProjectDropdown() {
   const saved = getSelectedProject()
 
   // Clear existing options except "All projects"
-  select.innerHTML = `<option value="">All projects (${sessions.length})</option>`
+  select.innerHTML = `<option value="">All projects (${conversations.length})</option>`
   for (const p of projects) {
     const opt = document.createElement('option')
     opt.value = p
@@ -314,9 +314,9 @@ function populateProjectDropdown() {
   }
 }
 
-function buildSessionsUrl(limit = 1000) {
+function buildConversationsUrl(limit = 1000) {
   const dataPath = getDataPath()
-  let url = `/api/sessions?limit=${limit}`
+  let url = `/api/conversations?limit=${limit}`
   if (dataPath) url += `&data_path=${encodeURIComponent(dataPath)}`
   return url
 }
@@ -324,12 +324,12 @@ function buildSessionsUrl(limit = 1000) {
 // --- Data Loading ---
 async function loadData() {
   try {
-    const [usage, sessions] = await Promise.all([
+    const [usage, conversations] = await Promise.all([
       fetch('/api/usage').then(r => r.json()),
-      fetch(buildSessionsUrl()).then(r => r.json()),
+      fetch(buildConversationsUrl()).then(r => r.json()),
     ])
     state.usage = usage
-    state.sessions = sessions
+    state.conversations = conversations
     populateProjectDropdown()
     renderUsageDashboard()
     updateTimeScopeCounts()
@@ -392,42 +392,42 @@ function destroyChart(name) {
 
 function showLoader(tabId) {
   document.getElementById(tabId).innerHTML =
-    '<div class="scoring-loader"><div class="spinner"></div><p>Analyzing sessions with Claude...</p></div>'
+    '<div class="scoring-loader"><div class="spinner"></div><p>Analyzing conversations with Claude...</p></div>'
 }
 
-// --- Session Scope Resolution ---
-function resolveSessionIds(scopeValue, sessions) {
+// --- Conversation Scope Resolution ---
+function resolveConversationIds(scopeValue, conversations) {
   const [type, rawVal] = scopeValue.split(':')
   const val = parseInt(rawVal)
 
   if (type === 'days') {
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - val)
-    const filtered = sessions.filter(s =>
+    const filtered = conversations.filter(s =>
       s.started_at && new Date(s.started_at) >= cutoff
     )
     return {
       ids: filtered.map(s => s.id),
-      description: `Last ${val} days (${filtered.length} sessions)`
+      description: `Last ${val} days (${filtered.length} conversations)`
     }
   }
 
   // Default: count-based
   const count = isNaN(val) ? 5 : val
-  const sliced = sessions.slice(0, count)
+  const sliced = conversations.slice(0, count)
   return {
     ids: sliced.map(s => s.id),
-    description: `${sliced.length} sessions`
+    description: `${sliced.length} conversations`
   }
 }
 
 function updateTimeScopeCounts() {
-  if (!state.sessions?.sessions) return
-  const sessions = getFilteredSessions()
-  const select = document.getElementById('session-scope')
+  if (!state.conversations?.conversations) return
+  const conversations = getFilteredConversations()
+  const select = document.getElementById('conversation-scope')
   for (const option of select.options) {
     if (!option.value.startsWith('days:')) continue
-    const { description } = resolveSessionIds(option.value, sessions)
+    const { description } = resolveConversationIds(option.value, conversations)
     option.textContent = description
   }
 }
@@ -442,7 +442,7 @@ document.getElementById('project-filter').addEventListener('change', (e) => {
   }
   updateTimeScopeCounts()
   if (state.activeTab === 'usage') {
-    loadSessionAnalytics()
+    loadConversationAnalytics()
   }
 })
 
@@ -500,13 +500,13 @@ document.addEventListener('click', (e) => {
     return
   }
 
-  // Show more sessions
+  // Show more conversations
   if (target.classList.contains('show-more-btn')) {
     const btn = target
     let shown = parseInt(btn.dataset.shown, 10)
     const total = parseInt(btn.dataset.total, 10)
     const batch = parseInt(btn.dataset.batch, 10)
-    const items = btn.parentElement.querySelectorAll('.session-item')
+    const items = btn.parentElement.querySelectorAll('.conversation-item')
     const newShown = Math.min(shown + batch, total)
     for (let i = shown; i < newShown; i++) {
       items[i].style.display = ''
@@ -516,22 +516,22 @@ document.addEventListener('click', (e) => {
     if (remaining <= 0) {
       btn.remove()
     } else {
-      btn.textContent = `Show ${remaining} more session${remaining !== 1 ? 's' : ''}`
+      btn.textContent = `Show ${remaining} more conversation${remaining !== 1 ? 's' : ''}`
     }
     return
   }
 
-  // Session analytics table: show more
-  if (target.classList.contains('session-table-show-more')) {
-    sessionTableShowCount += 10
-    renderSessionTokenTable()
+  // Conversation analytics table: show more
+  if (target.classList.contains('conversation-table-show-more')) {
+    conversationTableShowCount += 10
+    renderConversationTokenTable()
     return
   }
 
-  // Session analytics table: sort by column
-  const sortHeader = target.closest('.session-table-sortable')
+  // Conversation analytics table: sort by column
+  const sortHeader = target.closest('.conversation-table-sortable')
   if (sortHeader) {
-    const container = document.getElementById('session-token-table-container')
+    const container = document.getElementById('conversation-token-table-container')
     const key = sortHeader.dataset.sortKey
     const currentKey = container.dataset.sortKey || 'started_at'
     const currentDir = container.dataset.sortDir || 'desc'
@@ -541,15 +541,15 @@ document.addEventListener('click', (e) => {
       container.dataset.sortKey = key
       container.dataset.sortDir = 'desc'
     }
-    sessionTableShowAll = false
-    renderSessionTokenTable()
+    conversationTableShowAll = false
+    renderConversationTokenTable()
     return
   }
 
-  // Session item expand/collapse
-  const sessionItem = target.closest('.session-item')
-  if (sessionItem) {
-    sessionItem.classList.toggle('expanded')
+  // Conversation item expand/collapse
+  const conversationItem = target.closest('.conversation-item')
+  if (conversationItem) {
+    conversationItem.classList.toggle('expanded')
     return
   }
 })
@@ -726,85 +726,85 @@ function renderUsagePace(daily) {
     </div>`
 }
 
-// --- Session Analytics ---
-async function loadSessionAnalytics() {
+// --- Conversation Analytics ---
+async function loadConversationAnalytics() {
   const dataPath = getDataPath()
   const project = getSelectedProject()
-  let url = '/api/session-analytics'
+  let url = '/api/conversation-analytics'
   const params = []
   if (dataPath) params.push(`data_path=${encodeURIComponent(dataPath)}`)
   if (project) params.push(`project=${encodeURIComponent(project)}`)
   if (params.length) url += '?' + params.join('&')
 
   // Update heading with project name
-  const heading = document.getElementById('session-analytics-heading')
+  const heading = document.getElementById('conversation-analytics-heading')
   const selectedProject = getSelectedProject()
   if (heading) {
     heading.textContent = selectedProject
-      ? `Session Analytics — ${selectedProject}`
-      : 'Session Analytics — All Projects'
+      ? `Conversation Analytics — ${selectedProject}`
+      : 'Conversation Analytics — All Projects'
   }
 
   try {
     const resp = await fetch(url)
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    state.sessionAnalytics = await resp.json()
-    renderSessionEfficiencyCards()
-    renderSessionTokenTable()
+    state.conversationAnalytics = await resp.json()
+    renderConversationEfficiencyCards()
+    renderConversationTokenTable()
     renderScoreCorrelation()
   } catch (e) {
-    console.error('Failed to load session analytics:', e)
-    state.sessionAnalytics = null
-    const cards = document.getElementById('session-efficiency-cards')
-    if (cards) cards.innerHTML = '<div class="empty-state-box"><div class="empty-state-icon">📊</div><p class="empty-state">No session data available.</p></div>'
+    console.error('Failed to load conversation analytics:', e)
+    state.conversationAnalytics = null
+    const cards = document.getElementById('conversation-efficiency-cards')
+    if (cards) cards.innerHTML = '<div class="empty-state-box"><div class="empty-state-icon">📊</div><p class="empty-state">No conversation data available.</p></div>'
     const chartContainer = document.getElementById('weekly-token-chart-container')
     if (chartContainer) chartContainer.style.display = 'none'
-    const table = document.getElementById('session-token-table-container')
+    const table = document.getElementById('conversation-token-table-container')
     if (table) table.innerHTML = ''
   }
 }
 
-function renderSessionEfficiencyCards() {
-  const container = document.getElementById('session-efficiency-cards')
+function renderConversationEfficiencyCards() {
+  const container = document.getElementById('conversation-efficiency-cards')
   if (!container) return
 
-  const data = state.sessionAnalytics
-  if (!data || !data.sessions || data.sessions.length === 0) {
-    container.innerHTML = '<div class="empty-state-box"><div class="empty-state-icon">📊</div><p class="empty-state">No session data available.</p></div>'
+  const data = state.conversationAnalytics
+  if (!data || !data.conversations || data.conversations.length === 0) {
+    container.innerHTML = '<div class="empty-state-box"><div class="empty-state-icon">📊</div><p class="empty-state">No conversation data available.</p></div>'
     return
   }
 
   const agg = data.aggregates
-  const sessions = data.sessions
+  const conversations = data.conversations
 
-  // Find most efficient session (lowest tokens_per_prompt with at least 1 prompt)
-  const sessionsWithPrompts = sessions.filter(s => s.prompt_count > 0 && s.tokens_per_prompt > 0)
+  // Find most efficient conversation (lowest tokens_per_prompt with at least 1 prompt)
+  const conversationsWithPrompts = conversations.filter(s => s.prompt_count > 0 && s.tokens_per_prompt > 0)
   let mostEfficientLabel = '—'
   let mostEfficientValue = '—'
-  if (sessionsWithPrompts.length > 0) {
-    const best = sessionsWithPrompts.reduce((a, b) => a.tokens_per_prompt < b.tokens_per_prompt ? a : b)
+  if (conversationsWithPrompts.length > 0) {
+    const best = conversationsWithPrompts.reduce((a, b) => a.tokens_per_prompt < b.tokens_per_prompt ? a : b)
     const date = best.started_at ? new Date(best.started_at).toLocaleDateString() : 'Unknown'
     mostEfficientLabel = escapeHtml(date)
     mostEfficientValue = formatTokens(Math.round(best.tokens_per_prompt))
   }
 
-  const totalTokens = sessions.reduce((sum, s) => sum + (s.total_tokens || 0), 0)
-  const totalCost = agg.total_estimated_cost != null ? agg.total_estimated_cost : sessions.reduce((sum, s) => sum + (s.estimated_cost || 0), 0)
-  const totalPrompts = sessions.reduce((sum, s) => sum + (s.prompt_count || 0), 0)
+  const totalTokens = conversations.reduce((sum, s) => sum + (s.total_tokens || 0), 0)
+  const totalCost = agg.total_estimated_cost != null ? agg.total_estimated_cost : conversations.reduce((sum, s) => sum + (s.estimated_cost || 0), 0)
+  const totalPrompts = conversations.reduce((sum, s) => sum + (s.prompt_count || 0), 0)
 
   // Compute avg cache read/creation ratio and output/input ratio
-  const totalCacheRead = sessions.reduce((sum, s) => sum + (s.total_cache_read_tokens || 0), 0)
-  const totalCacheCreation = sessions.reduce((sum, s) => sum + (s.total_cache_creation_tokens || 0), 0)
+  const totalCacheRead = conversations.reduce((sum, s) => sum + (s.total_cache_read_tokens || 0), 0)
+  const totalCacheCreation = conversations.reduce((sum, s) => sum + (s.total_cache_creation_tokens || 0), 0)
   const avgCacheRC = totalCacheCreation > 0 ? totalCacheRead / totalCacheCreation : null
 
-  const totalOutput = sessions.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0)
-  const totalInput = sessions.reduce((sum, s) => sum + (s.total_input_tokens || 0), 0)
+  const totalOutput = conversations.reduce((sum, s) => sum + (s.total_output_tokens || 0), 0)
+  const totalInput = conversations.reduce((sum, s) => sum + (s.total_input_tokens || 0), 0)
   const totalInputAll = totalInput + totalCacheRead + totalCacheCreation
   const avgOutIn = totalInputAll > 0 ? totalOutput / totalInputAll : null
 
-  const scoredSessions = sessions.filter(s => s.overall_score != null)
-  const avgScore = scoredSessions.length > 0
-    ? Math.round(scoredSessions.reduce((sum, s) => sum + s.overall_score, 0) / scoredSessions.length)
+  const scoredConversations = conversations.filter(s => s.overall_score != null)
+  const avgScore = scoredConversations.length > 0
+    ? Math.round(scoredConversations.reduce((sum, s) => sum + s.overall_score, 0) / scoredConversations.length)
     : null
 
   container.innerHTML = `
@@ -812,7 +812,7 @@ function renderSessionEfficiencyCards() {
       <div class="pace-card">
         <div class="pace-card-title">Total Tokens</div>
         <div class="pace-card-value">${formatTokens(totalTokens)}</div>
-        <div class="pace-card-detail">${escapeHtml(totalPrompts.toLocaleString())} prompts across ${escapeHtml(String(sessions.length))} sessions</div>
+        <div class="pace-card-detail">${escapeHtml(totalPrompts.toLocaleString())} prompts across ${escapeHtml(String(conversations.length))} conversations</div>
       </div>
       <div class="pace-card">
         <div class="pace-card-title">Estimated Total Cost</div>
@@ -822,10 +822,10 @@ function renderSessionEfficiencyCards() {
       <div class="pace-card">
         <div class="pace-card-title">Avg Cost/Prompt</div>
         <div class="pace-card-value">${totalPrompts > 0 ? escapeHtml(formatCost(totalCost / totalPrompts)) : '—'}</div>
-        <div class="pace-card-detail">${escapeHtml(String(totalPrompts.toLocaleString()))} prompts across ${escapeHtml(String(agg.total_sessions))} sessions</div>
+        <div class="pace-card-detail">${escapeHtml(String(totalPrompts.toLocaleString()))} prompts across ${escapeHtml(String(agg.total_conversations))} conversations</div>
       </div>
       <div class="pace-card">
-        <div class="pace-card-title">Most Efficient Session</div>
+        <div class="pace-card-title">Most Efficient Conversation</div>
         <div class="pace-card-value">${mostEfficientValue}</div>
         <div class="pace-card-detail">${mostEfficientLabel} tokens/prompt</div>
       </div>
@@ -847,27 +847,27 @@ function renderSessionEfficiencyCards() {
       <div class="pace-card">
         <div class="pace-card-title">Avg Fluency Score</div>
         <div class="pace-card-value">${avgScore != null ? escapeHtml(String(avgScore)) + '%' : '—'}</div>
-        <div class="pace-card-detail">${avgScore != null ? escapeHtml(String(scoredSessions.length)) + ' scored sessions' : 'No scored sessions'}</div>
+        <div class="pace-card-detail">${avgScore != null ? escapeHtml(String(scoredConversations.length)) + ' scored conversations' : 'No scored conversations'}</div>
       </div>
     </div>`
 }
 
 
-// Session table state
-let sessionTableShowCount = 10
+// Conversation table state
+let conversationTableShowCount = 10
 
-function renderSessionTokenTable() {
-  const container = document.getElementById('session-token-table-container')
+function renderConversationTokenTable() {
+  const container = document.getElementById('conversation-token-table-container')
   if (!container) return
 
-  const data = state.sessionAnalytics
-  if (!data || !data.sessions || data.sessions.length === 0) {
+  const data = state.conversationAnalytics
+  if (!data || !data.conversations || data.conversations.length === 0) {
     container.innerHTML = ''
     return
   }
 
-  // Clone and sort sessions — default: most recent first
-  let sessions = [...data.sessions]
+  // Clone and sort conversations — default: most recent first
+  let conversations = [...data.conversations]
   const sortKey = container.dataset.sortKey || 'started_at'
   const sortDir = container.dataset.sortDir || 'desc'
 
@@ -885,7 +885,7 @@ function renderSessionTokenTable() {
     return s[key]
   }
 
-  sessions.sort((a, b) => {
+  conversations.sort((a, b) => {
     let va = derivedValue(a, sortKey), vb = derivedValue(b, sortKey)
     if (sortKey === 'started_at') {
       va = va || ''
@@ -895,8 +895,8 @@ function renderSessionTokenTable() {
     return sortDir === 'asc' ? (va || 0) - (vb || 0) : (vb || 0) - (va || 0)
   })
 
-  const visible = sessions.slice(0, sessionTableShowCount)
-  const remaining = sessions.length - sessionTableShowCount
+  const visible = conversations.slice(0, conversationTableShowCount)
+  const remaining = conversations.length - conversationTableShowCount
 
   function sortIcon(key) {
     if (sortKey !== key) return ''
@@ -904,21 +904,21 @@ function renderSessionTokenTable() {
   }
 
   let html = `
-    <div class="session-table-wrapper">
-      <table class="session-token-table">
+    <div class="conversation-table-wrapper">
+      <table class="conversation-token-table">
         <thead>
           <tr>
-            <th class="session-table-sortable" data-sort-key="started_at">Date${sortIcon('started_at')}</th>
-            <th class="session-table-sortable" data-sort-key="project">Project${sortIcon('project')}</th>
-            <th class="session-table-sortable" data-sort-key="prompt_count">Prompts${sortIcon('prompt_count')}</th>
-            <th class="session-table-sortable" data-sort-key="total_tokens">Total Tokens${sortIcon('total_tokens')}</th>
-            <th class="session-table-sortable" data-sort-key="estimated_cost">Cost${sortIcon('estimated_cost')}</th>
-            <th class="session-table-sortable" data-sort-key="tokens_per_prompt">Tokens/Prompt${sortIcon('tokens_per_prompt')}</th>
-            <th class="session-table-sortable" data-sort-key="cost_per_prompt">Cost/Prompt${sortIcon('cost_per_prompt')}</th>
-            <th class="session-table-sortable" data-sort-key="cache_hit_rate">Cache Hit Rate${sortIcon('cache_hit_rate')}</th>
-            <th class="session-table-sortable" data-sort-key="cache_read_creation_ratio">Cache R/C${sortIcon('cache_read_creation_ratio')}</th>
-            <th class="session-table-sortable" data-sort-key="output_input_ratio">Out/In${sortIcon('output_input_ratio')}</th>
-            <th class="session-table-sortable" data-sort-key="overall_score">Score${sortIcon('overall_score')}</th>
+            <th class="conversation-table-sortable" data-sort-key="started_at">Date${sortIcon('started_at')}</th>
+            <th class="conversation-table-sortable" data-sort-key="project">Project${sortIcon('project')}</th>
+            <th class="conversation-table-sortable" data-sort-key="prompt_count">Prompts${sortIcon('prompt_count')}</th>
+            <th class="conversation-table-sortable" data-sort-key="total_tokens">Total Tokens${sortIcon('total_tokens')}</th>
+            <th class="conversation-table-sortable" data-sort-key="estimated_cost">Cost${sortIcon('estimated_cost')}</th>
+            <th class="conversation-table-sortable" data-sort-key="tokens_per_prompt">Tokens/Prompt${sortIcon('tokens_per_prompt')}</th>
+            <th class="conversation-table-sortable" data-sort-key="cost_per_prompt">Cost/Prompt${sortIcon('cost_per_prompt')}</th>
+            <th class="conversation-table-sortable" data-sort-key="cache_hit_rate">Cache Hit Rate${sortIcon('cache_hit_rate')}</th>
+            <th class="conversation-table-sortable" data-sort-key="cache_read_creation_ratio">Cache R/C${sortIcon('cache_read_creation_ratio')}</th>
+            <th class="conversation-table-sortable" data-sort-key="output_input_ratio">Out/In${sortIcon('output_input_ratio')}</th>
+            <th class="conversation-table-sortable" data-sort-key="overall_score">Score${sortIcon('overall_score')}</th>
           </tr>
         </thead>
         <tbody>`
@@ -960,7 +960,7 @@ function renderSessionTokenTable() {
       </table>`
 
   if (remaining > 0) {
-    html += `<button class="session-show-more-btn session-table-show-more">Show ${remaining} more session${remaining !== 1 ? 's' : ''}</button>`
+    html += `<button class="conversation-show-more-btn conversation-table-show-more">Show ${remaining} more conversation${remaining !== 1 ? 's' : ''}</button>`
   }
 
   html += '</div>'
@@ -971,22 +971,22 @@ function renderScoreCorrelation() {
   const container = document.getElementById('score-correlation-container')
   if (!container) return
 
-  const data = state.sessionAnalytics
-  if (!data || !data.sessions) {
+  const data = state.conversationAnalytics
+  if (!data || !data.conversations) {
     container.innerHTML = ''
     return
   }
 
-  // Use all sessions for cost charts, scored subset for score-colored charts
-  const allSessions = data.sessions.filter(s => s.tokens_per_prompt > 0 && s.estimated_cost > 0)
-  const scored = allSessions.filter(s => s.overall_score != null)
+  // Use all conversations for cost charts, scored subset for score-colored charts
+  const allConversations = data.conversations.filter(s => s.tokens_per_prompt > 0 && s.estimated_cost > 0)
+  const scored = allConversations.filter(s => s.overall_score != null)
 
-  if (allSessions.length < 3) {
-    container.innerHTML = allSessions.length === 0 ? '' : `
+  if (allConversations.length < 3) {
+    container.innerHTML = allConversations.length === 0 ? '' : `
       <div class="correlation-section">
         <h3>Cost Efficiency Analysis</h3>
         <div class="correlation-placeholder">
-          <p>Need at least 3 sessions for analysis (${escapeHtml(String(allSessions.length))} available).</p>
+          <p>Need at least 3 conversations for analysis (${escapeHtml(String(allConversations.length))} available).</p>
         </div>
       </div>`
     return
@@ -1005,8 +1005,8 @@ function renderScoreCorrelation() {
     return `rgb(${Math.round(217 + (5 - 217) * u)},${Math.round(119 + (150 - 119) * u)},${Math.round(6 + (105 - 6) * u)})`
   }
 
-  // --- Compute derived features for all sessions ---
-  const enriched = allSessions.map(s => {
+  // --- Compute derived features for all conversations ---
+  const enriched = allConversations.map(s => {
     const promptCount = s.prompt_count || 1
     const costPerPrompt = s.estimated_cost / promptCount
     const cacheReadCreation = s.total_cache_creation_tokens > 0
@@ -1027,13 +1027,13 @@ function renderScoreCorrelation() {
   // --- Chart 3: Score vs Cost/Prompt (cache hit as color) ---
   const chart3Data = enriched.filter(s => s.overall_score != null)
 
-  // Score color bounds (from scored sessions)
+  // Score color bounds (from scored conversations)
   const scoreVals = scored.map(s => s.overall_score)
   const scoreMin = scoreVals.length > 0 ? Math.min(...scoreVals) : 0
   const scoreMax = scoreVals.length > 0 ? Math.max(...scoreVals) : 100
 
   // Cache hit color bounds
-  const cacheVals = allSessions.map(s => s.cache_hit_rate || 0)
+  const cacheVals = allConversations.map(s => s.cache_hit_rate || 0)
   const cacheMin = Math.min(...cacheVals)
   const cacheMax = Math.max(...cacheVals)
 
@@ -1053,7 +1053,7 @@ function renderScoreCorrelation() {
         insightsHtml += `
           <div class="insight-card">
             <span class="insight-icon">&#x1f4b0;</span>
-            <span>Sessions with higher cache reuse cost <strong>${escapeHtml(String(costDiff))}% less</strong> per prompt on average</span>
+            <span>Conversations with higher cache reuse cost <strong>${escapeHtml(String(costDiff))}% less</strong> per prompt on average</span>
           </div>`
       }
     }
@@ -1073,7 +1073,7 @@ function renderScoreCorrelation() {
       insightsHtml += `
         <div class="insight-card">
           <span class="insight-icon">&#x1f3af;</span>
-          <span>Sessions scoring above ${escapeHtml(String(Math.round(medianScore)))}% cost <strong>${escapeHtml(String(costPct))}% ${escapeHtml(costDir)}</strong> per prompt on average</span>
+          <span>Conversations scoring above ${escapeHtml(String(Math.round(medianScore)))}% cost <strong>${escapeHtml(String(costPct))}% ${escapeHtml(costDir)}</strong> per prompt on average</span>
         </div>`
     }
   }
@@ -1193,27 +1193,27 @@ function renderScoreCorrelation() {
 
 // --- Fluency Scoring ---
 document.getElementById('run-scoring-btn').addEventListener('click', () => {
-  const scopeValue = document.getElementById('session-scope').value
+  const scopeValue = document.getElementById('conversation-scope').value
   runScoring(scopeValue)
 })
 
 async function runScoring(scopeValue) {
-  if (!state.sessions?.sessions?.length) return
+  if (!state.conversations?.conversations?.length) return
 
-  const { ids, description } = resolveSessionIds(scopeValue, getFilteredSessions())
+  const { ids, description } = resolveConversationIds(scopeValue, getFilteredConversations())
   if (ids.length === 0) {
     document.getElementById('fluency-results').innerHTML =
-      '<p class="empty-state">No sessions found in the selected time range.</p>'
+      '<p class="empty-state">No conversations found in the selected time range.</p>'
     return
   }
 
   const forceRescore = document.getElementById('force-rescore').checked
   if (forceRescore && ids.length > 20) {
-    if (!confirm(`Force Rescore will re-score all ${ids.length} sessions using the Anthropic API. Continue?`)) return
+    if (!confirm(`Force Rescore will re-score all ${ids.length} conversations using the Anthropic API. Continue?`)) return
   }
 
   // Persist selection
-  localStorage.setItem('codefluent-session-scope', scopeValue)
+  localStorage.setItem('codefluent-conversation-scope', scopeValue)
 
   const btn = document.getElementById('run-scoring-btn')
   btn.disabled = true
@@ -1224,7 +1224,7 @@ async function runScoring(scopeValue) {
     const res = await fetch('/api/score', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_ids: ids, force_rescore: forceRescore, project: getSelectedProject() })
+      body: JSON.stringify({ conversation_ids: ids, force_rescore: forceRescore, project: getSelectedProject() })
     })
     state.scores = await res.json()
     renderFluencyScore()
@@ -1281,7 +1281,7 @@ function renderFluencyScore() {
   const { aggregate, scores } = state.scores
   if (!aggregate?.average_score) {
     document.getElementById('fluency-results').innerHTML =
-      '<p class="empty-state">No sessions could be scored.</p>'
+      '<p class="empty-state">No conversations could be scored.</p>'
     return
   }
 
@@ -1305,7 +1305,7 @@ function renderFluencyScore() {
           <span class="score-label">/ 100</span>
         </div>
       </div>
-      <p class="score-summary">${aggregate.sessions_scored} sessions analyzed${aggregate.sessions_skipped ? ` (${aggregate.sessions_skipped} skipped — no prompts)` : ''}</p>
+      <p class="score-summary">${aggregate.conversations_scored} conversations analyzed${aggregate.conversations_skipped ? ` (${aggregate.conversations_skipped} skipped — no prompts)` : ''}</p>
       ${renderTrajectoryText(aggregate.score_history)}
     </div>`
 
@@ -1346,22 +1346,22 @@ function renderFluencyScore() {
   // Coding patterns donut
   const patterns = aggregate.pattern_distribution || {}
   const patternEntries = Object.entries(patterns).sort((a, b) => b[1] - a[1])
-  const totalSessions = Object.values(patterns).reduce((a, b) => a + b, 0)
+  const totalConversations = Object.values(patterns).reduce((a, b) => a + b, 0)
   const highQualityCount = patternEntries
     .filter(([p]) => HIGH_QUALITY_PATTERNS.includes(p))
     .reduce((sum, [, c]) => sum + c, 0)
-  const highQualityPct = totalSessions > 0 ? Math.round(highQualityCount / totalSessions * 100) : 0
+  const highQualityPct = totalConversations > 0 ? Math.round(highQualityCount / totalConversations * 100) : 0
 
   html += `
     <div class="pattern-section">
       <h3>Coding Interaction Patterns</h3>
-      <p class="section-desc">Each session is classified into one of six coding interaction patterns based on how you engaged with Claude.</p>
+      <p class="section-desc">Each conversation is classified into one of six coding interaction patterns based on how you engaged with Claude.</p>
       <div class="pattern-layout">
         <div class="pattern-chart-wrap"><canvas id="pattern-chart"></canvas></div>
         <div class="pattern-legend">`
 
   patternEntries.forEach(([p, count], i) => {
-    const pct = totalSessions > 0 ? Math.round(count / totalSessions * 100) : 0
+    const pct = totalConversations > 0 ? Math.round(count / totalConversations * 100) : 0
     const isHighQuality = HIGH_QUALITY_PATTERNS.includes(p)
     const nameClass = isHighQuality ? 'pattern-name-high' : 'pattern-name-low'
     const desc = PATTERN_DESCRIPTIONS[p] || ''
@@ -1382,34 +1382,34 @@ function renderFluencyScore() {
       </div>
     </div>`
 
-  // Session breakdown
+  // Conversation breakdown
   const INITIAL_SHOWN = 5
   const BATCH_SIZE = 10
-  const validSessions = Object.entries(scores).filter(([, sd]) => !sd.error)
-  html += '<div class="session-list"><h3>Session Breakdown</h3>'
-  validSessions.forEach(([sid, scoreData], idx) => {
-    const session = state.sessions.sessions.find(s => s.id === sid)
-    const date = session?.started_at ? new Date(session.started_at).toLocaleDateString() : ''
-    const project = session?.project || ''
+  const validConversations = Object.entries(scores).filter(([, sd]) => !sd.error)
+  html += '<div class="conversation-list"><h3>Conversation Breakdown</h3>'
+  validConversations.forEach(([sid, scoreData], idx) => {
+    const conversation = state.conversations.conversations.find(s => s.id === sid)
+    const date = conversation?.started_at ? new Date(conversation.started_at).toLocaleDateString() : ''
+    const project = conversation?.project || ''
     const effectiveScore = scoreData.effective_score ?? scoreData.overall_score
     const hidden = idx >= INITIAL_SHOWN ? ' style="display:none"' : ''
     html += `
-      <div class="session-item"${hidden}>
-        <div class="session-header">
-          <span class="session-id">${escapeHtml(project)} (${date})</span>
-          <span class="session-score" style="color: ${effectiveScore >= SCORE_GREEN() ? 'var(--success)' : effectiveScore >= SCORE_AMBER() ? 'var(--warning)' : 'var(--danger)'}">
+      <div class="conversation-item"${hidden}>
+        <div class="conversation-header">
+          <span class="conversation-id">${escapeHtml(project)} (${date})</span>
+          <span class="conversation-score" style="color: ${effectiveScore >= SCORE_GREEN() ? 'var(--success)' : effectiveScore >= SCORE_AMBER() ? 'var(--warning)' : 'var(--danger)'}">
             ${effectiveScore}/100
           </span>
         </div>
-        <div class="session-detail">
+        <div class="conversation-detail">
           <p>${escapeHtml(scoreData.one_line_summary || '')}</p>
           <p>Pattern: ${escapeHtml(PATTERN_LABELS[scoreData.coding_pattern] || scoreData.coding_pattern || '')}</p>
         </div>
       </div>`
   })
-  if (validSessions.length > INITIAL_SHOWN) {
-    const remaining = validSessions.length - INITIAL_SHOWN
-    html += `<button class="show-more-btn" data-shown="${INITIAL_SHOWN}" data-total="${validSessions.length}" data-batch="${BATCH_SIZE}">Show ${remaining} more session${remaining !== 1 ? 's' : ''}</button>`
+  if (validConversations.length > INITIAL_SHOWN) {
+    const remaining = validConversations.length - INITIAL_SHOWN
+    html += `<button class="show-more-btn" data-shown="${INITIAL_SHOWN}" data-total="${validConversations.length}" data-batch="${BATCH_SIZE}">Show ${remaining} more conversation${remaining !== 1 ? 's' : ''}</button>`
   }
   html += '</div>'
 
@@ -1747,7 +1747,7 @@ document.getElementById('apply-path-btn').addEventListener('click', async () => 
 
   // Validate path by making a lightweight API call
   try {
-    const res = await fetch(`/api/sessions?limit=1&data_path=${encodeURIComponent(path)}`)
+    const res = await fetch(`/api/conversations?limit=1&data_path=${encodeURIComponent(path)}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
       const detail = body.detail || `Error ${res.status}`
@@ -1770,10 +1770,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (card) card.style.display = 'block'
   }
 
-  // Restore saved session scope selection
-  const savedScope = localStorage.getItem('codefluent-session-scope')
+  // Restore saved conversation scope selection
+  const savedScope = localStorage.getItem('codefluent-conversation-scope')
   if (savedScope) {
-    const select = document.getElementById('session-scope')
+    const select = document.getElementById('conversation-scope')
     if (select) select.value = savedScope
   }
 

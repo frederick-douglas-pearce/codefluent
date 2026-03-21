@@ -1650,12 +1650,12 @@ describe.each([
   })
 })
 
-// --- resolveSessionIds (frontend helper, extracted from app.js) ---
+// --- resolveConversationIds (frontend helper, extracted from app.js) ---
 
-function extractResolveSessionIds(filePath: string): (scopeValue: string, sessions: any[]) => { ids: string[], description: string } {
+function extractResolveConversationIds(filePath: string): (scopeValue: string, conversations: any[]) => { ids: string[], description: string } {
   const src = fs.readFileSync(filePath, 'utf-8')
-  const startIdx = src.indexOf('function resolveSessionIds(')
-  if (startIdx === -1) throw new Error(`resolveSessionIds not found in ${filePath}`)
+  const startIdx = src.indexOf('function resolveConversationIds(')
+  if (startIdx === -1) throw new Error(`resolveConversationIds not found in ${filePath}`)
   const braceIdx = src.indexOf('{', startIdx)
   let depth = 0, endIdx = braceIdx
   for (let i = braceIdx; i < src.length; i++) {
@@ -1664,18 +1664,18 @@ function extractResolveSessionIds(filePath: string): (scopeValue: string, sessio
     if (depth === 0) { endIdx = i; break }
   }
   const fnSrc = src.substring(startIdx, endIdx + 1)
-  const fn = new Function(`return (${fnSrc.replace('function resolveSessionIds', 'function')})`)()
+  const fn = new Function(`return (${fnSrc.replace('function resolveConversationIds', 'function')})`)()
   return fn
 }
 
-const resolveSessionIdsVscode = extractResolveSessionIds(VSCODE_APP_PATH)
-const resolveSessionIdsWebapp = extractResolveSessionIds(WEBAPP_APP_PATH)
+const resolveConversationIdsVscode = extractResolveConversationIds(VSCODE_APP_PATH)
+const resolveConversationIdsWebapp = extractResolveConversationIds(WEBAPP_APP_PATH)
 
 describe.each([
-  ['vscode', resolveSessionIdsVscode],
-  ['webapp', resolveSessionIdsWebapp],
-])('resolveSessionIds (%s)', (_label, resolveSessionIds) => {
-  const makeSessions = (count: number, daysAgo: number[] = []) => {
+  ['vscode', resolveConversationIdsVscode],
+  ['webapp', resolveConversationIdsWebapp],
+])('resolveConversationIds (%s)', (_label, resolveConversationIds) => {
+  const makeConversations = (count: number, daysAgo: number[] = []) => {
     return Array.from({ length: count }, (_, i) => {
       const date = new Date()
       if (daysAgo[i] !== undefined) {
@@ -1689,92 +1689,92 @@ describe.each([
 
   // --- Count-based tests ---
 
-  it('count-based: returns correct number of sessions', () => {
-    const sessions = makeSessions(10)
-    const result = resolveSessionIds('count:5', sessions)
+  it('count-based: returns correct number of conversations', () => {
+    const conversations = makeConversations(10)
+    const result = resolveConversationIds('count:5', conversations)
     expect(result.ids).toHaveLength(5)
     expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2', 'sess-3', 'sess-4'])
-    expect(result.description).toBe('5 sessions')
+    expect(result.description).toBe('5 conversations')
   })
 
-  it('count-based: handles fewer sessions than requested', () => {
-    const sessions = makeSessions(3)
-    const result = resolveSessionIds('count:10', sessions)
+  it('count-based: handles fewer conversations than requested', () => {
+    const conversations = makeConversations(3)
+    const result = resolveConversationIds('count:10', conversations)
     expect(result.ids).toHaveLength(3)
-    expect(result.description).toBe('3 sessions')
+    expect(result.description).toBe('3 conversations')
   })
 
   it('count-based: handles count:50', () => {
-    const sessions = makeSessions(60)
-    const result = resolveSessionIds('count:50', sessions)
+    const conversations = makeConversations(60)
+    const result = resolveConversationIds('count:50', conversations)
     expect(result.ids).toHaveLength(50)
   })
 
   // --- Time-based tests ---
 
-  it('time-based: filters sessions within 7 days', () => {
-    const sessions = makeSessions(5, [1, 3, 5, 8, 15])
-    const result = resolveSessionIds('days:7', sessions)
+  it('time-based: filters conversations within 7 days', () => {
+    const conversations = makeConversations(5, [1, 3, 5, 8, 15])
+    const result = resolveConversationIds('days:7', conversations)
     expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
-    expect(result.description).toBe('Last 7 days (3 sessions)')
+    expect(result.description).toBe('Last 7 days (3 conversations)')
   })
 
-  it('time-based: filters sessions within 30 days', () => {
-    const sessions = makeSessions(5, [1, 10, 25, 35, 60])
-    const result = resolveSessionIds('days:30', sessions)
+  it('time-based: filters conversations within 30 days', () => {
+    const conversations = makeConversations(5, [1, 10, 25, 35, 60])
+    const result = resolveConversationIds('days:30', conversations)
     expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
-    expect(result.description).toBe('Last 30 days (3 sessions)')
+    expect(result.description).toBe('Last 30 days (3 conversations)')
   })
 
-  it('time-based: filters sessions within 60 days', () => {
-    const sessions = makeSessions(4, [5, 30, 55, 65])
-    const result = resolveSessionIds('days:60', sessions)
-    expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
-  })
-
-  it('time-based: filters sessions within 90 days', () => {
-    const sessions = makeSessions(4, [10, 50, 85, 100])
-    const result = resolveSessionIds('days:90', sessions)
+  it('time-based: filters conversations within 60 days', () => {
+    const conversations = makeConversations(4, [5, 30, 55, 65])
+    const result = resolveConversationIds('days:60', conversations)
     expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
   })
 
-  it('time-based: returns 0 sessions when none match', () => {
-    const sessions = makeSessions(3, [100, 200, 300])
-    const result = resolveSessionIds('days:7', sessions)
+  it('time-based: filters conversations within 90 days', () => {
+    const conversations = makeConversations(4, [10, 50, 85, 100])
+    const result = resolveConversationIds('days:90', conversations)
+    expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
+  })
+
+  it('time-based: returns 0 conversations when none match', () => {
+    const conversations = makeConversations(3, [100, 200, 300])
+    const result = resolveConversationIds('days:7', conversations)
     expect(result.ids).toHaveLength(0)
-    expect(result.description).toBe('Last 7 days (0 sessions)')
+    expect(result.description).toBe('Last 7 days (0 conversations)')
   })
 
   // --- Edge cases ---
 
-  it('skips sessions with null started_at for time-based', () => {
-    const sessions = [
+  it('skips conversations with null started_at for time-based', () => {
+    const conversations = [
       { id: 'sess-0', started_at: new Date().toISOString() },
       { id: 'sess-1', started_at: null },
       { id: 'sess-2', started_at: new Date().toISOString() },
     ]
-    const result = resolveSessionIds('days:7', sessions)
+    const result = resolveConversationIds('days:7', conversations)
     expect(result.ids).toEqual(['sess-0', 'sess-2'])
   })
 
-  it('includes sessions with null started_at for count-based', () => {
-    const sessions = [
+  it('includes conversations with null started_at for count-based', () => {
+    const conversations = [
       { id: 'sess-0', started_at: null },
       { id: 'sess-1', started_at: null },
       { id: 'sess-2', started_at: null },
     ]
-    const result = resolveSessionIds('count:5', sessions)
+    const result = resolveConversationIds('count:5', conversations)
     expect(result.ids).toEqual(['sess-0', 'sess-1', 'sess-2'])
   })
 
-  it('handles empty sessions array', () => {
-    expect(resolveSessionIds('count:5', []).ids).toHaveLength(0)
-    expect(resolveSessionIds('days:7', []).ids).toHaveLength(0)
+  it('handles empty conversations array', () => {
+    expect(resolveConversationIds('count:5', []).ids).toHaveLength(0)
+    expect(resolveConversationIds('days:7', []).ids).toHaveLength(0)
   })
 
   it('unknown type falls back to count:5', () => {
-    const sessions = makeSessions(10)
-    const result = resolveSessionIds('unknown:abc', sessions)
+    const conversations = makeConversations(10)
+    const result = resolveConversationIds('unknown:abc', conversations)
     expect(result.ids).toHaveLength(5)
   })
 })
