@@ -295,12 +295,62 @@ def recommend_threshold(threshold_results: list[dict]) -> tuple[float, str]:
     return threshold, "; ".join(reasons)
 
 
+def print_histogram(gaps: list[float], max_width: int = 50) -> None:
+    """Print an ASCII histogram of gap lengths using log-scale bins."""
+    if not gaps:
+        print("  No gaps to display.")
+        return
+
+    # Define bins: <1m, 1-2m, 2-5m, 5-10m, 10-15m, 15-30m, 30-60m, 1-2h, 2-4h, 4-8h, 8-24h, 1-3d, 3d+
+    bins = [
+        (0, 1, "<1m"),
+        (1, 2, "1-2m"),
+        (2, 5, "2-5m"),
+        (5, 10, "5-10m"),
+        (10, 15, "10-15m"),
+        (15, 30, "15-30m"),
+        (30, 60, "30m-1h"),
+        (60, 120, "1-2h"),
+        (120, 240, "2-4h"),
+        (240, 480, "4-8h"),
+        (480, 1440, "8-24h"),
+        (1440, 4320, "1-3d"),
+        (4320, float("inf"), "3d+"),
+    ]
+
+    counts = [0] * len(bins)
+    for gap in gaps:
+        for i, (lo, hi, _) in enumerate(bins):
+            if lo <= gap < hi:
+                counts[i] += 1
+                break
+
+    max_count = max(counts) if counts else 1
+    total = len(gaps)
+
+    print("  Gap Length Histogram")
+    print("  " + "-" * 66)
+
+    for i, (_, _, label) in enumerate(bins):
+        count = counts[i]
+        pct = count / total * 100
+        bar_len = round(count / max_count * max_width) if max_count > 0 else 0
+        bar = "\u2588" * bar_len
+        if count > 0:
+            print(f"  {label:>8}  {bar} {count} ({pct:.0f}%)")
+        else:
+            print(f"  {label:>8}  {count}")
+
+    print()
+
+
 def print_report(
     data_path: Path,
     project_timestamps: dict[str, list[datetime]],
     stats: dict,
     threshold_results: list[dict],
     recommendation: tuple[float, str],
+    show_histogram: bool = False,
 ) -> None:
     """Print the analysis report to stdout."""
     all_project_ts = list(project_timestamps.values())
@@ -334,6 +384,9 @@ def print_report(
     print(f"  P99:      {format_duration(stats['p99']):>10}")
     print(f"  Max:      {format_duration(stats['max']):>10}")
     print()
+
+    if show_histogram:
+        print_histogram(all_gaps)
 
     print("  Threshold Analysis")
     print("  " + "-" * 66)
@@ -384,6 +437,11 @@ def main(argv: list[str] | None = None) -> None:
         "--threshold",
         type=float,
         help="Test a specific threshold in addition to the defaults",
+    )
+    parser.add_argument(
+        "--histogram",
+        action="store_true",
+        help="Show an ASCII histogram of gap lengths",
     )
     parser.add_argument(
         "--json",
@@ -437,7 +495,7 @@ def main(argv: list[str] | None = None) -> None:
         }
         print(json.dumps(output, indent=2))
     else:
-        print_report(data_path, project_timestamps, stats, threshold_results, recommendation)
+        print_report(data_path, project_timestamps, stats, threshold_results, recommendation, show_histogram=args.histogram)
 
 
 if __name__ == "__main__":
