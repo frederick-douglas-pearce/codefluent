@@ -40,7 +40,7 @@
       <div id="onboarding-card" class="onboarding-card" style="display: none;">
         <button class="onboarding-dismiss" aria-label="Dismiss onboarding">&#x2715;</button>
         <h2>Welcome to CodeFluent</h2>
-        <p>CodeFluent measures your <strong>AI fluency</strong> — how effectively you interact with Claude Code. Based on <a href="https://www.anthropic.com/research/AI-fluency-index">Anthropic's AI Fluency Index</a> research, we analyze 11 prompting behaviors across your sessions and provide personalized coaching to help you get more from AI.</p>
+        <p>CodeFluent measures your <strong>AI fluency</strong> — how effectively you interact with Claude Code. Based on <a href="https://www.anthropic.com/research/AI-fluency-index">Anthropic's AI Fluency Index</a> research, we analyze 11 prompting behaviors across your conversations and provide personalized coaching to help you get more from AI.</p>
         <p>Head to the <strong>Fluency Score</strong> tab and click <strong>Run Analysis</strong> to get started.</p>
       </div>
 
@@ -48,16 +48,16 @@
       <div id="tab-fluency" class="tab-panel active">
         <div class="section-header">
           <h2>Measure Your AI Fluency</h2>
-          <p>AI fluency measures how effectively you interact with Claude Code. Based on Anthropic's research, we analyze 11 prompting behaviors across your sessions.</p>
+          <p>AI fluency measures how effectively you interact with Claude Code. Based on Anthropic's research, we analyze 11 prompting behaviors across your conversations.</p>
         </div>
         <div class="scoring-controls">
-          <label for="session-scope">Analyze last</label>
-          <select id="session-scope">
+          <label for="conversation-scope">Analyze last</label>
+          <select id="conversation-scope">
             <optgroup label="By count">
-              <option value="count:5" selected>5 sessions</option>
-              <option value="count:10">10 sessions</option>
-              <option value="count:20">20 sessions</option>
-              <option value="count:50">50 sessions</option>
+              <option value="count:5" selected>5 conversations</option>
+              <option value="count:10">10 conversations</option>
+              <option value="count:20">20 conversations</option>
+              <option value="count:50">50 conversations</option>
             </optgroup>
             <optgroup label="By time">
               <option value="days:7">Last 7 days</option>
@@ -74,7 +74,7 @@
         <div id="fluency-results">
           <div class="empty-state-box">
             <div class="empty-state-icon">📊</div>
-            <p class="empty-state">Select how many recent sessions to analyze and click "Run Analysis" above.</p>
+            <p class="empty-state">Select how many recent conversations to analyze and click "Run Analysis" above.</p>
           </div>
         </div>
       </div>
@@ -144,14 +144,14 @@
           <canvas id="usage-chart"></canvas>
         </div>
 
-        <!-- Session Analytics (from parsed JSONL data) -->
-        <h3 class="session-analytics-header" id="session-analytics-header" style="display:none;">Session Analytics</h3>
-        <div id="session-efficiency-cards" class="pace-section"></div>
+        <!-- Conversation Analytics (from parsed JSONL data) -->
+        <h3 class="conversation-analytics-header" id="conversation-analytics-header" style="display:none;">Conversation Analytics</h3>
+        <div id="conversation-efficiency-cards" class="pace-section"></div>
         <div id="score-correlation-container"></div>
-        <div id="session-token-table-container" style="display:none;">
-          <h3>Session Token Details</h3>
+        <div id="conversation-token-table-container" style="display:none;">
+          <h3>Conversation Token Details</h3>
           <div class="table-wrapper">
-            <table class="session-table" id="session-token-table">
+            <table class="conversation-table" id="conversation-token-table">
               <thead>
                 <tr>
                   <th data-sort="date" class="sortable sorted-desc">Date</th>
@@ -167,16 +167,16 @@
                   <th data-sort="score" class="sortable">Score</th>
                 </tr>
               </thead>
-              <tbody id="session-token-tbody"></tbody>
+              <tbody id="conversation-token-tbody"></tbody>
             </table>
           </div>
-          <button class="session-show-more-btn" id="session-table-show-more" style="display:none;">Show more</button>
+          <button class="conversation-show-more-btn" id="conversation-table-show-more" style="display:none;">Show more</button>
         </div>
       </div>
     </main>
 
     <footer class="footer">
-      Built on <a href="https://www.anthropic.com/research/AI-fluency-index">Anthropic's AI Fluency Research</a>
+      Inspired by <a href="https://www.anthropic.com/research/AI-fluency-index">Anthropic's AI Fluency Research</a>
       &middot; PDX Hacks 2026
     </footer>
   </div>

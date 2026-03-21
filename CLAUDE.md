@@ -48,16 +48,17 @@ codefluent/
 │   ├── src/
 │   │   ├── extension.ts       # Activation, status bar, commands
 │   │   ├── webviewProvider.ts # WebviewViewProvider, IPC, terminal launch
-│   │   ├── parser.ts          # JSONL session parsing (~/.claude/projects/)
+│   │   ├── parser.ts          # JSONL session file parsing + message extraction (~/.claude/projects/)
 │   │   ├── scoring.ts         # Fluency scoring via Anthropic API
-│   │   ├── analytics.ts       # Session token analytics (efficiency metrics, cost calculations)
+│   │   ├── analytics.ts       # Conversation token analytics (efficiency metrics, cost calculations)
 │   │   ├── pricing.ts         # Token pricing lookup (shared/pricing.json)
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub repo scoping + task suggestions
 │   │   ├── config.ts          # Centralized config (shared/defaults.json + VS Code settings)
 │   │   ├── prompts.ts         # Prompt loader + template filler (shared/prompts/)
 │   │   ├── cache.ts           # Persistent score caching (globalStorageUri)
-│   │   ├── dataCache.ts       # Session/usage data caching (stale-while-revalidate)
+│   │   ├── dataCache.ts       # Conversation/usage data caching (stale-while-revalidate)
+│   │   ├── conversation.ts    # Conversation assembly (gap-based splitting from session files)
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
 │   ├── media/
 │   │   ├── index.html         # Webview HTML template (nonce-based CSP)
@@ -66,12 +67,13 @@ codefluent/
 │   │   ├── icon.svg           # Activity bar icon (amber brackets)
 │   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
 │   ├── test/
-│   │   ├── unit/{config,scoring,quickwins,xss,platform,prompts,cache,dataCache,parser,recommendations,usage}.test.ts
+│   │   ├── unit/{analytics,config,conversation,scoring,quickwins,xss,platform,prompts,cache,dataCache,parser,recommendations,usage}.test.ts
 │   │   └── integration/{extension,webviewProvider}.test.ts
 │   └── out/                   # Compiled JS (gitignored)
 ├── webapp/                    # FastAPI web app
 │   ├── config.py              # Centralized config (shared/defaults.json + env vars + config.json)
 │   ├── main.py                # FastAPI backend (scoring, optimizer, quickwins, usage)
+│   ├── conversations.py       # Python conversation assembly equivalent
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
 │   ├── static/
 │   │   ├── index.html         # Web frontend HTML
@@ -85,7 +87,7 @@ codefluent/
 │   ├── pricing.json           # Token pricing by model (input/output/cache rates)
 │   ├── prompts/               # Versioned prompt templates
 │   │   ├── registry.json          # Active version pointers
-│   │   ├── scoring/v1.0.md        # Session scoring prompt
+│   │   ├── scoring/v1.0.md        # Conversation scoring prompt
 │   │   ├── config/v1.0.md         # CLAUDE.md scoring prompt
 │   │   ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
 │   │   └── single_scoring/v1.0.md # Single-prompt verification scorer
@@ -143,7 +145,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 546 tests)
+npm test                   # Jest (unit + integration, 615 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -186,12 +188,14 @@ The webview (browser context) communicates with the extension host (Node context
 | Type | Direction | Handler |
 |------|-----------|---------|
 | `getUsage` | webview -> ext | Calls `ccusage` CLI, returns daily/monthly/session data |
-| `getSessions` | webview -> ext | Parses `~/.claude/projects/` JSONL files |
-| `runScoring` | webview -> ext | Scores session prompts + workspace CLAUDE.md via Anthropic API, caches results |
+| `getConversations` | webview -> ext | Parses `~/.claude/projects/` JSONL files, assembles conversations via gap-based splitting |
+| `getSessions` | webview -> ext | Deprecated alias for `getConversations` (kept for backward compatibility) |
+| `runScoring` | webview -> ext | Scores conversation prompts + workspace CLAUDE.md via Anthropic API, caches results |
 | `getCachedScores` | webview -> ext | Returns cached scores + aggregate (includes config behaviors) |
 | `getQuickwins` | webview -> ext | GitHub repo context + Claude suggestions |
 | `optimizePrompt` | webview -> ext | Scores input prompt, generates optimized version, scores output (2 API calls) |
-| `getSessionAnalytics` | webview -> ext | Returns per-session token metrics (efficiency, cost, cache ratios) |
+| `getConversationAnalytics` | webview -> ext | Returns per-conversation token metrics (efficiency, cost, cache ratios) |
+| `getSessionAnalytics` | webview -> ext | Deprecated alias for `getConversationAnalytics` (kept for backward compatibility) |
 | `getConfig` | webview -> ext | Returns display config values from `shared/defaults.json` + VS Code settings |
 | `copyToClipboard` | webview -> ext | Copies text via `vscode.env.clipboard` |
 | `runInTerminal` | webview -> ext | Opens terminal, runs `claude "<prompt>"` |
@@ -215,8 +219,14 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 The webapp uses a project dropdown (populated from session data) to scope features to a specific project:
 - **Quick Wins:** Sends `project_path_encoded` to `/api/quickwins?project=...`, backend detects GitHub repo via `git remote get-url origin` in the decoded project directory
 - **Prompt Optimizer:** Sends `project_path_encoded` so the backend can find and score the project's `CLAUDE.md`
-- **Settings bar visibility per tab:** Data path shown only on Fluency Score; project dropdown on Fluency Score, Prompt Optimizer, Quick Wins, and Usage (for session analytics filtering); settings bar hidden on Recommendations
+- **Settings bar visibility per tab:** Data path shown only on Fluency Score; project dropdown on Fluency Score, Prompt Optimizer, Quick Wins, and Usage (for conversation analytics filtering); settings bar hidden on Recommendations
 - Frontend resolves `project_path_encoded` from session data via `getSelectedProjectEncoded()` (short name → encoded path lookup)
+
+### Webapp API Endpoints (Conversation Redesign)
+- `GET /api/conversations` — Primary endpoint, returns conversations assembled via gap-based splitting
+- `GET /api/sessions` — Deprecated alias for `/api/conversations`
+- `GET /api/conversation-analytics` — Primary endpoint, returns per-conversation token metrics
+- `GET /api/session-analytics` — Deprecated alias for `/api/conversation-analytics`
 
 ### Terminal Launch
 "Run" buttons create terminals with `shellPath: '/bin/bash'` and `shellArgs: ['--norc', '--noprofile']` to bypass shell init scripts (venv activation, etc.), while preserving `PATH` from the extension host process.
@@ -251,7 +261,7 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) f
 
 **Examples:**
 ```
-feat: add session token analytics to Usage tab (#89)
+feat: add conversation token analytics to Usage tab (#89)
 fix: sparkline score history not scoped to current project
 docs: update TECHNICAL_SPEC for v0.3.0 changes
 chore: bump @anthropic-ai/sdk to 0.52.0
@@ -264,7 +274,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (546 tests) in `vscode-extension/`, `pytest` (342 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (615 tests) in `vscode-extension/`, `pytest` (449 tests) in `webapp/`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
@@ -274,7 +284,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 546 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 615 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -355,7 +365,7 @@ The parser MUST handle both.
 ## Anthropic API Usage
 - Model for scoring: `claude-sonnet-4-20250514` (fast, cheap, good for classification)
 - API key via: env var > `.env` > VS Code secrets > prompt
-- Keep prompts concise — send only user prompt text (up to 20 per session, max 2000 chars each)
+- Keep prompts concise — send only user prompt text (up to 20 per conversation, max 2000 chars each)
 - Cache scoring results in `globalStorageUri/scores.json` to avoid re-scoring
 
 ## CLAUDE.md Config Scoring
@@ -372,7 +382,7 @@ The remaining 8 behaviors are task-specific and always scored `false` for config
 2. Content is truncated to 4000 chars and sent to Claude Sonnet with `CONFIG_SCORING_PROMPT` (v1.1)
 3. Returns `{ fluency_behaviors: Record<string, boolean>, one_line_summary: string }`
 4. Results cached in `globalStorageUri/config_scores.json` keyed by workspace path + content hash
-5. `computeAggregate()` merges via `effective_behavior = session_behavior OR (config_eligible AND config_behavior)`
+5. `computeAggregate()` merges via `effective_behavior = conversation_behavior OR (config_eligible AND config_behavior)`
 6. Frontend shows an amber "CLAUDE.md" tag next to config-boosted behaviors (only for eligible behaviors)
 7. Prompt Optimizer also scores CLAUDE.md on demand if not cached, passes only eligible config behavior flags to avoid adding redundant behaviors
 
@@ -394,7 +404,7 @@ Scoring prompts are extracted into standalone files under `shared/prompts/` with
 ```
 shared/prompts/
 ├── registry.json              # Points to active prompt file for each type
-├── scoring/v1.0.md            # Session scoring prompt template
+├── scoring/v1.0.md            # Conversation scoring prompt template
 ├── config/v1.1.md             # CLAUDE.md scoring prompt (3 eligible behaviors only)
 ├── optimizer/v1.1.md          # Prompt optimizer template (config-aware)
 └── single_scoring/v1.0.md     # Single-prompt verification scorer
@@ -424,7 +434,7 @@ Prompts use `{{PLACEHOLDER}}` for template variables (simple string replacement,
 - **Single scoring prompt placeholder:** `{{PROMPT}}`
 
 ### Cache invalidation
-Cached scores are stamped with `prompt_version`. On cache read, entries whose `prompt_version` doesn't match the current registry version are treated as stale and re-scored. This applies to session scores (`scores.json`), config scores (`config_scores.json`), and optimizer results (`optimizer_cache.json`).
+Cached scores are stamped with `prompt_version`. On cache read, entries whose `prompt_version` doesn't match the current registry version are treated as stale and re-scored. This applies to conversation scores (`scores.json`), config scores (`config_scores.json`), and optimizer results (`optimizer_cache.json`).
 
 ### Build integration
 The compile script copies `shared/prompts/` and `shared/defaults.json` into `vscode-extension/shared/` so the extension can load them at runtime via `prompts.ts` and `config.ts`.
@@ -496,31 +506,33 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 546 Jest tests (15 suites)
+npm test                   # Runs all 615 Jest tests (16 suites)
 
 # Test structure:
 # test/unit/config.test.ts                     — centralized config module (defaults, VS Code overrides, display config)
 # test/unit/prompts.test.ts                    — prompt loader + template filler (all prompt types)
-# test/unit/scoring.test.ts                    — scoreSessions, computeAggregate, optimizePrompt, scoreSinglePrompt, prompt versioning
+# test/unit/conversation.test.ts               — conversation assembly, gap-based splitting, boundary detection
+# test/unit/scoring.test.ts                    — scoreConversations, computeAggregate, optimizePrompt, scoreSinglePrompt, prompt versioning
 # test/unit/quickwins.test.ts                  — GitHub name validation, repo detection, arg safety
 # test/unit/xss.test.ts                        — escapeHtml payloads + source-level XSS vector coverage
 # test/unit/platform.test.ts                   — cross-platform shell, escaping, npx helpers
 # test/unit/cache.test.ts                      — score cache persistence, content hashing, invalidation
-# test/unit/dataCache.test.ts                  — session/usage data caching, stale-while-revalidate
+# test/unit/dataCache.test.ts                  — conversation/usage data caching, stale-while-revalidate
 # test/unit/parser.test.ts                     — JSONL parsing, content extraction, subagent filtering
 # test/unit/recommendations.test.ts            — recommendation generation, behavior categorization
 # test/unit/usage.test.ts                      — ccusage CLI bridge, data formatting
-# test/unit/analytics.test.ts                  — session analytics, efficiency metrics, cost calculations
+# test/unit/analytics.test.ts                  — conversation analytics, efficiency metrics, cost calculations
 # test/unit/pricing.test.ts                    — token pricing lookup, model matching, fallback rates
 # test/integration/extension.test.ts           — activation, status bar, commands
 # test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests, optimizer IPC
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (342 tests, 7 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (449 tests, 9 suites)
 
 # Test structure:
-# tests/test_api.py              — health endpoint, sessions, scores, scoring, optimizer, quickwins, usage
+# tests/test_conversations.py    — conversation assembly, gap-based splitting, boundary detection
+# tests/test_api.py              — health endpoint, conversations, scores, scoring, optimizer, quickwins, usage
 # tests/test_helpers.py          — _decode_project_path, _detect_project_repo, validators, compute_aggregate, classify_error
 # tests/test_security.py         — rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification
 # tests/test_extract_prompts.py  — JSONL parsing, content extraction, session filtering, metadata
@@ -540,5 +552,5 @@ Run before merging PRs that touch webapp UI or API. Start the server with `uv ru
 4. **Fluency scoring** — Run Scoring button triggers analysis, results display with score ring and behavior bars
 5. **Prompt Optimizer** — paste prompt, click Optimize, input/output scores and optimized prompt appear
 6. **Quick Wins** — Generate button works; project-scoped mode uses selected project
-7. **Usage tab** — data renders with pace cards and chart (if ccusage data exists); session analytics section shows efficiency cards, cost-efficiency scatter charts, and sortable session details table; project dropdown filters session data
+7. **Usage tab** — data renders with pace cards and chart (if ccusage data exists); conversation analytics section shows efficiency cards, cost-efficiency scatter charts, and sortable conversation details table; project dropdown filters conversation data
 8. **Health endpoint** — `GET /health` returns status, version, and dependency checks

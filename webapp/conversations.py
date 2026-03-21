@@ -1,0 +1,238 @@
+"""CodeFluent — Conversation assembly from pooled session messages."""
+
+from datetime import datetime
+from pathlib import Path
+
+from extract_prompts import parse_session_messages, _get_project_path_encoded, _UUID_PATTERN
+from config import get_config
+
+CLAUDE_DATA_DIR = Path.home() / ".claude" / "projects"
+
+
+def build_conversations(
+    messages: list[dict],
+    project: str,
+    project_path_encoded: str,
+    gap_minutes: float,
+) -> list[dict]:
+    """Split pooled messages into conversations based on inactivity gaps.
+
+    Messages are sorted by (timestamp, file_position). A new conversation
+    starts when the gap between consecutive user messages exceeds gap_minutes.
+    """
+    if not messages:
+        return []
+
+    # Sort by (timestamp, file_position) — stable ordering
+    sorted_msgs = sorted(
+        messages,
+        key=lambda m: (m.get("timestamp") or "", m.get("file_position", 0)),
+    )
+
+    gap_ms = gap_minutes * 60 * 1000
+
+    def _ts_to_ms(ts: str) -> float:
+        """Parse ISO timestamp to epoch milliseconds."""
+        ts = ts.replace("Z", "+00:00")
+        return datetime.fromisoformat(ts).timestamp() * 1000
+
+    # Split into conversation buckets
+    buckets: list[list[dict]] = [[]]
+    last_user_ts: float | None = None
+
+    for msg in sorted_msgs:
+        if msg["type"] == "user" and msg.get("timestamp"):
+            ts = _ts_to_ms(msg["timestamp"])
+            if last_user_ts is not None and (ts - last_user_ts) > gap_ms:
+                buckets.append([])
+            last_user_ts = ts
+        buckets[-1].append(msg)
+
+    # Build conversations from buckets
+    conversations: list[dict] = []
+
+    for bucket in buckets:
+        user_prompts = []
+        user_msg_count = 0
+        assistant_msg_count = 0
+        tool_use_count = 0
+        tools_used: set[str] = set()
+        thinking_count = 0
+        used_plan_mode = False
+        model = None
+        version = None
+        git_branch = None
+        session_ids: set[str] = set()
+        timestamps: list[str] = []
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_cache_creation_tokens = 0
+        total_cache_read_tokens = 0
+
+        for msg in bucket:
+            if msg.get("session_id"):
+                session_ids.add(msg["session_id"])
+            if msg.get("timestamp"):
+                timestamps.append(msg["timestamp"])
+
+            if msg["type"] == "user":
+                user_msg_count += 1
+                if msg.get("content"):
+                    user_prompts.append(msg["content"])
+                if msg.get("used_plan_mode"):
+                    used_plan_mode = True
+            elif msg["type"] == "assistant":
+                assistant_msg_count += 1
+                if msg.get("model") and not model:
+                    model = msg["model"]
+                usage = msg.get("usage")
+                if usage:
+                    total_input_tokens += usage.get("input_tokens", 0)
+                    total_output_tokens += usage.get("output_tokens", 0)
+                    total_cache_creation_tokens += usage.get("cache_creation_input_tokens", 0)
+                    total_cache_read_tokens += usage.get("cache_read_input_tokens", 0)
+                if msg.get("tool_names"):
+                    tool_use_count += len(msg["tool_names"])
+                    tools_used.update(msg["tool_names"])
+            elif msg["type"] == "tool_use":
+                tool_use_count += 1
+                if msg.get("tool_names"):
+                    tools_used.update(msg["tool_names"])
+            elif msg["type"] == "thinking":
+                thinking_count += 1
+
+            if not version and msg.get("claude_code_version"):
+                version = msg["claude_code_version"]
+            if not git_branch and msg.get("git_branch"):
+                git_branch = msg["git_branch"]
+
+        # Skip conversations with no user prompts
+        if not user_prompts:
+            continue
+
+        timestamps.sort()
+        total_tokens = total_input_tokens + total_output_tokens + total_cache_creation_tokens + total_cache_read_tokens
+        tokens_per_prompt = total_tokens / user_msg_count if user_msg_count > 0 else 0
+        cache_hit_denom = total_cache_read_tokens + total_input_tokens + total_cache_creation_tokens
+        cache_hit_rate = total_cache_read_tokens / cache_hit_denom if cache_hit_denom > 0 else 0
+
+        conversations.append({
+            "id": "",  # filled below
+            "project": project,
+            "project_path_encoded": project_path_encoded,
+            "session_ids": sorted(session_ids),
+            "started_at": timestamps[0] if timestamps else None,
+            "ended_at": timestamps[-1] if timestamps else None,
+            "user_prompts": user_prompts,
+            "user_message_count": user_msg_count,
+            "assistant_message_count": assistant_msg_count,
+            "tool_use_count": tool_use_count,
+            "tools_used": sorted(tools_used),
+            "thinking_count": thinking_count,
+            "used_plan_mode": used_plan_mode,
+            "model": model,
+            "claude_code_version": version,
+            "git_branch": git_branch,
+            "total_input_tokens": total_input_tokens,
+            "total_output_tokens": total_output_tokens,
+            "total_cache_creation_tokens": total_cache_creation_tokens,
+            "total_cache_read_tokens": total_cache_read_tokens,
+            "total_tokens": total_tokens,
+            "tokens_per_prompt": tokens_per_prompt,
+            "cache_hit_rate": cache_hit_rate,
+        })
+
+    # Assign deterministic IDs
+    pad_width = max(3, len(str(len(conversations))))
+    for i, conv in enumerate(conversations):
+        conv["id"] = f"{project_path_encoded}:conv:{str(i).zfill(pad_width)}"
+
+    return conversations
+
+
+def get_all_conversations(
+    data_dir: Path = None,
+    limit: int = None,
+    project: str = None,
+    max_files: int = None,
+    gap_minutes: float = None,
+) -> dict:
+    """Parse all sessions and assemble into conversations."""
+    if data_dir is None:
+        data_dir = CLAUDE_DATA_DIR
+    if gap_minutes is None:
+        gap_minutes = get_config("conversation.inactivityGapMinutes")
+
+    if not data_dir.exists():
+        return {
+            "conversations": [],
+            "metadata": {
+                "total_conversations": 0,
+                "total_projects": 0,
+                "total_prompts": 0,
+                "extracted_at": datetime.now().isoformat(),
+            },
+        }
+
+    # Collect all JSONL file paths
+    file_paths: list[Path] = []
+    for project_dir in sorted(data_dir.iterdir()):
+        if not project_dir.is_dir():
+            continue
+
+        flat_files = sorted(project_dir.glob("*.jsonl"))
+        seen_ids = {f.stem for f in flat_files}
+        file_paths.extend(flat_files)
+
+        for subdir in sorted(project_dir.iterdir()):
+            if not subdir.is_dir() or subdir.name in seen_ids:
+                continue
+            file_paths.extend(sorted(subdir.glob("*.jsonl")))
+
+    # When max_files is set, sort by mtime descending
+    if max_files and max_files < len(file_paths):
+        file_paths.sort(key=lambda fp: fp.stat().st_mtime, reverse=True)
+        file_paths = file_paths[:max_files]
+
+    # Parse all files into messages
+    parsed = []
+    for fp in file_paths:
+        result = parse_session_messages(fp)
+        if result:
+            parsed.append(result)
+
+    # Group messages by project_path_encoded
+    by_project: dict[str, dict] = {}
+    for result in parsed:
+        key = result["project_path_encoded"]
+        if key not in by_project:
+            by_project[key] = {"project": result["project"], "encoded": key, "messages": []}
+        by_project[key]["messages"].extend(result["messages"])
+
+    # Build conversations per project
+    all_conversations = []
+    for info in by_project.values():
+        convs = build_conversations(info["messages"], info["project"], info["encoded"], gap_minutes)
+        all_conversations.extend(convs)
+
+    # Sort by started_at descending
+    all_conversations.sort(key=lambda c: c.get("started_at") or "", reverse=True)
+
+    # Apply filters
+    if project:
+        all_conversations = [c for c in all_conversations if c["project"] == project]
+    if limit:
+        all_conversations = all_conversations[:limit]
+
+    projects = set(c["project"] for c in all_conversations)
+    total_prompts = sum(len(c["user_prompts"]) for c in all_conversations)
+
+    return {
+        "conversations": all_conversations,
+        "metadata": {
+            "total_conversations": len(all_conversations),
+            "total_projects": len(projects),
+            "total_prompts": total_prompts,
+            "extracted_at": datetime.now().isoformat(),
+        },
+    }

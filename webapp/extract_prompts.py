@@ -44,6 +44,143 @@ def extract_user_text(message_content) -> str:
     return ""
 
 
+def parse_session_messages(filepath: Path) -> dict | None:
+    """Parse a single JSONL session file and extract individual timestamped messages.
+
+    Returns a dict with messages, session_id, project, project_path_encoded,
+    or None if the file is empty, unreadable, or a sidechain session.
+    """
+    lines = []
+    try:
+        with open(filepath, "r", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    lines.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except OSError:
+        return None
+
+    if not lines:
+        return None
+
+    session_id = None
+    project_cwd = None
+    version = None
+    git_branch = None
+    is_sidechain = False
+
+    messages = []
+
+    for i, msg in enumerate(lines):
+        msg_type = msg.get("type", "")
+
+        if msg_type in SKIP_TYPES:
+            continue
+
+        if not session_id and msg.get("sessionId"):
+            session_id = msg["sessionId"]
+        if not project_cwd and msg.get("cwd"):
+            project_cwd = msg["cwd"]
+        if not version and msg.get("version"):
+            version = msg["version"]
+        if not git_branch and msg.get("gitBranch"):
+            git_branch = msg["gitBranch"]
+        if msg.get("isSidechain") is True:
+            is_sidechain = True
+
+        if msg_type == "user":
+            content = msg.get("message", {}).get("content", "")
+            text = extract_user_text(content)
+            is_interrupted = text == "[Request interrupted by user for tool use]"
+            extracted = {
+                "type": "user",
+                "timestamp": msg.get("timestamp"),
+                "session_id": "",  # filled after loop
+                "file_position": i,
+                "content": None if (not text or is_interrupted) else text[:2000],
+                "used_plan_mode": bool(msg.get("planContent")),
+            }
+            messages.append(extracted)
+
+        elif msg_type == "assistant":
+            tool_names = []
+            content = msg.get("message", {}).get("content", [])
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        if block.get("name"):
+                            tool_names.append(block["name"])
+            usage = msg.get("message", {}).get("usage", {})
+            extracted = {
+                "type": "assistant",
+                "timestamp": msg.get("timestamp"),
+                "session_id": "",
+                "file_position": i,
+                "model": msg.get("message", {}).get("model"),
+                "tool_names": tool_names if tool_names else None,
+            }
+            if usage:
+                extracted["usage"] = {
+                    "input_tokens": usage.get("input_tokens", 0),
+                    "output_tokens": usage.get("output_tokens", 0),
+                    "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+                    "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+                }
+            messages.append(extracted)
+
+        elif msg_type == "tool_use":
+            name = msg.get("name") or msg.get("message", {}).get("name")
+            if not name:
+                content = msg.get("message", {}).get("content", [])
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "tool_use":
+                            name = block.get("name")
+                            break
+            messages.append({
+                "type": "tool_use",
+                "timestamp": msg.get("timestamp"),
+                "session_id": "",
+                "file_position": i,
+                "tool_names": [name] if name else None,
+            })
+
+        elif msg_type == "thinking":
+            messages.append({
+                "type": "thinking",
+                "timestamp": msg.get("timestamp"),
+                "session_id": "",
+                "file_position": i,
+            })
+
+    if is_sidechain:
+        return None
+
+    if not session_id:
+        session_id = filepath.stem
+
+    project_name = project_cwd.rstrip("/").split("/")[-1] if project_cwd else filepath.parent.name
+
+    # Backfill session_id and metadata
+    for m in messages:
+        m["session_id"] = session_id
+        if version:
+            m.setdefault("claude_code_version", version)
+        if git_branch:
+            m.setdefault("git_branch", git_branch)
+
+    return {
+        "messages": messages,
+        "session_id": session_id,
+        "project": project_name,
+        "project_path_encoded": _get_project_path_encoded(filepath),
+    }
+
+
 def parse_session_file(filepath: Path) -> dict | None:
     """Parse a single JSONL session file and extract prompt data."""
     lines = []

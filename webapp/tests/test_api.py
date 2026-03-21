@@ -240,12 +240,17 @@ class TestPostScore:
     def test_scores_sessions_with_mocked_api(
         self, client, mock_anthropic, mock_sessions_dir, monkeypatch
     ):
-        session_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-
         # Mock _resolve_data_dir to point to our test sessions
         monkeypatch.setattr(
             main, "_resolve_data_dir", lambda data_path=None: mock_sessions_dir
         )
+
+        # First, get the conversation ID from the conversations endpoint
+        conv_resp = client.get("/api/conversations")
+        assert conv_resp.status_code == 200
+        conv_data = conv_resp.json()
+        assert len(conv_data["conversations"]) > 0
+        conversation_id = conv_data["conversations"][0]["id"]
 
         api_response = {
             "fluency_behaviors": {b: (i % 2 == 0) for i, b in enumerate(main.BEHAVIORS)},
@@ -257,11 +262,11 @@ class TestPostScore:
             json.dumps(api_response)
         )
 
-        resp = client.post("/api/score", json={"session_ids": [session_id]})
+        resp = client.post("/api/score", json={"conversation_ids": [conversation_id]})
         assert resp.status_code == 200
         data = resp.json()
-        assert session_id in data["scores"]
-        assert data["scores"][session_id]["overall_score"] == 55
+        assert conversation_id in data["scores"]
+        assert data["scores"][conversation_id]["overall_score"] == 55
         assert "aggregate" in data
 
     def test_uses_cached_scores(self, client, tmp_path, monkeypatch, mock_anthropic):
@@ -588,15 +593,17 @@ class TestGetQuickwins:
 
 class TestSessionAnalytics:
     def test_returns_sessions_with_token_data(self, client, mock_sessions_dir):
-        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        resp = client.get("/api/conversation-analytics", params={"data_path": str(mock_sessions_dir)})
         assert resp.status_code == 200
         data = resp.json()
-        assert "sessions" in data
+        assert "conversations" in data
+        assert "sessions" in data  # deprecated alias
         assert "aggregates" in data
         assert "weekly" in data
-        assert len(data["sessions"]) == 1
-        session = data["sessions"][0]
-        assert session["session_id"] == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        assert len(data["conversations"]) == 1
+        session = data["conversations"][0]
+        # Conversation ID is now project-based, not raw session UUID
+        assert ":conv:" in session["session_id"]
         assert session["project"] == "testproject"
         assert session["prompt_count"] == 2
         assert "total_tokens" in session
@@ -606,6 +613,14 @@ class TestSessionAnalytics:
         assert "total_cache_read_tokens" in session
         assert "tokens_per_prompt" in session
         assert "cache_hit_rate" in session
+
+    def test_deprecated_endpoint_alias(self, client, mock_sessions_dir):
+        """The old /api/session-analytics endpoint still works."""
+        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "conversations" in data
+        assert "sessions" in data
 
     def test_overall_score_null_when_not_scored(self, client, mock_sessions_dir):
         resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
@@ -618,10 +633,13 @@ class TestSessionAnalytics:
         data_dir.mkdir(exist_ok=True)
         monkeypatch.setattr(main, "DATA_DIR", data_dir)
 
-        session_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        # First, get the actual conversation ID
+        conv_resp = client.get("/api/conversations", params={"data_path": str(mock_sessions_dir)})
+        conversation_id = conv_resp.json()["conversations"][0]["id"]
+
         scores = {
-            session_id: {
-                "session_id": session_id,
+            conversation_id: {
+                "session_id": conversation_id,
                 "fluency_behaviors": {b: False for b in main.BEHAVIORS},
                 "overall_score": 65,
                 "coding_pattern": "conceptual_inquiry",
@@ -630,9 +648,9 @@ class TestSessionAnalytics:
         }
         (data_dir / "scores.json").write_text(json.dumps(scores))
 
-        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        resp = client.get("/api/conversation-analytics", params={"data_path": str(mock_sessions_dir)})
         assert resp.status_code == 200
-        session = resp.json()["sessions"][0]
+        session = resp.json()["conversations"][0]
         assert session["overall_score"] == 65
 
     def test_ignores_stale_scores(self, client, mock_sessions_dir, tmp_path, monkeypatch):
@@ -640,10 +658,13 @@ class TestSessionAnalytics:
         data_dir.mkdir(exist_ok=True)
         monkeypatch.setattr(main, "DATA_DIR", data_dir)
 
-        session_id = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+        # First, get the actual conversation ID
+        conv_resp = client.get("/api/conversations", params={"data_path": str(mock_sessions_dir)})
+        conversation_id = conv_resp.json()["conversations"][0]["id"]
+
         scores = {
-            session_id: {
-                "session_id": session_id,
+            conversation_id: {
+                "session_id": conversation_id,
                 "fluency_behaviors": {b: False for b in main.BEHAVIORS},
                 "overall_score": 65,
                 "coding_pattern": "conceptual_inquiry",
@@ -652,13 +673,13 @@ class TestSessionAnalytics:
         }
         (data_dir / "scores.json").write_text(json.dumps(scores))
 
-        resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})
+        resp = client.get("/api/conversation-analytics", params={"data_path": str(mock_sessions_dir)})
         assert resp.status_code == 200
-        session = resp.json()["sessions"][0]
+        session = resp.json()["conversations"][0]
         assert session["overall_score"] is None
 
     def test_respects_project_filter(self, client, mock_sessions_dir):
-        resp = client.get("/api/session-analytics", params={
+        resp = client.get("/api/conversation-analytics", params={
             "data_path": str(mock_sessions_dir),
             "project": "testproject",
         })

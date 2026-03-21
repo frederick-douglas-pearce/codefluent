@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 from pathlib import Path
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 import json
 import asyncio
 import re
@@ -22,6 +22,7 @@ from config import get_config, get_display_config
 import subprocess
 from anthropic import Anthropic
 from extract_prompts import get_all_sessions
+from conversations import get_all_conversations
 
 BEHAVIORS = [
     "iteration_and_refinement", "clarifying_goals", "specifying_format",
@@ -65,6 +66,10 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Prevent browser from caching stale static assets
+    path = request.url.path
+    if path == "/" or (path.startswith("/static/") and (path.endswith(".js") or path.endswith(".css"))):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
 
 
@@ -179,19 +184,34 @@ SINGLE_SCORING_PROMPT_VERSION = _single_scoring_prompt["version"]
 
 
 class ScoreRequest(BaseModel):
-    session_ids: list[str] = Field(..., min_length=1, max_length=500)
+    conversation_ids: list[str] | None = Field(default=None, max_length=500)
+    session_ids: list[str] | None = Field(default=None, max_length=500)  # deprecated alias
     force_rescore: bool = False
     project: str = Field(default="", max_length=500)
 
-    @field_validator("session_ids", mode="before")
+    @field_validator("conversation_ids", "session_ids", mode="before")
     @classmethod
-    def validate_session_ids(cls, v):
+    def validate_ids(cls, v):
+        if v is None:
+            return v
         if not isinstance(v, list):
-            raise ValueError("session_ids must be a list")
+            raise ValueError("IDs must be a list")
         for sid in v:
             if not isinstance(sid, str) or len(sid) > 200:
-                raise ValueError("Each session_id must be a string under 200 chars")
+                raise ValueError("Each ID must be a string under 200 chars")
         return v
+
+    @model_validator(mode="after")
+    def require_at_least_one_id_list(self):
+        ids = self.conversation_ids or self.session_ids
+        if not ids:
+            raise ValueError("conversation_ids or session_ids is required and must be non-empty")
+        return self
+
+    @property
+    def resolved_ids(self) -> list[str]:
+        """Return conversation_ids, falling back to session_ids for backward compat."""
+        return self.conversation_ids or self.session_ids or []
 
 
 _score_timestamps: list[float] = []
@@ -394,27 +414,38 @@ def _resolve_data_dir(data_path: str | None = None) -> Path:
     return Path.home() / ".claude" / "projects"
 
 
-@app.get("/api/sessions")
-async def get_sessions(
+@app.get("/api/conversations")
+async def get_conversations(
     limit: int = Query(default=1000, ge=1, le=1000),
     project: str = Query(default=None, max_length=500),
     data_path: str = Query(default=None, max_length=1000),
 ):
-    """Parse sessions on-demand from JSONL files."""
+    """Parse conversations on-demand from JSONL files."""
+    data_dir = _resolve_data_dir(data_path)
+    return get_all_conversations(data_dir, limit, project)
+
+
+@app.get("/api/sessions")
+async def get_sessions_deprecated(
+    limit: int = Query(default=1000, ge=1, le=1000),
+    project: str = Query(default=None, max_length=500),
+    data_path: str = Query(default=None, max_length=1000),
+):
+    """Deprecated: Use /api/conversations instead."""
     data_dir = _resolve_data_dir(data_path)
     return get_all_sessions(data_dir, limit, project)
 
 
-@app.get("/api/session-analytics")
-async def get_session_analytics(
+@app.get("/api/conversation-analytics")
+async def get_conversation_analytics(
     data_path: str = Query(default=None, max_length=1000),
     project: str = Query(default=None, max_length=500),
 ):
-    """Return sessions with token analytics and optional cached fluency scores."""
+    """Return conversations with token analytics and optional cached fluency scores."""
     try:
         data_dir = _resolve_data_dir(data_path)
-        session_data = get_all_sessions(data_dir, project=project, max_files=200)
-        sessions_list = session_data.get("sessions", [])
+        conv_data = get_all_conversations(data_dir, project=project, max_files=200)
+        sessions_list = conv_data.get("conversations", [])
 
         # Load cached scores
         scores_path = DATA_DIR / "scores.json"
@@ -482,7 +513,8 @@ async def get_session_analytics(
         weekly = _compute_weekly_analytics(analytics_sessions)
 
         return {
-            "sessions": analytics_sessions,
+            "conversations": analytics_sessions,
+            "sessions": analytics_sessions,  # deprecated alias
             "aggregates": aggregates,
             "weekly": weekly,
         }
@@ -492,15 +524,26 @@ async def get_session_analytics(
         raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
 
 
+@app.get("/api/session-analytics")
+async def get_session_analytics_deprecated(
+    data_path: str = Query(default=None, max_length=1000),
+    project: str = Query(default=None, max_length=500),
+):
+    """Deprecated: Use /api/conversation-analytics instead."""
+    return await get_conversation_analytics(data_path=data_path, project=project)
+
+
 def _compute_session_aggregates(sessions: list) -> dict:
-    """Compute aggregate token metrics across sessions."""
+    """Compute aggregate token metrics across conversations."""
     n = len(sessions)
     if n == 0:
         return {
-            "avg_tokens_per_session": 0,
+            "avg_tokens_per_conversation": 0,
+            "avg_tokens_per_session": 0,  # deprecated alias
             "avg_tokens_per_prompt": 0,
             "avg_cache_hit_rate": 0,
-            "total_sessions": 0,
+            "total_conversations": 0,
+            "total_sessions": 0,  # deprecated alias
             "total_estimated_cost": 0,
         }
 
@@ -510,10 +553,12 @@ def _compute_session_aggregates(sessions: list) -> dict:
     total_cost = sum(s.get("estimated_cost", 0) for s in sessions)
 
     return {
-        "avg_tokens_per_session": round(total_tokens_sum / n),
+        "avg_tokens_per_conversation": round(total_tokens_sum / n),
+        "avg_tokens_per_session": round(total_tokens_sum / n),  # deprecated alias
         "avg_tokens_per_prompt": round(total_tokens_sum / total_prompts) if total_prompts > 0 else 0,
         "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
-        "total_sessions": n,
+        "total_conversations": n,
+        "total_sessions": n,  # deprecated alias
         "total_estimated_cost": round(total_cost, 2),
     }
 
@@ -543,9 +588,11 @@ def _compute_weekly_analytics(sessions: list) -> list:
         weekly.append({
             "week": week_key,
             "total_tokens": total_tokens,
-            "avg_tokens_per_session": round(total_tokens / n) if n else 0,
+            "avg_tokens_per_conversation": round(total_tokens / n) if n else 0,
+            "avg_tokens_per_session": round(total_tokens / n) if n else 0,  # deprecated alias
             "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
-            "session_count": n,
+            "conversation_count": n,
+            "session_count": n,  # deprecated alias
         })
 
     weekly.sort(key=lambda w: w["week"])
@@ -586,16 +633,18 @@ async def get_scores(project: str = Query(default=None, max_length=500)):
 
     aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
     if isinstance(last_ids, list) and last_ids:
-        aggregate["sessions_requested"] = len(last_ids)
-        aggregate["sessions_skipped"] = len(last_ids) - len(scored)
+        aggregate["conversations_requested"] = len(last_ids)
+        aggregate["conversations_skipped"] = len(last_ids) - len(scored)
+        aggregate["sessions_requested"] = len(last_ids)  # deprecated alias
+        aggregate["sessions_skipped"] = len(last_ids) - len(scored)  # deprecated alias
 
     # Attach score history scoped to project
     data_dir = _resolve_data_dir()
-    session_data = get_all_sessions(data_dir)
-    sessions_list = session_data.get("sessions", [])
+    conv_data = get_all_conversations(data_dir)
+    conversations_list = conv_data.get("conversations", [])
     if project:
-        sessions_list = [s for s in sessions_list if s.get("project") == project]
-    aggregate["score_history"] = compute_score_history(cached, sessions_list, config_behaviors)
+        conversations_list = [c for c in conversations_list if c.get("project") == project]
+    aggregate["score_history"] = compute_score_history(cached, conversations_list, config_behaviors)
 
     return {"scores": scoped, "aggregate": aggregate}
 
@@ -603,10 +652,10 @@ async def get_scores(project: str = Query(default=None, max_length=500)):
 
 
 @app.post("/api/score")
-async def score_sessions(request: ScoreRequest):
-    """Score sessions for AI fluency using Anthropic API."""
+async def score_conversations_endpoint(request: ScoreRequest):
+    """Score conversations for AI fluency using Anthropic API."""
     _check_rate_limit()
-    session_ids = request.session_ids
+    conversation_ids = request.resolved_ids
     force = request.force_rescore
 
     scores_path = DATA_DIR / "scores.json"
@@ -616,16 +665,16 @@ async def score_sessions(request: ScoreRequest):
             cached = json.load(f)
 
     data_dir = _resolve_data_dir()
-    session_data = get_all_sessions(data_dir)
-    all_sessions = {s["id"]: s for s in session_data["sessions"]}
+    conv_data = get_all_conversations(data_dir)
+    all_conversations = {c["id"]: c for c in conv_data["conversations"]}
 
     results = {}
-    for sid in session_ids:
+    for sid in conversation_ids:
         if sid in cached and not force and cached[sid].get("prompt_version") == SCORING_PROMPT_VERSION:
             results[sid] = cached[sid]
             continue
 
-        session = all_sessions.get(sid)
+        session = all_conversations.get(sid)
         if not session or not session["user_prompts"]:
             continue
 
@@ -663,18 +712,18 @@ async def score_sessions(request: ScoreRequest):
     with open(scores_path, "w") as f:
         json.dump(cached, f, indent=2)
 
-    # Persist last-scored session IDs for scoped cache retrieval
+    # Persist last-scored conversation IDs for scoped cache retrieval
     last_scored_path = DATA_DIR / "last_scored_ids.json"
     last_scored_path.parent.mkdir(parents=True, exist_ok=True)
     with open(last_scored_path, "w") as f:
-        json.dump(session_ids, f)
+        json.dump(conversation_ids, f)
 
-    # Score CLAUDE.md files from scored sessions' projects
+    # Score CLAUDE.md files from scored conversations' projects
     config_behaviors = None
     config_cache = _load_config_cache()
     scored_projects = set()
-    for sid in session_ids:
-        session = all_sessions.get(sid)
+    for sid in conversation_ids:
+        session = all_conversations.get(sid)
         if session and session.get("project_path_encoded"):
             scored_projects.add(session["project_path_encoded"])
 
@@ -707,13 +756,17 @@ async def score_sessions(request: ScoreRequest):
 
     scored = [r for r in results.values() if "fluency_behaviors" in r]
     aggregate = compute_aggregate(scored, config_behaviors) if scored else {}
-    aggregate["sessions_requested"] = len(session_ids)
-    aggregate["sessions_skipped"] = len(session_ids) - len(scored)
-    history_sessions = list(all_sessions.values())
+    aggregate["conversations_requested"] = len(conversation_ids)
+    aggregate["conversations_scored"] = len(scored)
+    aggregate["conversations_skipped"] = len(conversation_ids) - len(scored)
+    # Deprecated aliases
+    aggregate["sessions_requested"] = len(conversation_ids)
+    aggregate["sessions_skipped"] = len(conversation_ids) - len(scored)
+    history_convs = list(all_conversations.values())
     if request.project:
-        history_sessions = [s for s in history_sessions if s.get("project") == request.project]
+        history_convs = [c for c in history_convs if c.get("project") == request.project]
     aggregate["score_history"] = compute_score_history(
-        cached, history_sessions, config_behaviors
+        cached, history_convs, config_behaviors
     )
 
     return {"scores": results, "aggregate": aggregate}
@@ -1130,7 +1183,8 @@ def compute_aggregate(scored_sessions: list, config_behaviors: dict = None) -> d
     avg_score = round(score_sum / n) if n else 0
 
     result = {
-        "sessions_scored": n,
+        "conversations_scored": n,
+        "sessions_scored": n,  # deprecated alias
         "average_score": avg_score,
         "behavior_prevalence": prevalence,
         "pattern_distribution": patterns,
@@ -1198,7 +1252,8 @@ def compute_score_history(
             "period": period,
             "period_start": group["monday"],
             "score": round(score_sum / len(group["sessions"])),
-            "sessions_scored": len(group["sessions"]),
+            "conversations_scored": len(group["sessions"]),
+            "sessions_scored": len(group["sessions"]),  # deprecated alias
         })
 
     history.sort(key=lambda h: h["period"])

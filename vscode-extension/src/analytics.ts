@@ -1,71 +1,98 @@
 import { ParsedSession } from './parser'
+import { ParsedConversation } from './conversation'
 import { ScoreResult, getISOWeekKey, BEHAVIORS } from './scoring'
 import { estimateSessionCost, loadPricing, PricingData } from './pricing'
 
 export interface WeeklyTokenAggregation {
   week: string
   total_tokens: number
-  avg_tokens_per_session: number
+  avg_tokens_per_conversation: number
   avg_cache_hit_rate: number
-  session_count: number
+  conversation_count: number
+  /** @deprecated Use avg_tokens_per_conversation */
+  avg_tokens_per_session?: number
+  /** @deprecated Use conversation_count */
+  session_count?: number
 }
 
-export interface SessionEfficiency {
+export interface ConversationEfficiency {
   avg_tokens_per_prompt: number
   avg_cache_hit_rate: number
   total_tokens: number
-  total_sessions: number
-  most_efficient_session: { id: string; tokens_per_prompt: number } | null
+  total_conversations: number
+  most_efficient_conversation: { id: string; tokens_per_prompt: number } | null
+  /** @deprecated Use total_conversations */
+  total_sessions?: number
+  /** @deprecated Use most_efficient_conversation */
+  most_efficient_session?: { id: string; tokens_per_prompt: number } | null
 }
 
-export interface EnrichedSession extends Omit<ParsedSession, 'user_prompts' | 'tools_used'> {
+/** @deprecated Use ConversationEfficiency */
+export type SessionEfficiency = ConversationEfficiency
+
+// Base enriched type that works with both ParsedConversation and ParsedSession
+export type EnrichedConversation = (Omit<ParsedConversation, 'user_prompts' | 'tools_used'> | Omit<ParsedSession, 'user_prompts' | 'tools_used'>) & {
   overall_score: number | null
   estimated_cost: number
 }
 
-export interface SessionAnalyticsResult {
-  sessions: EnrichedSession[]
+/** @deprecated Use EnrichedConversation */
+export type EnrichedSession = EnrichedConversation
+
+export interface ConversationAnalyticsResult {
+  conversations: EnrichedConversation[]
   aggregates: {
-    avg_tokens_per_session: number
+    avg_tokens_per_conversation: number
     avg_tokens_per_prompt: number
     avg_cache_hit_rate: number
-    total_sessions: number
+    total_conversations: number
     total_estimated_cost: number
+    /** @deprecated Use avg_tokens_per_conversation */
+    avg_tokens_per_session?: number
+    /** @deprecated Use total_conversations */
+    total_sessions?: number
   }
   weekly: WeeklyTokenAggregation[]
+  /** @deprecated Use conversations */
+  sessions?: EnrichedConversation[]
 }
 
-export function computeWeeklyTokenAggregation(sessions: ParsedSession[]): WeeklyTokenAggregation[] {
-  if (sessions.length === 0) return []
+/** @deprecated Use ConversationAnalyticsResult */
+export type SessionAnalyticsResult = ConversationAnalyticsResult
 
-  const weekGroups = new Map<string, { sessions: ParsedSession[]; monday: string }>()
+export function computeWeeklyTokenAggregation(conversations: (ParsedConversation | ParsedSession)[]): WeeklyTokenAggregation[] {
+  if (conversations.length === 0) return []
 
-  for (const session of sessions) {
-    if (!session.started_at) continue
+  const weekGroups = new Map<string, { conversations: (ParsedConversation | ParsedSession)[]; monday: string }>()
 
-    const weekInfo = getISOWeekKey(session.started_at)
+  for (const conv of conversations) {
+    if (!conv.started_at) continue
+
+    const weekInfo = getISOWeekKey(conv.started_at)
     if (!weekInfo) continue
 
     const group = weekGroups.get(weekInfo.key)
     if (group) {
-      group.sessions.push(session)
+      group.conversations.push(conv)
     } else {
-      weekGroups.set(weekInfo.key, { sessions: [session], monday: weekInfo.monday })
+      weekGroups.set(weekInfo.key, { conversations: [conv], monday: weekInfo.monday })
     }
   }
 
   const result: WeeklyTokenAggregation[] = []
-  for (const [week, { sessions: weekSessions }] of weekGroups) {
-    const totalTokens = weekSessions.reduce((sum, s) => sum + s.total_tokens, 0)
-    const avgTokensPerSession = Math.round(totalTokens / weekSessions.length)
-    const avgCacheHitRate = weekSessions.reduce((sum, s) => sum + s.cache_hit_rate, 0) / weekSessions.length
+  for (const [week, { conversations: weekConvs }] of weekGroups) {
+    const totalTokens = weekConvs.reduce((sum, c) => sum + c.total_tokens, 0)
+    const avgTokensPerConv = Math.round(totalTokens / weekConvs.length)
+    const avgCacheHitRate = weekConvs.reduce((sum, c) => sum + c.cache_hit_rate, 0) / weekConvs.length
 
     result.push({
       week,
       total_tokens: totalTokens,
-      avg_tokens_per_session: avgTokensPerSession,
+      avg_tokens_per_conversation: avgTokensPerConv,
+      avg_tokens_per_session: avgTokensPerConv, // deprecated alias
       avg_cache_hit_rate: Math.round(avgCacheHitRate * 10000) / 10000,
-      session_count: weekSessions.length,
+      conversation_count: weekConvs.length,
+      session_count: weekConvs.length, // deprecated alias
     })
   }
 
@@ -73,28 +100,30 @@ export function computeWeeklyTokenAggregation(sessions: ParsedSession[]): Weekly
   return result
 }
 
-export function computeSessionEfficiency(sessions: ParsedSession[]): SessionEfficiency {
-  if (sessions.length === 0) {
+export function computeConversationEfficiency(conversations: (ParsedConversation | ParsedSession)[]): ConversationEfficiency {
+  if (conversations.length === 0) {
     return {
       avg_tokens_per_prompt: 0,
       avg_cache_hit_rate: 0,
       total_tokens: 0,
+      total_conversations: 0,
       total_sessions: 0,
+      most_efficient_conversation: null,
       most_efficient_session: null,
     }
   }
 
-  const totalTokens = sessions.reduce((sum, s) => sum + s.total_tokens, 0)
-  const totalPrompts = sessions.reduce((sum, s) => sum + s.user_message_count, 0)
+  const totalTokens = conversations.reduce((sum, c) => sum + c.total_tokens, 0)
+  const totalPrompts = conversations.reduce((sum, c) => sum + c.user_message_count, 0)
   const avgTokensPerPrompt = totalPrompts > 0 ? totalTokens / totalPrompts : 0
-  const avgCacheHitRate = sessions.reduce((sum, s) => sum + s.cache_hit_rate, 0) / sessions.length
+  const avgCacheHitRate = conversations.reduce((sum, c) => sum + c.cache_hit_rate, 0) / conversations.length
 
-  // Most efficient = lowest tokens_per_prompt among sessions that have prompts
+  // Most efficient = lowest tokens_per_prompt among conversations that have prompts
   let mostEfficient: { id: string; tokens_per_prompt: number } | null = null
-  for (const s of sessions) {
-    if (s.user_message_count > 0 && s.total_tokens > 0) {
-      if (!mostEfficient || s.tokens_per_prompt < mostEfficient.tokens_per_prompt) {
-        mostEfficient = { id: s.id, tokens_per_prompt: Math.round(s.tokens_per_prompt) }
+  for (const c of conversations) {
+    if (c.user_message_count > 0 && c.total_tokens > 0) {
+      if (!mostEfficient || c.tokens_per_prompt < mostEfficient.tokens_per_prompt) {
+        mostEfficient = { id: c.id, tokens_per_prompt: Math.round(c.tokens_per_prompt) }
       }
     }
   }
@@ -103,21 +132,26 @@ export function computeSessionEfficiency(sessions: ParsedSession[]): SessionEffi
     avg_tokens_per_prompt: Math.round(avgTokensPerPrompt),
     avg_cache_hit_rate: Math.round(avgCacheHitRate * 10000) / 10000,
     total_tokens: totalTokens,
-    total_sessions: sessions.length,
-    most_efficient_session: mostEfficient,
+    total_conversations: conversations.length,
+    total_sessions: conversations.length, // deprecated alias
+    most_efficient_conversation: mostEfficient,
+    most_efficient_session: mostEfficient, // deprecated alias
   }
 }
 
-export function joinSessionsWithScores(
-  sessions: ParsedSession[],
+/** @deprecated Use computeConversationEfficiency */
+export const computeSessionEfficiency = computeConversationEfficiency
+
+export function joinConversationsWithScores(
+  conversations: (ParsedConversation | ParsedSession)[],
   scores: ScoreResult[],
   pricing?: PricingData,
   configBehaviors?: Record<string, boolean>,
-): EnrichedSession[] {
+): EnrichedConversation[] {
   const scoreMap = new Map<string, number | null>()
   for (const score of scores) {
     if (score.overall_score == null) continue
-    // Compute effective score: session behavior OR config behavior
+    // Compute effective score: conversation behavior OR config behavior
     if (configBehaviors && score.fluency_behaviors) {
       const effectiveCount = BEHAVIORS.filter(b =>
         score.fluency_behaviors![b] || configBehaviors[b]
@@ -135,19 +169,19 @@ export function joinSessionsWithScores(
     // pricing.json not found — costs will be 0
   }
 
-  return sessions.map(session => {
+  return conversations.map(conv => {
     // Strip large fields not needed for analytics UI to avoid OOM on IPC
-    const { user_prompts, tools_used, ...rest } = session
+    const { user_prompts, tools_used, ...rest } = conv
 
     let estimated_cost = 0
     if (pricingData) {
       const cost = estimateSessionCost(
-        session.total_input_tokens,
-        session.total_output_tokens,
-        session.total_cache_creation_tokens,
-        session.total_cache_read_tokens,
-        session.model,
-        session.started_at,
+        conv.total_input_tokens,
+        conv.total_output_tokens,
+        conv.total_cache_creation_tokens,
+        conv.total_cache_read_tokens,
+        conv.model,
+        conv.started_at,
         pricingData,
       )
       estimated_cost = cost.total_cost
@@ -155,34 +189,45 @@ export function joinSessionsWithScores(
 
     return {
       ...rest,
-      overall_score: scoreMap.get(session.id) ?? null,
+      overall_score: scoreMap.get(conv.id) ?? null,
       estimated_cost,
     }
   })
 }
 
-export function buildSessionAnalytics(
-  sessions: ParsedSession[],
+/** @deprecated Use joinConversationsWithScores */
+export const joinSessionsWithScores = joinConversationsWithScores
+
+export function buildConversationAnalytics(
+  conversations: (ParsedConversation | ParsedSession)[],
   scores: ScoreResult[],
   configBehaviors?: Record<string, boolean>,
-): SessionAnalyticsResult {
-  const enriched = joinSessionsWithScores(sessions, scores, undefined, configBehaviors)
-  const weekly = computeWeeklyTokenAggregation(sessions)
-  const efficiency = computeSessionEfficiency(sessions)
+): ConversationAnalyticsResult {
+  const enriched = joinConversationsWithScores(conversations, scores, undefined, configBehaviors)
+  const weekly = computeWeeklyTokenAggregation(conversations)
+  const efficiency = computeConversationEfficiency(conversations)
 
-  const totalEstimatedCost = enriched.reduce((sum, s) => sum + s.estimated_cost, 0)
+  const totalEstimatedCost = enriched.reduce((sum, c) => sum + c.estimated_cost, 0)
+
+  const avgTokensPerConv = efficiency.total_conversations > 0
+    ? Math.round(efficiency.total_tokens / efficiency.total_conversations)
+    : 0
 
   return {
-    sessions: enriched,
+    conversations: enriched,
+    sessions: enriched, // deprecated alias
     aggregates: {
-      avg_tokens_per_session: efficiency.total_sessions > 0
-        ? Math.round(efficiency.total_tokens / efficiency.total_sessions)
-        : 0,
+      avg_tokens_per_conversation: avgTokensPerConv,
+      avg_tokens_per_session: avgTokensPerConv, // deprecated alias
       avg_tokens_per_prompt: efficiency.avg_tokens_per_prompt,
       avg_cache_hit_rate: efficiency.avg_cache_hit_rate,
-      total_sessions: efficiency.total_sessions,
+      total_conversations: efficiency.total_conversations,
+      total_sessions: efficiency.total_conversations, // deprecated alias
       total_estimated_cost: Math.round(totalEstimatedCost * 100) / 100,
     },
     weekly,
   }
 }
+
+/** @deprecated Use buildConversationAnalytics */
+export const buildSessionAnalytics = buildConversationAnalytics

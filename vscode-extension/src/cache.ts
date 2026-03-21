@@ -16,7 +16,16 @@ export class ScoreCache {
   read(): Record<string, any> {
     try {
       const data = fs.readFileSync(this.filePath, 'utf8')
-      return JSON.parse(data)
+      const raw = JSON.parse(data)
+      // Cache format migration: discard old session-keyed caches
+      if (raw.cache_format === 'conversations') {
+        return raw.scores || {}
+      }
+      // Legacy format (no cache_format field) — discard
+      if (typeof raw === 'object' && !raw.cache_format) {
+        return {}
+      }
+      return {}
     } catch {
       return {}
     }
@@ -27,7 +36,7 @@ export class ScoreCache {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true })
     }
-    fs.writeFileSync(this.filePath, JSON.stringify(data, null, 2))
+    fs.writeFileSync(this.filePath, JSON.stringify({ cache_format: 'conversations', scores: data }, null, 2))
   }
 
   readConfig(): Record<string, any> {

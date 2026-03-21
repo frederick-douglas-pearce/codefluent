@@ -156,13 +156,13 @@ describe('computeSessionEfficiency', () => {
   it('returns zeros for empty sessions', () => {
     const result = computeSessionEfficiency([])
 
-    expect(result).toEqual({
-      avg_tokens_per_prompt: 0,
-      avg_cache_hit_rate: 0,
-      total_tokens: 0,
-      total_sessions: 0,
-      most_efficient_session: null,
-    })
+    expect(result.avg_tokens_per_prompt).toBe(0)
+    expect(result.avg_cache_hit_rate).toBe(0)
+    expect(result.total_tokens).toBe(0)
+    expect(result.total_conversations).toBe(0)
+    expect(result.total_sessions).toBe(0) // deprecated alias
+    expect(result.most_efficient_conversation).toBeNull()
+    expect(result.most_efficient_session).toBeNull() // deprecated alias
   })
 
   it('computes metrics for a single session', () => {
@@ -304,14 +304,15 @@ describe('buildSessionAnalytics', () => {
   it('returns empty structure for empty inputs', () => {
     const result = buildSessionAnalytics([], [])
 
-    expect(result.sessions).toEqual([])
-    expect(result.aggregates).toEqual({
-      avg_tokens_per_session: 0,
-      avg_tokens_per_prompt: 0,
-      avg_cache_hit_rate: 0,
-      total_sessions: 0,
-      total_estimated_cost: 0,
-    })
+    expect(result.conversations).toEqual([])
+    expect(result.sessions).toEqual([]) // deprecated alias
+    expect(result.aggregates.avg_tokens_per_conversation).toBe(0)
+    expect(result.aggregates.avg_tokens_per_session).toBe(0) // deprecated alias
+    expect(result.aggregates.avg_tokens_per_prompt).toBe(0)
+    expect(result.aggregates.avg_cache_hit_rate).toBe(0)
+    expect(result.aggregates.total_conversations).toBe(0)
+    expect(result.aggregates.total_sessions).toBe(0) // deprecated alias
+    expect(result.aggregates.total_estimated_cost).toBe(0)
     expect(result.weekly).toEqual([])
   })
 
@@ -323,9 +324,11 @@ describe('buildSessionAnalytics', () => {
     const scores = [makeScoreResult({ session_id: 's1', overall_score: 70 })]
     const result = buildSessionAnalytics(sessions, scores)
 
+    expect(result.conversations).toHaveLength(2)
+    expect(result.conversations[0].overall_score).toBe(70)
+    expect(result.conversations[1].overall_score).toBeNull()
+    // Deprecated alias still works
     expect(result.sessions).toHaveLength(2)
-    expect(result.sessions[0].overall_score).toBe(70)
-    expect(result.sessions[1].overall_score).toBeNull()
 
     expect(result.aggregates.total_sessions).toBe(2)
     expect(result.aggregates.avg_tokens_per_session).toBe(3000)
@@ -341,20 +344,25 @@ describe('buildSessionAnalytics', () => {
     const sessions = [makeSession()]
     const result = buildSessionAnalytics(sessions, [])
 
-    // Verify the exact keys exist
-    expect(result).toHaveProperty('sessions')
+    // Verify new and deprecated keys exist
+    expect(result).toHaveProperty('conversations')
+    expect(result).toHaveProperty('sessions') // deprecated alias
     expect(result).toHaveProperty('aggregates')
     expect(result).toHaveProperty('weekly')
-    expect(result.aggregates).toHaveProperty('avg_tokens_per_session')
+    expect(result.aggregates).toHaveProperty('avg_tokens_per_conversation')
+    expect(result.aggregates).toHaveProperty('avg_tokens_per_session') // deprecated alias
     expect(result.aggregates).toHaveProperty('avg_tokens_per_prompt')
     expect(result.aggregates).toHaveProperty('avg_cache_hit_rate')
-    expect(result.aggregates).toHaveProperty('total_sessions')
+    expect(result.aggregates).toHaveProperty('total_conversations')
+    expect(result.aggregates).toHaveProperty('total_sessions') // deprecated alias
 
     // Verify weekly item shape
     expect(result.weekly[0]).toHaveProperty('week')
     expect(result.weekly[0]).toHaveProperty('total_tokens')
-    expect(result.weekly[0]).toHaveProperty('avg_tokens_per_session')
+    expect(result.weekly[0]).toHaveProperty('avg_tokens_per_conversation')
+    expect(result.weekly[0]).toHaveProperty('avg_tokens_per_session') // deprecated alias
     expect(result.weekly[0]).toHaveProperty('avg_cache_hit_rate')
-    expect(result.weekly[0]).toHaveProperty('session_count')
+    expect(result.weekly[0]).toHaveProperty('conversation_count')
+    expect(result.weekly[0]).toHaveProperty('session_count') // deprecated alias
   })
 })

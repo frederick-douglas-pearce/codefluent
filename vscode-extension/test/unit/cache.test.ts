@@ -16,14 +16,21 @@ describe('ScoreCache', () => {
   })
 
   describe('read', () => {
-    it('returns parsed JSON from scores.json', () => {
-      mockFs.readFileSync.mockReturnValue(JSON.stringify({ 'sess-1': { score: 80 } }))
+    it('returns parsed JSON from scores.json with conversations format', () => {
+      const scores = { 'conv-1': { score: 80 } }
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({ cache_format: 'conversations', scores }))
       const result = cache.read()
-      expect(result).toEqual({ 'sess-1': { score: 80 } })
+      expect(result).toEqual(scores)
       expect(mockFs.readFileSync).toHaveBeenCalledWith(
         expect.stringContaining('scores.json'),
         'utf8',
       )
+    })
+
+    it('discards old session-keyed cache without cache_format', () => {
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({ 'sess-1': { score: 80 } }))
+      const result = cache.read()
+      expect(result).toEqual({})
     })
 
     it('returns empty object on ENOENT', () => {
@@ -38,13 +45,13 @@ describe('ScoreCache', () => {
   })
 
   describe('write', () => {
-    it('writes stringified JSON to scores.json', () => {
+    it('writes stringified JSON to scores.json with conversations wrapper', () => {
       mockFs.existsSync.mockReturnValue(true)
-      const data = { 'sess-1': { score: 75 } }
+      const data = { 'conv-1': { score: 75 } }
       cache.write(data)
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
         expect.stringContaining('scores.json'),
-        JSON.stringify(data, null, 2),
+        JSON.stringify({ cache_format: 'conversations', scores: data }, null, 2),
       )
     })
 
@@ -62,7 +69,7 @@ describe('ScoreCache', () => {
       cache.write({ a: 1 })
       const written = (mockFs.writeFileSync as jest.Mock).mock.calls[0][1]
       expect(written).toContain('\n')
-      expect(written).toBe(JSON.stringify({ a: 1 }, null, 2))
+      expect(written).toBe(JSON.stringify({ cache_format: 'conversations', scores: { a: 1 } }, null, 2))
     })
   })
 
