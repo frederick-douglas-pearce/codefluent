@@ -37,11 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Conversation token analytics** — per-conversation token aggregation from JSONL data with cost estimation, cache hit rates, and output/input ratios displayed on the Usage tab (#86, #88, #89)
+- **Session token analytics** — per-session token aggregation from JSONL data with cost estimation, cache hit rates, and output/input ratios displayed on the Usage tab (#86, #88, #89)
 - **Cost-efficiency scatter charts** — 3 scatter plots with continuous red-amber-green color gradient by fluency score: Cost/Prompt vs Cache Hit Rate, Cost/Prompt vs Output/Input Ratio, Fluency Score vs Cost/Prompt (#90, #102)
-- **Per-conversation cost estimation** — model-specific pricing from `shared/pricing.json` (#91)
-- **Conversation analytics project filtering** — filter analytics by selected project (#104)
-- **Sortable conversation details table** — date, project, prompts, tokens, cost, cost/prompt, cache hit, cache R/C, out/in, score
+- **Per-session cost estimation** — model-specific pricing from `shared/pricing.json` (#91)
+- **Session analytics project filtering** — filter analytics by selected project (#104)
+- **Sortable session details table** — date, project, prompts, tokens, cost, cost/prompt, cache hit, cache R/C, out/in, score
 
 ### Changed
 
@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Conversation analytics OOM crash on large datasets
+- Session analytics OOM crash on large datasets
 - Sparkline score history not scoped to current project
 - Score chart y-axis clipping above 100
 
