@@ -192,13 +192,12 @@ The extension resolves this automatically via the system home directory.
 
 ## How It Works
 
-1. The extension parses JSONL session files from `~/.claude/projects/`, pools all messages per project, and assembles **conversations** by splitting at configurable inactivity gaps (default: 60 minutes)
-2. `ccusage` reads your Claude Code session history and exports token/cost data
-3. User prompts are sent to `claude-sonnet-4-20250514` (with `temperature: 0` for deterministic scoring) for fluency scoring against Anthropic's 4D AI Fluency Framework
-4. If a `CLAUDE.md` exists in the workspace, it's scored separately against the same 11 behaviors — effective behavior = conversation OR config
-5. The Prompt Optimizer analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config (scoring on demand if not cached), then generates an optimized version that incorporates only the missing behaviors not already covered by project conventions
-6. Results are cached locally in VS Code's extension storage (by conversation ID and CLAUDE.md content hash) to avoid re-scoring
-7. Quick Wins uses the `gh` CLI to pull repo context and open issues, scoped to the current workspace
+1. **Parse** — JSONL session files from the session data path (`~/.claude/projects/` by default) are parsed to extract user prompts, assistant responses, and token usage metadata
+2. **Assemble conversations** — All messages per project are pooled, sorted by timestamp, and split into conversations at inactivity gaps between user prompts (configurable via `conversation.inactivityGapMinutes`, default: 60 minutes)
+3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
+4. **Config scoring** — If a `CLAUDE.md` exists, it's scored against 3 config-eligible meta-interaction behaviors. Results are merged via `effective = conversation OR config`
+5. **Cache** — Scores are cached locally (by conversation ID, content hash, and prompt version) in both the VS Code extension and webapp to avoid re-scoring unchanged conversations
+6. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) are computed from parsed JSONL token data
 
 Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
