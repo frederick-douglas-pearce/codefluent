@@ -5,15 +5,43 @@ Extension-specific changes. For the full project changelog (including webapp and
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.0] - 2026-03-22
+
+### ⚠ BREAKING CHANGES
+
+- Sessions replaced by **conversations** as the primary analytics unit. Conversations are formed by gap-based splitting across all session files per project, producing more meaningful scoring windows and accurate per-day attribution (#130)
+
+### Added
+
+- **Conversation assembly** — all messages per project are pooled, sorted by timestamp, and split into conversations at configurable inactivity gaps between user prompts (default: 60 minutes). Each conversation is the unit of scoring, replacing the previous per-session approach (#130)
+- **Centralized configuration** — `shared/defaults.json` as single source of truth, with VS Code settings overlay. Exposes `codefluent.scoring.model`, `codefluent.scoring.maxPromptsPerConversation`, `codefluent.optimizer.alreadyGoodThreshold`, and `codefluent.conversation.inactivityGapMinutes` in VS Code Settings UI (#132, #134)
+- **CLAUDE.md config scoring restricted to 3 behaviors** — only `setting_interaction_terms`, `identifying_missing_context`, and `questioning_reasoning` can be credited from config (defense-in-depth with prompt) (#118, #127)
+- **Scoring eval framework** — golden set of 50 curated test cases with automated regression checks in CI on prompt changes (#110, #119, #123)
+- **Inter-prompt gap analysis tool** — `webapp/analyze_gaps.py` for visualizing gap distributions to tune the inactivity threshold (#131, #135)
+
+### Changed
+
+- All UI terminology: "session analytics" → "conversation analytics" throughout (#130)
+- Footer text: "Built on" → "Inspired by" Anthropic research (#130)
+- Prompt counts now only count `type: "user"` messages with actual content, excluding `tool_result` messages (#139)
+- Test coverage: 617 tests across 16 suites
+
+### Fixed
+
+- Scoring parity between VS Code extension and webapp Usage tab (#142)
+- Prompt counts inflated by `tool_result` messages counted as user prompts (#139)
+- Conversation table formatting lacks cell padding/spacing (#137)
+- Stale browser cache and null element crash on Usage tab (#130)
+
 ## [0.3.0] - 2026-03-14
 
 ### Added
 
-- **Session token analytics** — per-session token aggregation from JSONL data with cost estimation, cache hit rates, and output/input ratios displayed on the Usage tab (#86, #88, #89)
+- **Conversation token analytics** — per-conversation token aggregation from JSONL data with cost estimation, cache hit rates, and output/input ratios displayed on the Usage tab (#86, #88, #89)
 - **Cost-efficiency scatter charts** — 3 scatter plots with continuous red-amber-green color gradient by fluency score: Cost/Prompt vs Cache Hit Rate, Cost/Prompt vs Output/Input Ratio, Fluency Score vs Cost/Prompt (#90, #102)
-- **Per-session cost estimation** — model-specific pricing from `shared/pricing.json` (#91)
-- **Session analytics project filtering** — filter analytics by selected project (#104)
-- **Sortable session details table** — date, project, prompts, tokens, cost, cost/prompt, cache hit, cache R/C, out/in, score
+- **Per-conversation cost estimation** — model-specific pricing from `shared/pricing.json` (#91)
+- **Conversation analytics project filtering** — filter analytics by selected project (#104)
+- **Sortable conversation details table** — date, project, prompts, tokens, cost, cost/prompt, cache hit, cache R/C, out/in, score
 
 ### Changed
 
@@ -23,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Session analytics OOM crash on large datasets
+- Conversation analytics OOM crash on large datasets
 - Sparkline score history not scoped to current project
 - Score chart y-axis clipping above 100
 
