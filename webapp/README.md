@@ -101,13 +101,11 @@ The webapp exposes `GET /health` returning server status, version, and dependenc
 
 ## How It Works
 
-1. **Session parsing & conversation assembly** — Reads JSONL session files from `~/.claude/projects/`, pools all messages per project, and assembles conversations by splitting at configurable inactivity gaps (default: 60 minutes)
-2. **Fluency scoring** — Sends prompts (up to 20 per conversation) to Claude Sonnet (`temperature: 0`) for behavioral classification against 11 fluency indicators
-3. **Config scoring** — Reads your project's `CLAUDE.md` and scores it against the same behaviors
-4. **Score aggregation** — Merges conversation + config scores, caches results to minimize API calls
-5. **Prompt optimization** — Analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config, generates an improved version that skips behaviors already covered by project conventions
-6. **Recommendations** — Identifies your weakest behaviors and generates targeted improvement tips
-7. **Usage tracking** — Calls `ccusage` to aggregate all-projects token/cost data; parses JSONL history for per-conversation efficiency metrics (cost, cache hit rates, output/input ratios)
+1. **Parse & assemble** — JSONL session files are parsed and all messages per project are assembled into conversations by splitting at inactivity gaps between user prompts (`conversation.inactivityGapMinutes`, default: 60 minutes)
+2. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for fluency scoring
+3. **Config scoring** — Your project's `CLAUDE.md` is scored against 3 config-eligible meta-interaction behaviors and merged via `effective = conversation OR config`
+4. **Cache** — Results are cached locally by conversation ID, content hash, and prompt version to avoid re-scoring
+5. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics are computed from parsed JSONL token data
 
 All data stays local. No telemetry, no external servers — just your local session files and direct Anthropic API calls for scoring.
 
