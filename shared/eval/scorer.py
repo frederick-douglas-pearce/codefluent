@@ -132,6 +132,7 @@ def call_api(client, prompt, max_tokens=1024):
     response = client.messages.create(
         model=MODEL,
         max_tokens=max_tokens,
+        temperature=0,
         messages=[{"role": "user", "content": prompt}],
     )
     text = response.content[0].text

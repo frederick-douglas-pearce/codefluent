@@ -693,6 +693,7 @@ async def score_conversations_endpoint(request: ScoreRequest):
                 lambda: client.messages.create(
                     model=get_config("scoring.model"),
                     max_tokens=get_config("scoring.maxTokens"),
+                    temperature=0,
                     messages=[{"role": "user", "content": prompt}],
                 ),
                 context=f"scoring session {sid}",
@@ -950,6 +951,7 @@ async def optimize_prompt(request: OptimizeRequest):
         lambda: client.messages.create(
             model=get_config("optimizer.model"),
             max_tokens=get_config("optimizer.maxTokens"),
+            temperature=0,
             messages=[{"role": "user", "content": prompt}],
         ),
         context="optimizing prompt",
@@ -984,6 +986,7 @@ async def optimize_prompt(request: OptimizeRequest):
         lambda: client.messages.create(
             model=get_config("scoring.model"),
             max_tokens=get_config("scoring.maxTokens"),
+            temperature=0,
             messages=[{"role": "user", "content": single_prompt}],
         ),
         context="scoring optimized prompt",
@@ -1105,6 +1108,7 @@ def score_claude_md(content: str) -> dict:
         lambda: client.messages.create(
             model=get_config("scoring.model"),
             max_tokens=get_config("scoring.maxTokens"),
+            temperature=0,
             messages=[{"role": "user", "content": prompt}],
         ),
         context="scoring CLAUDE.md config",

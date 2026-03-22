@@ -278,6 +278,7 @@ export async function scoreClaudeMd(
     () => client.messages.create({
       model: getConfig<string>('scoring.model'),
       max_tokens: getConfig<number>('scoring.maxTokens'),
+      temperature: 0,
       messages: [{ role: 'user', content: prompt }],
     }),
     'scoreClaudeMd',
@@ -338,6 +339,7 @@ export async function scoreConversations(
         () => client.messages.create({
           model: getConfig<string>('scoring.model'),
           max_tokens: getConfig<number>('scoring.maxTokens'),
+          temperature: 0,
           messages: [{ role: 'user', content: prompt }],
         }),
         `scoreConversation(${cid})`,
@@ -600,6 +602,7 @@ export async function optimizePrompt(
     () => client.messages.create({
       model: getConfig<string>('optimizer.model'),
       max_tokens: getConfig<number>('optimizer.maxTokens'),
+      temperature: 0,
       messages: [{ role: 'user', content: prompt }],
     }),
     'optimizePrompt',
@@ -626,6 +629,7 @@ export async function scoreSinglePrompt(
     () => client.messages.create({
       model: getConfig<string>('scoring.model'),
       max_tokens: getConfig<number>('scoring.maxTokens'),
+      temperature: 0,
       messages: [{ role: 'user', content: prompt }],
     }),
     'scoreSinglePrompt',
