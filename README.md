@@ -144,39 +144,47 @@ CodeFluent resolves this automatically via the system home directory. If your se
 
 ### Web App
 
-| Fluency Score | Recommendations |
-|---------------|-----------------|
-| ![Fluency tab](images/demo-fluency.png) | ![Recommendations tab](images/demo-recommendations.png) |
+<table>
+<tr><th>Fluency Score</th><th>Recommendations</th></tr>
+<tr valign="top"><td><img src="images/demo-fluency.png" alt="Fluency tab"></td><td><img src="images/demo-recommendations.png" alt="Recommendations tab"></td></tr>
+</table>
 
-| Prompt Optimizer | Quick Wins |
-|------------------|------------|
-| ![Prompt Optimizer tab](images/demo-optimizer.png) | ![Quick Wins tab](images/demo-quickwins.png) |
+<table>
+<tr><th>Prompt Optimizer</th><th>Quick Wins</th></tr>
+<tr valign="top"><td><img src="images/demo-optimizer.png" alt="Prompt Optimizer tab"></td><td><img src="images/demo-quickwins.png" alt="Quick Wins tab"></td></tr>
+</table>
 
-| Usage | Conversation Analytics |
-|-------|------------------------|
-| ![Usage tab](images/demo-usage.png) | ![Conversation Analytics](images/demo-usage-analytics.png) |
+<table>
+<tr><th>Usage</th><th>Conversation Analytics</th></tr>
+<tr valign="top"><td><img src="images/demo-usage.png" alt="Usage tab"></td><td><img src="images/demo-usage-analytics.png" alt="Conversation Analytics"></td></tr>
+</table>
 
-| Cost Efficiency Charts |
-|------------------------|
-| ![Cost Efficiency Charts](images/demo-usage-charts.png) |
+<table>
+<tr><th>Cost Efficiency Charts</th></tr>
+<tr><td><img src="images/demo-usage-charts.png" alt="Cost Efficiency Charts"></td></tr>
+</table>
 
 ### VS Code Extension
 
-| Fluency Score | Recommendations |
-|---------------|-----------------|
-| ![VS Code sidebar showing Fluency Score tab with score ring, behavior bars, and benchmark comparison](images/vscode-scoring.png) | ![VS Code sidebar showing Recommendations tab](images/vscode-recommendations.png) |
+<table>
+<tr><th>Fluency Score</th><th>Recommendations</th></tr>
+<tr valign="top"><td><img src="images/vscode-scoring.png" alt="VS Code Fluency Score tab"></td><td><img src="images/vscode-recommendations.png" alt="VS Code Recommendations tab"></td></tr>
+</table>
 
-| Prompt Optimizer | Quick Wins |
-|------------------|------------|
-| ![VS Code sidebar showing Prompt Optimizer](images/vscode-optimizer.png) | ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) |
+<table>
+<tr><th>Prompt Optimizer</th><th>Quick Wins</th></tr>
+<tr valign="top"><td><img src="images/vscode-optimizer.png" alt="VS Code Prompt Optimizer"></td><td><img src="images/vscode-quickwins.png" alt="VS Code Quick Wins"></td></tr>
+</table>
 
-| Usage | Conversation Analytics |
-|-------|------------------------|
-| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) | ![VS Code sidebar showing Conversation Analytics cards and scatter chart](images/vscode-usage-analytics.png) |
+<table>
+<tr><th>Usage</th><th>Conversation Analytics</th></tr>
+<tr valign="top"><td><img src="images/vscode-usage.png" alt="VS Code Usage tab"></td><td><img src="images/vscode-usage-analytics.png" alt="VS Code Conversation Analytics"></td></tr>
+</table>
 
-| Cost Efficiency Charts |
-|------------------------|
-| ![VS Code sidebar showing cost efficiency scatter charts and session table](images/vscode-usage-charts.png) |
+<table>
+<tr><th>Cost Efficiency Charts</th></tr>
+<tr><td><img src="images/vscode-usage-charts.png" alt="VS Code cost efficiency charts and conversation table"></td></tr>
+</table>
 
 ## Features
 

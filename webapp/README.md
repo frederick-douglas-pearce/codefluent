@@ -50,17 +50,20 @@ Usage data and session prompts are fetched on demand — no manual export steps 
 
 See the [main README](../README.md#features) for feature descriptions. Screenshots below show the webapp interface:
 
-| Fluency Score | Recommendations |
-|---------------|-----------------|
-| ![Fluency tab](../images/demo-fluency.png) | ![Recommendations tab](../images/demo-recommendations.png) |
+<table>
+<tr><th>Fluency Score</th><th>Recommendations</th></tr>
+<tr valign="top"><td><img src="../images/demo-fluency.png" alt="Fluency tab"></td><td><img src="../images/demo-recommendations.png" alt="Recommendations tab"></td></tr>
+</table>
 
-| Prompt Optimizer | Quick Wins |
-|------------------|------------|
-| ![Prompt Optimizer](../images/demo-optimizer.png) | ![Quick Wins tab](../images/demo-quickwins.png) |
+<table>
+<tr><th>Prompt Optimizer</th><th>Quick Wins</th></tr>
+<tr valign="top"><td><img src="../images/demo-optimizer.png" alt="Prompt Optimizer"></td><td><img src="../images/demo-quickwins.png" alt="Quick Wins tab"></td></tr>
+</table>
 
-| Usage Dashboard | Conversation Analytics | Charts & Details |
-|-----------------|------------------------|------------------|
-| ![Usage tab](../images/demo-usage.png) | ![Conversation Analytics](../images/demo-usage-analytics.png) | ![Charts & Table](../images/demo-usage-charts.png) |
+<table>
+<tr><th>Usage Dashboard</th><th>Conversation Analytics</th><th>Charts & Details</th></tr>
+<tr valign="top"><td><img src="../images/demo-usage.png" alt="Usage tab"></td><td><img src="../images/demo-usage-analytics.png" alt="Conversation Analytics"></td><td><img src="../images/demo-usage-charts.png" alt="Charts & Table"></td></tr>
+</table>
 
 ## Webapp-Specific Design Choices
 
