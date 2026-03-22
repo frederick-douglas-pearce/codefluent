@@ -6,7 +6,7 @@
 - Browser open to `http://localhost:8001`
 - ccusage data already exported to `data/ccusage/`
 - Prompts already extracted via `uv run python extract_prompts.py`
-- At least 5 sessions pre-scored (results cached in `data/scores.json`)
+- At least 5 conversations pre-scored (results cached in `data/scores.json`)
 - Terminal ready but minimized
 
 ---
@@ -39,7 +39,7 @@
 
 ## AI Fluency Score (1:00 – 2:00) — The Core Feature
 
-> "Now the interesting part. I scored my recent sessions against Anthropic's framework."
+> "Now the interesting part. I scored my recent conversations against Anthropic's framework."
 
 **Actions:**
 1. Click "Fluency Score" tab
@@ -48,7 +48,7 @@
    - "Iteration & Refinement — 100%. Building on Responses — 100%. I'm good at iterating rather than accepting the first answer."
    - "But look — Setting Interaction Terms, only 12%. I almost never tell Claude *how* to work with me. Providing Examples — also 12%."
    - "Checking Facts — 50%, above the Anthropic benchmark of 25%. But Identifying Missing Context — 75%, way above the 20% benchmark. That's a strength."
-4. Point to coding pattern chart: "Anthropic studied 6 coding interaction patterns. Users who ask conceptual questions scored 86% on comprehension. Users who just delegate? Under 40%. 88% of my sessions use high-quality patterns — mostly Conceptual Inquiry."
+4. Point to coding pattern chart: "Anthropic studied 6 coding interaction patterns. Users who ask conceptual questions scored 86% on comprehension. Users who just delegate? Under 40%. 88% of my conversations use high-quality patterns — mostly Conceptual Inquiry."
 
 > "These aren't made-up metrics. The scoring rubric comes directly from two Anthropic research papers published in the last five weeks."
 

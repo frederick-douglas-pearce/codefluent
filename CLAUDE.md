@@ -145,11 +145,11 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 615 tests)
+npm test                   # Jest (unit + integration, 617 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.3.0.vsix
+code --install-extension codefluent-1.0.0.vsix
 
 # Debug: press F5 in VS Code with vscode-extension/ open
 
@@ -274,7 +274,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (615 tests) in `vscode-extension/`, `pytest` (449 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (617 tests) in `vscode-extension/`, `pytest` (450 tests) in `webapp/`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
@@ -284,7 +284,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 615 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 617 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -506,7 +506,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 615 Jest tests (16 suites)
+npm test                   # Runs all 617 Jest tests (16 suites)
 
 # Test structure:
 # test/unit/config.test.ts                     — centralized config module (defaults, VS Code overrides, display config)
@@ -528,7 +528,7 @@ npm test                   # Runs all 615 Jest tests (16 suites)
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (449 tests, 9 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (450 tests, 9 suites)
 
 # Test structure:
 # tests/test_conversations.py    — conversation assembly, gap-based splitting, boundary detection
@@ -538,6 +538,7 @@ uv run pytest tests/ -v    # Runs all webapp tests (449 tests, 9 suites)
 # tests/test_extract_prompts.py  — JSONL parsing, content extraction, session filtering, metadata
 # tests/test_prompts.py          — prompt loading, template filling, registry consistency
 # tests/test_config.py           — centralized config module (defaults, env vars, config.json overrides)
+# tests/test_analyze_gaps.py     — inter-prompt gap analysis, histogram generation
 # tests/test_eval.py             — eval framework (scorer, checks, report, CLI, golden set integration)
 # tests/conftest.py              — shared fixtures (TestClient, mock Anthropic, mock sessions)
 ```
@@ -547,7 +548,7 @@ uv run pytest tests/ -v    # Runs all webapp tests (449 tests, 9 suites)
 Run before merging PRs that touch webapp UI or API. Start the server with `uv run uvicorn main:app --port 8001`, then verify:
 
 1. **Tab navigation** — all 5 tabs switch correctly, correct panel is visible
-2. **Settings bar visibility** — data path input shows only on Fluency Score; project dropdown shows on Fluency Score, Optimizer, Quick Wins; settings bar hidden on Recommendations, Usage
+2. **Settings bar visibility** — data path input shows only on Fluency Score; project dropdown shows on Fluency Score, Optimizer, Quick Wins, Usage; settings bar hidden on Recommendations
 3. **Project dropdown** — populates from session data when data path is set
 4. **Fluency scoring** — Run Scoring button triggers analysis, results display with score ring and behavior bars
 5. **Prompt Optimizer** — paste prompt, click Optimize, input/output scores and optimized prompt appear

@@ -38,9 +38,9 @@ Then open `http://localhost:8000`. See [`webapp/README.md`](webapp/README.md) fo
 
 ## Running Tests
 
-The project has **769 automated tests** across both interfaces. All must pass before merging.
+The project has **1067 automated tests** across both interfaces. All must pass before merging.
 
-### VS Code Extension (528 tests, 14 suites)
+### VS Code Extension (617 tests, 16 suites)
 
 ```bash
 cd vscode-extension
@@ -51,14 +51,16 @@ npx jest test/unit/scoring      # Run a specific test file
 
 | Suite | What it tests |
 |-------|--------------|
-| `scoring.test.ts` | `scoreSessions`, `computeAggregate`, config scoring |
+| `scoring.test.ts` | `scoreConversations`, `computeAggregate`, config scoring |
+| `conversation.test.ts` | Conversation assembly, gap-based splitting, boundary detection |
+| `config.test.ts` | Centralized config module (defaults, VS Code overrides) |
 | `quickwins.test.ts` | GitHub name validation, repo detection, argument safety |
 | `xss.test.ts` | `escapeHtml` payloads + source-level XSS vector coverage |
 | `platform.test.ts` | Cross-platform shell, escaping, npx helpers |
 | `parser.test.ts` | JSONL session file parsing |
 | `cache.test.ts` | Score cache read/write, invalidation |
-| `dataCache.test.ts` | Session/usage data caching, stale-while-revalidate |
-| `analytics.test.ts` | Session analytics, efficiency metrics, cost calculations |
+| `dataCache.test.ts` | Conversation/usage data caching, stale-while-revalidate |
+| `analytics.test.ts` | Conversation analytics, efficiency metrics, cost calculations |
 | `pricing.test.ts` | Token pricing lookup, model matching, fallback rates |
 | `usage.test.ts` | ccusage CLI bridge |
 | `prompts.test.ts` | Prompt loader + template filler |
@@ -66,7 +68,7 @@ npx jest test/unit/scoring      # Run a specific test file
 | `extension.test.ts` | Activation, status bar, commands |
 | `webviewProvider.test.ts` | Message handling, HTML generation, injection tests |
 
-### Web App (241 tests, 5 suites)
+### Web App (450 tests, 9 suites)
 
 ```bash
 cd webapp
@@ -76,11 +78,15 @@ uv run pytest tests/test_api.py # Run a specific test file
 
 | Suite | What it tests |
 |-------|--------------|
-| `test_api.py` | Health endpoint, sessions, scores, scoring, optimizer, quickwins, usage |
-| `test_helpers.py` | Path decoding, repo detection, validators, compute_aggregate |
+| `test_api.py` | Health endpoint, conversations, scores, scoring, optimizer, quickwins, usage |
+| `test_helpers.py` | Path decoding, repo detection, validators, compute_aggregate, cost estimation |
 | `test_security.py` | Rate limiting, CORS, error leakage, path traversal, security headers |
 | `test_extract_prompts.py` | JSONL parsing, content extraction, session filtering |
+| `test_conversations.py` | Conversation assembly, gap-based splitting, boundary detection |
+| `test_config.py` | Centralized config module (defaults, env vars, config.json overrides) |
+| `test_analyze_gaps.py` | Inter-prompt gap analysis, histogram generation |
 | `test_prompts.py` | Prompt loading, template filling, registry consistency |
+| `test_eval.py` | Eval framework: scorer, checks, report, CLI, golden set integration |
 
 ## Branching Strategy
 
@@ -179,8 +185,8 @@ CodeFluent ships **two production interfaces**: the VS Code extension and the we
 
 Before submitting a pull request, verify:
 
-- [ ] `npm test` passes (528+ extension tests green)
-- [ ] `uv run pytest` passes (241+ webapp tests green)
+- [ ] `npm test` passes (617+ extension tests green)
+- [ ] `uv run pytest` passes (450+ webapp tests green)
 - [ ] No regressions in existing functionality
 - [ ] New features include test coverage
 - [ ] Both interfaces updated if the change affects shared functionality

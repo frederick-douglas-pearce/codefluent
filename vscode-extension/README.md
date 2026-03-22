@@ -18,7 +18,7 @@ CodeFluent parses your local Claude Code session files, scores your prompts agai
 
 1. Install the `.vsix` package:
    ```
-   code --install-extension codefluent-0.3.0.vsix
+   code --install-extension codefluent-1.0.0.vsix
    ```
 2. Open the CodeFluent sidebar by clicking the activity bar icon
 3. When prompted, enter your Anthropic API key (stored securely in VS Code SecretStorage)
@@ -47,7 +47,7 @@ Tailored coaching based on your weakest fluency behaviors, with high/medium impa
 
 ### CLAUDE.md Config Scoring
 
-Get credit for fluency behaviors encoded in your project's `CLAUDE.md` file. Behaviors defined as project conventions are merged with your session scores — so good project setup boosts your fluency rating.
+Get credit for 3 meta-interaction behaviors that can be established as project conventions: *setting interaction terms*, *identifying missing context*, and *questioning reasoning*. If your `CLAUDE.md` defines these (e.g., "push back if wrong"), they boost your effective score via `conversation OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
 
 ### Prompt Optimizer
 
@@ -63,31 +63,37 @@ GitHub-repo-scoped task suggestions — CodeFluent detects your current workspac
 
 ![Quick Wins Suggestions](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-quickwins.png)
 
+### Conversations
+
+Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use. CodeFluent assembles **conversations** by pooling all messages per project, sorting by timestamp, and splitting into conversations whenever a gap between user prompts exceeds a configurable inactivity threshold (default: 60 minutes). Each conversation represents one focused interaction — the same unit of analysis used by Anthropic's AI Fluency Index, designed to align with the research and make our scores comparable to their benchmarks.
+
+The inactivity threshold is configurable via the `codefluent.conversation.inactivityGapMinutes` VS Code setting.
+
 ### Usage Dashboard
 
-Track daily and monthly token usage, costs, and session history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage). Session analytics shows per-session efficiency metrics, cost-efficiency scatter charts with fluency score color gradients, and a sortable details table with cost/prompt, cache hit rates, and output/input ratios.
+Track daily and monthly token usage, costs, and conversation history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage). Conversation analytics shows per-conversation efficiency metrics, cost-efficiency scatter charts with fluency score color gradients, and a sortable details table with cost/prompt, cache hit rates, and output/input ratios.
 
 ![Usage Dashboard](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage.png)
 
-![Session Analytics](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage-analytics.png)
+![Conversation Analytics](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage-analytics.png)
 
 ![Cost Efficiency Charts](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage-charts.png)
 
 ## How It Works
 
-1. **Session parsing** — Reads JSONL session files from `~/.claude/projects/` to extract your prompts and token usage
-2. **Fluency scoring** — Sends prompts (up to 20 per session, max 2000 chars each) to Claude Sonnet for behavioral classification
-3. **Config scoring** — Reads your workspace `CLAUDE.md` and scores it against the same behaviors
-4. **Score aggregation** — Merges session + config scores, caches results to minimize API calls
-5. **Recommendations** — Identifies your weakest behaviors and generates targeted improvement tips
-6. **Prompt optimization** — Analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config, and generates an improved version
-7. **Usage tracking** — Calls `ccusage` for all-projects token/cost data; computes per-session efficiency metrics from parsed JSONL history
+1. **Parse & assemble** — JSONL session files are parsed and all messages per project are assembled into conversations by splitting at inactivity gaps between user prompts (`codefluent.conversation.inactivityGapMinutes`, default: 60 minutes)
+2. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`codefluent.scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for fluency scoring
+3. **Config scoring** — Your workspace `CLAUDE.md` is scored against 3 config-eligible meta-interaction behaviors and merged via `effective = conversation OR config`
+4. **Cache** — Results are cached locally by conversation ID, content hash, and prompt version to avoid re-scoring
+5. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics are computed from parsed JSONL token data
 
 All data stays local. No telemetry, no external servers — just your local session files and direct Anthropic API calls for scoring.
 
 ## Session Data
 
-Claude Code stores session transcripts as JSONL files at `~/.claude/projects/`. **Session transcripts are only available from late January 2026 onward** — earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (spawned by Claude's Agent tool) are excluded from scoring because they contain AI-generated prompts, not human input.
+Claude Code stores session transcripts as JSONL files at `~/.claude/projects/` by default. If your session data is in a non-default location, set `codefluent.sessionDataPath` in VS Code settings. **Session transcripts are only available from late January 2026 onward** — earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (spawned by Claude's Agent tool) are excluded from scoring because they contain AI-generated prompts, not human input.
+
+CodeFluent assembles these raw session files into conversations (see [Conversations](#conversations) above) before scoring.
 
 See [`docs/SESSION_DATA.md`](../docs/SESSION_DATA.md) for details on data availability, storage format, and scoring scope.
 
