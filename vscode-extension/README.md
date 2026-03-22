@@ -47,7 +47,7 @@ Tailored coaching based on your weakest fluency behaviors, with high/medium impa
 
 ### CLAUDE.md Config Scoring
 
-Get credit for fluency behaviors encoded in your project's `CLAUDE.md` file. Behaviors defined as project conventions are merged with your conversation scores — so good project setup boosts your fluency rating.
+Get credit for 3 meta-interaction behaviors that can be established as project conventions: *setting interaction terms*, *identifying missing context*, and *questioning reasoning*. If your `CLAUDE.md` defines these (e.g., "push back if wrong"), they boost your effective score via `conversation OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
 
 ### Prompt Optimizer
 
