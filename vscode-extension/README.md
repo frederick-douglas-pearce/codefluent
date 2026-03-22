@@ -91,7 +91,7 @@ All data stays local. No telemetry, no external servers — just your local sess
 
 ## Session Data
 
-Claude Code stores session transcripts as JSONL files at `~/.claude/projects/`. **Session transcripts are only available from late January 2026 onward** — earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (spawned by Claude's Agent tool) are excluded from scoring because they contain AI-generated prompts, not human input.
+Claude Code stores session transcripts as JSONL files at `~/.claude/projects/` by default. If your session data is in a non-default location, set `codefluent.sessionDataPath` in VS Code settings. **Session transcripts are only available from late January 2026 onward** — earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (spawned by Claude's Agent tool) are excluded from scoring because they contain AI-generated prompts, not human input.
 
 CodeFluent assembles these raw session files into conversations (see [Conversations](#conversations) above) before scoring.
 

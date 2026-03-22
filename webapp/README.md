@@ -188,7 +188,7 @@ User-controlled strings rendered in HTML use `escapeHtml()` in the frontend. The
 
 ## Session Data
 
-Claude Code stores session transcripts as JSONL files at `~/.claude/projects/`. **Session transcripts are only available from late January 2026 onward** — earlier Claude Code usage was not persisted as full transcripts. Subagent sessions are excluded from scoring because they contain AI-generated prompts, not human input.
+Claude Code stores session transcripts as JSONL files at `~/.claude/projects/` by default. If your session data is in a non-default location, enter the path in the data path input on the Fluency Score tab. **Session transcripts are only available from late January 2026 onward** — earlier Claude Code usage was not persisted as full transcripts. Subagent sessions are excluded from scoring because they contain AI-generated prompts, not human input.
 
 CodeFluent assembles these raw session files into conversations (gap-based splitting at configurable inactivity thresholds) before scoring. See the [main README](../README.md#conversations-the-right-unit-of-analysis) for details.
 

@@ -136,7 +136,7 @@ Claude Code stores session files at `~/.claude/projects/` on all platforms:
 | macOS | `~/.claude/projects/` |
 | Windows | `C:\Users\<username>\.claude\projects\` |
 
-The extension resolves this automatically via the system home directory.
+CodeFluent resolves this automatically via the system home directory. If your session data is stored in a non-default location, you can override the path in VS Code settings (`codefluent.sessionDataPath`) or via the data path input in the webapp.
 
 > **Note:** Session transcript files are only available from late January 2026 onward. Earlier Claude Code usage was not persisted as full transcripts. Subagent sessions (AI-spawned) are excluded from scoring. See [`docs/SESSION_DATA.md`](docs/SESSION_DATA.md) for details on data availability, storage format, and scoring scope.
 
