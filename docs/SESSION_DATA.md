@@ -90,6 +90,21 @@ find ~/.claude/projects -maxdepth 2 -name "*.jsonl" | wc -l
 (Get-ChildItem "$env:USERPROFILE\.claude\projects\*\*.jsonl").Count
 ```
 
+## Conversation Assembly
+
+Raw session files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use, while a focused coding session might span multiple files. CodeFluent assembles **conversations** from session files:
+
+1. All messages from a project's session files are pooled together
+2. Messages are sorted by timestamp
+3. The sorted stream is split at **inactivity gaps** (default: 60 minutes of silence between messages)
+4. Each resulting group is a conversation — the unit used for fluency scoring and analytics
+
+The inactivity threshold is configurable:
+- **VS Code extension:** `codefluent.conversation.inactivityGapMinutes` setting
+- **Webapp:** `conversation.inactivityGapMinutes` in `webapp/config.json` or `shared/defaults.json`
+
+**Source:** `vscode-extension/src/conversation.ts`, `webapp/conversations.py`
+
 ## JSONL Session Format
 
 Each session file contains one JSON object per line. The key message types used for scoring:
@@ -103,7 +118,7 @@ Each session file contains one JSON object per line. The key message types used 
 
 User prompt content can be either a plain string or an array of content blocks (e.g., `[{"type": "text", "text": "..."}]`). The parser handles both formats.
 
-## Token Usage Data for Session Analytics
+## Token Usage Data for Conversation Analytics
 
 Assistant messages include a `usage` block with per-message token counts:
 
@@ -118,6 +133,6 @@ Assistant messages include a `usage` block with per-message token counts:
 }
 ```
 
-These are aggregated per session to compute cost estimates, cache efficiency ratios, and output/input ratios. Cost calculations use model-specific pricing from `shared/pricing.json`, which maps model name prefixes to per-token rates for input, output, cache creation, and cache read.
+These are aggregated per conversation to compute cost estimates, cache efficiency ratios, and output/input ratios. Cost calculations use model-specific pricing from `shared/pricing.json`, which maps model name prefixes to per-token rates for input, output, cache creation, and cache read.
 
-The session analytics UI (Usage tab) uses this data to render efficiency summary cards, cost-efficiency scatter charts, and a sortable session details table. See `docs/TECHNICAL_SPEC.md` §7 for full details.
+The conversation analytics UI (Usage tab) uses this data to render efficiency summary cards, cost-efficiency scatter charts, and a sortable conversation details table. See `docs/TECHNICAL_SPEC.md` §7 for full details.

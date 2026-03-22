@@ -9,7 +9,7 @@ CodeFluent uses two independent data sources, both reading from the same JSONL s
 | Concern | Source | How it works |
 |---------|--------|--------------|
 | All-projects token/cost data | [`ccusage`](https://github.com/ryoppippi/ccusage) (npm) | Aggregates daily, monthly, and per-session totals. Webapp stores results in `data/ccusage/`. Extension calls via IPC. |
-| Session prompts + per-session token analytics | JSONL parser | Parses `~/.claude/projects/*.jsonl` on demand. Extension: `parser.ts` + `analytics.ts`. Webapp: `extract_prompts.py` → `get_all_sessions()`. |
+| Per-conversation prompts + token analytics | JSONL parser + conversation assembly | Parses `~/.claude/projects/*.jsonl`, assembles conversations via gap-based splitting. Extension: `parser.ts` + `conversation.ts` + `analytics.ts`. Webapp: `extract_prompts.py` + `conversations.py`. |
 
 Both interfaces parse JSONL directly on demand — there is no pre-generated intermediate file.
 
@@ -67,12 +67,12 @@ Both interfaces parse Claude Code session files from `~/.claude/projects/`. See 
 
 ### Scoring flow
 
-1. User selects sessions to score
-2. Backend loads prompts (up to 20 per session, max 2000 chars each) and session metadata (plan mode, thinking count, tools used)
-3. Prompts are sent to Claude Sonnet (`claude-sonnet-4-20250514`) using a versioned scoring prompt template
+1. User selects conversations to score
+2. Backend loads prompts (up to 20 per conversation, max 2000 chars each) and conversation metadata (plan mode, thinking count, tools used)
+3. Prompts are sent to Claude Sonnet (`claude-sonnet-4-20250514`, `temperature: 0`) using a versioned scoring prompt template
 4. Response is parsed for: 11 boolean fluency behaviors, coding interaction pattern, overall score (0–100), one-line summary
-5. Results are cached (keyed by session ID + prompt version) to avoid re-scoring
-6. Aggregate metrics are computed across all scored sessions
+5. Results are cached (keyed by conversation ID + prompt version) to avoid re-scoring
+6. Aggregate metrics are computed across all scored conversations
 
 ### Prompt versioning
 
@@ -85,9 +85,9 @@ The user's project `CLAUDE.md` is scored against 3 eligible meta-interaction beh
 ### Score aggregation
 
 `compute_aggregate()` produces:
-- **Behavior prevalence** — fraction of sessions exhibiting each behavior (0–1)
+- **Behavior prevalence** — fraction of conversations exhibiting each behavior (0–1)
 - **Pattern distribution** — count of each coding interaction pattern
-- **Average score** — mean of per-session overall scores
+- **Average score** — mean of per-conversation overall scores
 
 **Source:** `vscode-extension/src/scoring.ts`, `webapp/main.py` (scoring endpoints), `shared/prompts/`
 
@@ -143,44 +143,46 @@ From Anthropic's [Coding Skills Formation](https://www.anthropic.com/research/co
 
 ---
 
-## 7. Session Token Analytics
+## 7. Conversation Token Analytics
 
 ### Overview
 
-The Usage tab includes a **Session Analytics** section that aggregates per-session token usage from parsed JSONL data and provides cost-efficiency insights.
+The Usage tab includes a **Conversation Analytics** section that aggregates per-conversation token usage from parsed JSONL data and provides cost-efficiency insights. Conversations are assembled via gap-based splitting (see `conversation.ts` / `conversations.py`).
 
 ### Data flow
 
-Token data comes from `type: "assistant"` messages in JSONL session files (see [`SESSION_DATA.md`](SESSION_DATA.md#token-usage-data-for-session-analytics)). These are summed per session. Cost estimates use model-specific pricing from `shared/pricing.json`.
+Token data comes from `type: "assistant"` messages in JSONL session files (see [`SESSION_DATA.md`](SESSION_DATA.md#token-usage-data-for-conversation-analytics)). These are summed per conversation. Cost estimates use model-specific pricing from `shared/pricing.json`.
 
 | Component | Extension | Webapp |
 |-----------|-----------|--------|
-| Token aggregation | `analytics.ts` → `getSessionAnalytics()` IPC | `extract_prompts.py` → `get_all_sessions()` |
+| Token aggregation | `analytics.ts` → `getConversationAnalytics()` IPC | `conversations.py` → `assemble_conversations()` |
 | Pricing lookup | `pricing.ts` (reads `shared/pricing.json`) | `main.py` (inline, reads `shared/pricing.json`) |
-| Frontend rendering | `media/app.js` → `loadSessionAnalytics()` | `static/app.js` → `loadSessionAnalytics()` |
+| Frontend rendering | `media/app.js` → `loadConversationAnalytics()` | `static/app.js` → `loadConversationAnalytics()` |
 
 ### Derived metrics
 
-For each session:
+For each conversation:
 - **Total tokens** — sum of input + output + cache creation + cache read
 - **Estimated cost** — tokens × model-specific rates from `pricing.json`
 - **Cache hit rate** — `cache_read / (cache_read + cache_creation + input)` (0–1)
 - **Cache R/C ratio** — `cache_read / cache_creation` (higher = better reuse)
 - **Output/Input ratio** — `output / input` (higher = more output per fresh input)
-- **Cost per prompt** — `estimated_cost / user_message_count`
-- **Tokens per prompt** — `total_tokens / user_message_count`
+- **Cost per prompt** — `estimated_cost / prompt_count`
+- **Tokens per prompt** — `total_tokens / prompt_count`
+
+Note: `prompt_count` counts only `type: "user"` messages with actual prompt content, excluding `tool_result` messages that Claude Code auto-generates.
 
 ### UI components
 
-1. **Summary cards** — Total cost, avg cost/session, avg cost/prompt, most efficient session
+1. **Summary cards** — Total cost, avg cost/conversation, avg cost/prompt, most efficient conversation
 2. **Scatter charts** — 3 Chart.js scatter plots with continuous red → amber → green color gradient based on fluency score:
    - Cost/Prompt vs Cache Hit Rate
    - Cost/Prompt vs Output/Input Ratio
    - Fluency Score vs Cost/Prompt
-3. **Session details table** — Sortable columns: date, project, prompts, total tokens, cost, tokens/prompt, cost/prompt, cache hit, cache R/C, out/in, score
+3. **Conversation details table** — Sortable columns: date, project, prompts, total tokens, cost, tokens/prompt, cost/prompt, cache hit, cache R/C, out/in, score
 
 ### Project filtering
 
-Both interfaces support filtering session analytics by project. The webapp uses the project dropdown; the extension uses the workspace context.
+Both interfaces support filtering conversation analytics by project. The webapp uses the project dropdown; the extension uses the workspace context.
 
 **Source:** `vscode-extension/src/analytics.ts`, `vscode-extension/src/pricing.ts`, `shared/pricing.json`

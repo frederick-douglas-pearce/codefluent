@@ -29,10 +29,18 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 - **First to score collaboration quality.** Existing tools count tokens or track errors. CodeFluent is the first to analyze *how* you interact with AI and whether your patterns build or erode skills.
 - **AI evaluating AI collaboration.** Claude scores your prompts against the fluency framework, creating a feedback loop: the AI tells you how to work with it more effectively.
 - **Not just scoring — active coaching.** The Prompt Optimizer and Quick Wins generate ready-to-use prompts that incorporate missing fluency behaviors and respect your project's CLAUDE.md config. They don't just tell you what to improve — they show you how.
-- **Connects fluency to cost.** Session analytics links your fluency scores to token spending and cache efficiency, revealing which collaboration patterns are most cost-effective. No other tool examines these relationships.
+- **Connects fluency to cost.** Conversation analytics links your fluency scores to token spending and cache efficiency, revealing which collaboration patterns are most cost-effective. No other tool examines these relationships.
 - **Native VS Code integration.** Lives in your sidebar, respects your theme, launches Claude Code sessions directly from suggestions.
 - **Completely local and private.** All session data stays on your machine. The only external calls are to the Anthropic API for scoring.
 - **No server infrastructure.** No database, no auth, no backend to maintain. Install the `.vsix` and go.
+
+### Conversations: The Right Unit of Analysis
+
+Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use, while a focused coding session might span multiple files. Scoring raw session files produces misleading results.
+
+CodeFluent solves this with **conversations**: all messages from a project's session files are pooled, sorted by timestamp, and split at inactivity gaps (default: 60 minutes of silence). Each conversation represents one focused interaction — the natural unit for fluency scoring.
+
+This is CodeFluent's own contribution, built on the foundation of Anthropic's AI Fluency Index research. The inactivity threshold is configurable via `conversation.inactivityGapMinutes` in VS Code settings or `webapp/config.json`.
 
 ## Supported Platforms
 
@@ -63,7 +71,7 @@ cd codefluent/vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.3.0.vsix
+code --install-extension codefluent-1.0.0.vsix
 ```
 
 **Windows (PowerShell):**
@@ -74,7 +82,7 @@ cd codefluent\vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-0.3.0.vsix
+code --install-extension codefluent-1.0.0.vsix
 ```
 
 Then reload VS Code. The CodeFluent icon appears in the activity bar.
@@ -144,9 +152,9 @@ The extension resolves this automatically via the system home directory.
 |------------------|------------|
 | ![Prompt Optimizer tab](images/demo-optimizer.png) | ![Quick Wins tab](images/demo-quickwins.png) |
 
-| Usage | Session Analytics |
-|-------|-------------------|
-| ![Usage tab](images/demo-usage.png) | ![Session Analytics](images/demo-usage-analytics.png) |
+| Usage | Conversation Analytics |
+|-------|------------------------|
+| ![Usage tab](images/demo-usage.png) | ![Conversation Analytics](images/demo-usage-analytics.png) |
 
 | Cost Efficiency Charts |
 |------------------------|
@@ -162,9 +170,9 @@ The extension resolves this automatically via the system home directory.
 |------------------|------------|
 | ![VS Code sidebar showing Prompt Optimizer](images/vscode-optimizer.png) | ![VS Code sidebar showing Quick Wins with Run button](images/vscode-quickwins.png) |
 
-| Usage | Session Analytics |
-|-------|-------------------|
-| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) | ![VS Code sidebar showing Session Analytics cards and scatter chart](images/vscode-usage-analytics.png) |
+| Usage | Conversation Analytics |
+|-------|------------------------|
+| ![VS Code sidebar showing Usage tab with token/cost charts](images/vscode-usage.png) | ![VS Code sidebar showing Conversation Analytics cards and scatter chart](images/vscode-usage-analytics.png) |
 
 | Cost Efficiency Charts |
 |------------------------|
@@ -172,24 +180,24 @@ The extension resolves this automatically via the system home directory.
 
 ## Features
 
-- **Fluency Score** — Scores your sessions against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
+- **Fluency Score** — Scores your conversations against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
 - **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
 - **Prompt Optimizer** — Paste any prompt and get an optimized version that naturally incorporates missing fluency behaviors. Considers your CLAUDE.md config so it won't add behaviors already covered by project conventions. Shows before/after effective scores, highlights added behaviors, and lets you copy or run the improved prompt directly.
 - **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
-- **Usage Dashboard** — Two complementary views of your Claude Code usage. **All-projects analytics** (via [ccusage](https://github.com/ryoppippi/ccusage)) shows daily usage pace cards, cost projections, and a stacked token breakdown chart across all projects. **Session analytics** (from parsed JSONL history) shows per-session efficiency metrics — cost/prompt, cache hit rates, output/input ratios — with summary cards, three cost-efficiency scatter charts colored by fluency score, and a sortable details table. A **Refresh** button fetches the latest data on demand.
-- **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `session OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
+- **Usage Dashboard** — Two complementary views of your Claude Code usage. **All-projects analytics** (via [ccusage](https://github.com/ryoppippi/ccusage)) shows daily usage pace cards, cost projections, and a stacked token breakdown chart across all projects. **Conversation analytics** (from parsed JSONL history) shows per-conversation efficiency metrics — cost/prompt, cache hit rates, output/input ratios — with summary cards, three cost-efficiency scatter charts colored by fluency score, and a sortable details table. A **Refresh** button fetches the latest data on demand.
+- **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against the same 11 fluency behaviors. Behaviors defined as project conventions (e.g., "push back if wrong") boost your effective score via `conversation OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
 - **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
 - **VS Code Theming** — Automatically respects your light/dark theme.
-- **Project Scoping (Web App)** — A project dropdown filters fluency scoring, prompt optimization, quick wins, and session analytics to a specific project, so you can analyze each codebase independently.
+- **Project Scoping (Web App)** — A project dropdown filters fluency scoring, prompt optimization, quick wins, and conversation analytics to a specific project, so you can analyze each codebase independently.
 
 ## How It Works
 
-1. The extension parses JSONL session files from `~/.claude/projects/` to extract user prompts and metadata (plan mode usage, tool diversity, thinking count)
+1. The extension parses JSONL session files from `~/.claude/projects/`, pools all messages per project, and assembles **conversations** by splitting at configurable inactivity gaps (default: 60 minutes)
 2. `ccusage` reads your Claude Code session history and exports token/cost data
-3. User prompts are sent to `claude-sonnet-4-20250514` for fluency scoring against Anthropic's 4D AI Fluency Framework
-4. If a `CLAUDE.md` exists in the workspace, it's scored separately against the same 11 behaviors — effective behavior = session OR config
+3. User prompts are sent to `claude-sonnet-4-20250514` (with `temperature: 0` for deterministic scoring) for fluency scoring against Anthropic's 4D AI Fluency Framework
+4. If a `CLAUDE.md` exists in the workspace, it's scored separately against the same 11 behaviors — effective behavior = conversation OR config
 5. The Prompt Optimizer analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config (scoring on demand if not cached), then generates an optimized version that incorporates only the missing behaviors not already covered by project conventions
-6. Results are cached locally in VS Code's extension storage (by session ID and CLAUDE.md content hash) to avoid re-scoring
+6. Results are cached locally in VS Code's extension storage (by conversation ID and CLAUDE.md content hash) to avoid re-scoring
 7. Quick Wins uses the `gh` CLI to pull repo context and open issues, scoped to the current workspace
 
 Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
@@ -250,7 +258,7 @@ Cost: ~$0.25 for a full 50-entry run, ~$0.15 for CI (33-entry subset). See [`sha
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 848 tests including security-focused suites | Regressions |
+| Automated testing | 1067 tests including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -286,13 +294,14 @@ codefluent/
 │   │   ├── webviewProvider.ts # WebviewViewProvider, IPC, terminal launch
 │   │   ├── parser.ts          # JSONL session file parsing
 │   │   ├── scoring.ts         # Fluency scoring via Anthropic API
+│   │   ├── conversation.ts    # Conversation assembly (gap-based splitting)
 │   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub integration + task suggestions
 │   │   ├── prompts.ts         # Prompt loader + template filler
-│   │   ├── analytics.ts       # Session token analytics (efficiency, cost)
+│   │   ├── analytics.ts       # Conversation token analytics (efficiency, cost)
 │   │   ├── pricing.ts         # Token pricing lookup
 │   │   ├── cache.ts           # Persistent score caching
-│   │   ├── dataCache.ts       # Session/usage data caching
+│   │   ├── dataCache.ts       # Conversation/usage data caching
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
 │   ├── media/
 │   │   ├── index.html         # Webview UI
@@ -307,9 +316,11 @@ codefluent/
 │   └── tsconfig.json
 ├── webapp/                    # FastAPI web app (standalone alternative)
 │   ├── main.py                # FastAPI backend
+│   ├── conversations.py       # Python conversation assembly equivalent
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
+│   ├── config.py              # Centralized config (shared/defaults.json + env vars)
 │   ├── static/                # Web frontend (HTML/CSS/JS)
-│   ├── tests/                 # Pytest suite (API, security, helpers, prompts)
+│   ├── tests/                 # Pytest suite (API, security, helpers, prompts, config)
 │   └── pyproject.toml         # Python dependencies
 ├── shared/                    # Shared resources (both interfaces)
 │   ├── benchmarks.json        # Population benchmark data
@@ -360,14 +371,14 @@ See [`webapp/README.md`](webapp/README.md) for configuration, CORS, and Windows 
 
 ### Testing
 
-The project has **848 automated tests** across both interfaces:
+The project has **1067 automated tests** across both interfaces:
 
 ```bash
 cd vscode-extension
-npm test                   # 528 tests across 14 suites (Jest)
+npm test                   # 617 tests across 16 suites (Jest)
 
 cd webapp
-uv run pytest tests/ -v    # 320 tests across 6 suites (pytest)
+uv run pytest tests/ -v    # 450 tests across 9 suites (pytest)
 ```
 
 Test suites cover scoring, parsing, caching, analytics, pricing, XSS prevention, shell injection, path traversal, rate limiting, CORS, API surface, and scoring prompt regression testing. The eval framework (`shared/eval/`) validates scoring outputs against a [golden set of 50 curated entries](shared/eval/README.md). All tests must pass before merging to main.
@@ -376,7 +387,7 @@ Test suites cover scoring, parsing, caching, analytics, pricing, XSS prevention,
 
 Five GitHub Actions workflows run automatically:
 
-- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 848 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
+- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 1067 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
 - **Eval** (`eval.yml`) — Runs on PRs that modify `shared/prompts/**`: scores the golden set via the Anthropic API, validates schema + agreement against human-labeled ground truth. See [Eval Framework](#eval-framework) below.
 - **Claude Code Review** (`claude-review.yml`) — AI-powered PR review, responds to `@claude` mentions.
 - **Security Review** (`security-review.yml`) — Grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml).

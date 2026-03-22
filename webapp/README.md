@@ -58,9 +58,9 @@ See the [main README](../README.md#features) for feature descriptions. Screensho
 |------------------|------------|
 | ![Prompt Optimizer](../images/demo-optimizer.png) | ![Quick Wins tab](../images/demo-quickwins.png) |
 
-| Usage Dashboard | Session Analytics | Charts & Details |
-|-----------------|-------------------|------------------|
-| ![Usage tab](../images/demo-usage.png) | ![Session Analytics](../images/demo-usage-analytics.png) | ![Charts & Table](../images/demo-usage-charts.png) |
+| Usage Dashboard | Conversation Analytics | Charts & Details |
+|-----------------|------------------------|------------------|
+| ![Usage tab](../images/demo-usage.png) | ![Conversation Analytics](../images/demo-usage-analytics.png) | ![Charts & Table](../images/demo-usage-charts.png) |
 
 ## Webapp-Specific Design Choices
 
@@ -70,10 +70,10 @@ The webapp provides the same core functionality as the VS Code extension but ada
 
 The VS Code extension automatically detects the current workspace's GitHub repo via `git remote get-url origin`. The webapp has no workspace context, so it provides a **project dropdown** that lets users select which project to analyze.
 
-- The dropdown populates from session data, showing each project's name and session count
+- The dropdown populates from session data, showing each project's name and conversation count
 - Selection is persisted in `localStorage` across page reloads
 - The frontend resolves the short project name (e.g., "codefluent") to the encoded path (e.g., `-home-user-codefluent`) before sending API requests
-- Project scoping applies to: Fluency Score, Prompt Optimizer, Quick Wins, and Session Analytics (Usage tab)
+- Project scoping applies to: Fluency Score, Prompt Optimizer, Quick Wins, and Conversation Analytics (Usage tab)
 
 ### Settings Bar Visibility
 
@@ -101,13 +101,13 @@ The webapp exposes `GET /health` returning server status, version, and dependenc
 
 ## How It Works
 
-1. **Session parsing** — Reads JSONL session files from `~/.claude/projects/` to extract your prompts
-2. **Fluency scoring** — Sends prompts to Claude Sonnet for behavioral classification against 11 fluency indicators
+1. **Session parsing & conversation assembly** — Reads JSONL session files from `~/.claude/projects/`, pools all messages per project, and assembles conversations by splitting at configurable inactivity gaps (default: 60 minutes)
+2. **Fluency scoring** — Sends prompts (up to 20 per conversation) to Claude Sonnet (`temperature: 0`) for behavioral classification against 11 fluency indicators
 3. **Config scoring** — Reads your project's `CLAUDE.md` and scores it against the same behaviors
-4. **Score aggregation** — Merges session + config scores, caches results to minimize API calls
+4. **Score aggregation** — Merges conversation + config scores, caches results to minimize API calls
 5. **Prompt optimization** — Analyzes any prompt against the 11 behaviors, factors in CLAUDE.md config, generates an improved version that skips behaviors already covered by project conventions
 6. **Recommendations** — Identifies your weakest behaviors and generates targeted improvement tips
-7. **Usage tracking** — Calls `ccusage` to aggregate all-projects token/cost data; parses JSONL session history for per-session efficiency metrics (cost, cache hit rates, output/input ratios)
+7. **Usage tracking** — Calls `ccusage` to aggregate all-projects token/cost data; parses JSONL history for per-conversation efficiency metrics (cost, cache hit rates, output/input ratios)
 
 All data stays local. No telemetry, no external servers — just your local session files and direct Anthropic API calls for scoring.
 
@@ -131,7 +131,7 @@ CORS is restricted to localhost origins by default. The allowed origin is determ
 
 ## Testing
 
-The webapp has **320 tests** across 6 suites. Run with:
+The webapp has **450 tests** across 9 suites. Run with:
 
 ```bash
 cd webapp
@@ -142,10 +142,13 @@ uv run pytest tests/test_eval.py -m live  # Run live API eval tests (~$0.02)
 
 | Suite | Tests | What it covers |
 |-------|-------|----------------|
-| `test_api.py` | 59 | Health endpoint, sessions, scores, scoring, optimizer, quickwins, usage, session analytics |
-| `test_helpers.py` | 69 | Path decoding, repo detection, validators, `compute_aggregate`, cost estimation, error classification |
+| `test_api.py` | 65 | Health endpoint, conversations, scores, scoring, optimizer, quickwins, usage, conversation analytics |
+| `test_helpers.py` | 75 | Path decoding, repo detection, validators, `compute_aggregate`, cost estimation, error classification |
 | `test_security.py` | 38 | Rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification |
 | `test_extract_prompts.py` | 58 | JSONL parsing, content extraction, session filtering, metadata extraction |
+| `test_conversations.py` | 60 | Conversation assembly, gap-based splitting, boundary detection |
+| `test_config.py` | 11 | Centralized config module (defaults, env vars, config.json overrides) |
+| `test_analyze_gaps.py` | 47 | Inter-prompt gap analysis, histogram generation |
 | `test_prompts.py` | 17 | Prompt loading, template filling, registry consistency |
 | `test_eval.py` | 79 | Eval framework: scorer, checks, report, CLI args, golden set integration (+ 3 live API tests) |
 
@@ -188,6 +191,8 @@ User-controlled strings rendered in HTML use `escapeHtml()` in the frontend. The
 ## Session Data
 
 Claude Code stores session transcripts as JSONL files at `~/.claude/projects/`. **Session transcripts are only available from late January 2026 onward** — earlier Claude Code usage was not persisted as full transcripts. Subagent sessions are excluded from scoring because they contain AI-generated prompts, not human input.
+
+CodeFluent assembles these raw session files into conversations (gap-based splitting at configurable inactivity thresholds) before scoring. See the [main README](../README.md#conversations-the-right-unit-of-analysis) for details.
 
 | Platform | Path |
 |----------|------|

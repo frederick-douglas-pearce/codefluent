@@ -46,7 +46,7 @@ Both interfaces share the same tab structure. The webapp adds a header with sett
 │           ACTIVE TAB CONTENT                        │
 │           (scrollable)                              │
 │                                                     │
-│  FOOTER: "Powered by Anthropic Research" + links    │
+│  FOOTER: "Inspired by Anthropic Research" + links    │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -70,8 +70,8 @@ Scores user prompts against 11 fluency behaviors with benchmark comparisons.
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  SESSION SELECTOR                                │
-│  Analyze last [5 ▾] sessions    [Run Scoring ▶]  │
+│  CONVERSATION SELECTOR                            │
+│  Analyze last [5 ▾] conversations [Run Scoring ▶] │
 ├──────────────────────────────────────────────────┤
 │  OVERALL SCORE (SVG ring, animated)              │
 │              ┌─────────┐                         │
@@ -87,7 +87,7 @@ Scores user prompts against 11 fluency behaviors with benchmark comparisons.
 │  CODING PATTERNS (donut chart)                   │
 │  High-quality vs low-quality pattern split       │
 ├──────────────────────────────────────────────────┤
-│  SESSION BREAKDOWN (expandable per-session list) │
+│  CONVERSATION BREAKDOWN (expandable list)        │
 └──────────────────────────────────────────────────┘
 ```
 
@@ -180,7 +180,7 @@ Project-scoped GitHub task suggestions with copy-ready prompts.
 
 ## Tab 5: Usage Dashboard
 
-Two data sources displayed in sequence: ccusage all-projects data, then per-session analytics from JSONL parsing.
+Two data sources displayed in sequence: ccusage all-projects data, then per-conversation analytics from JSONL parsing.
 
 ### All-Projects Section (ccusage)
 
@@ -194,13 +194,13 @@ Two data sources displayed in sequence: ccusage all-projects data, then per-sess
 └──────────────────────────────────────────────────┘
 ```
 
-### Session Analytics Section
+### Conversation Analytics Section
 
 ```
 ┌──────────────────────────────────────────────────┐
 │  SUMMARY CARDS (4 across)                        │
-│  Total Cost | Avg Cost/Session | Avg Cost/Prompt │
-│  | Most Efficient Session                        │
+│  Total Cost | Avg Cost/Conv | Avg Cost/Prompt    │
+│  | Most Efficient Conversation                   │
 ├──────────────────────────────────────────────────┤
 │  SCATTER CHARTS (3 side-by-side)                 │
 │  Cost/Prompt vs Cache Hit Rate                   │
@@ -208,7 +208,7 @@ Two data sources displayed in sequence: ccusage all-projects data, then per-sess
 │  Fluency Score vs Cost/Prompt                    │
 │  (markers colored red→amber→green by score)      │
 ├──────────────────────────────────────────────────┤
-│  SESSION DETAILS TABLE (sortable, paginated)     │
+│  CONVERSATION DETAILS TABLE (sortable, paginated)│
 │  Date | Project | Prompts | Tokens | Cost |      │
 │  Tokens/Prompt | Cost/Prompt | Cache Hit |       │
 │  Cache R/C | Out/In | Score                      │
@@ -232,7 +232,7 @@ Implemented as `scoreColor(score)` — linear interpolation between three color 
 |-----------|-------------|---------|
 | Score ring | SVG circle with animated `stroke-dashoffset` | Fluency Score, Optimizer |
 | Behavior bars | Horizontal bar + benchmark marker + color coding | Fluency Score |
-| Stat cards | 4-column grid of label + large number + detail | Usage, Session Analytics |
+| Stat cards | 4-column grid of label + large number + detail | Usage, Conversation Analytics |
 | Task cards | Title, meta, prompt block, copy/run buttons | Quick Wins |
 | Spinner | CSS-animated border spinner | All tabs during loading |
 | Tab navigation | Horizontal tabs with active indicator | Page layout |
