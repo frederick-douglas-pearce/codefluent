@@ -38,7 +38,7 @@ Anthropic's own AI Fluency Index noted they "plan deeper study into Claude Code"
 
 Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use, while a focused coding session might span multiple files. Scoring raw session files produces misleading results.
 
-CodeFluent solves this with **conversations**: all messages from a project's session files are pooled, sorted by timestamp, and split at inactivity gaps (default: 60 minutes of silence). Each conversation represents one focused interaction — the same unit of analysis used by Anthropic's AI Fluency Index (which scored 9,830 conversations), making our benchmark comparisons directly meaningful.
+CodeFluent solves this with **conversations**: all messages from each of your project's session files are pooled, sorted by timestamp, and split at inactivity gaps (default: 60 minutes of silence). Each conversation represents one focused interaction — the same unit of analysis used by Anthropic's AI Fluency Index (which scored 9,830 conversations), making our benchmark comparisons directly meaningful.
 
 This conversation assembly is CodeFluent's own contribution, built on the research foundation. The inactivity threshold is configurable via `conversation.inactivityGapMinutes` in VS Code settings or `webapp/config.json`. To understand your own timing patterns, run `webapp/analyze_gaps.py` to visualize inter-prompt gaps and decide if the default fits your workflow.
 
