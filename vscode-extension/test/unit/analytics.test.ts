@@ -286,6 +286,31 @@ describe('joinSessionsWithScores', () => {
     expect(result[0].overall_score).toBeNull()
   })
 
+  it('applies config behaviors only for CONFIG_ELIGIBLE_BEHAVIORS', () => {
+    const session = makeSession({ id: 's1' })
+    // Score: 2/11 behaviors true (iteration_and_refinement, clarifying_goals)
+    const scores = [makeScoreResult({ session_id: 's1', overall_score: 18 })]
+    // Config has 5 behaviors true, but only 2 are eligible (setting_interaction_terms, questioning_reasoning)
+    // identifying_missing_context is eligible but false here
+    const configBehaviors: Record<string, boolean> = {
+      iteration_and_refinement: false,
+      clarifying_goals: true, // NOT eligible, should be ignored
+      specifying_format: true, // NOT eligible, should be ignored
+      providing_examples: true, // NOT eligible, should be ignored
+      setting_interaction_terms: true, // ELIGIBLE
+      checking_facts: false,
+      questioning_reasoning: true, // ELIGIBLE
+      identifying_missing_context: false, // ELIGIBLE but false
+      adjusting_approach: false,
+      building_on_responses: false,
+      providing_feedback: false,
+    }
+    const result = joinSessionsWithScores([session], scores, undefined, configBehaviors)
+    // Should be 4/11: 2 from conversation + 2 from eligible config = 36%
+    // NOT 7/11 (which would happen if all config behaviors applied)
+    expect(result[0].overall_score).toBe(36)
+  })
+
   it('preserves all session fields in enriched output', () => {
     const session = makeSession({ id: 's1', project: 'my-proj', total_tokens: 5000 })
     const scores = [makeScoreResult({ session_id: 's1', overall_score: 90 })]

@@ -115,6 +115,7 @@ describe('scoreSessions', () => {
     const callArgs = client.messages.create.mock.calls[0][0]
     expect(callArgs.model).toBe('claude-sonnet-4-20250514')
     expect(callArgs.max_tokens).toBe(1024)
+    expect(callArgs.temperature).toBe(0)
   })
 
   it('includes session metadata in the prompt', async () => {
@@ -2111,7 +2112,7 @@ describe('scoreSinglePrompt', () => {
     const client = { messages: { create: createFn } }
     await scoreSinglePrompt('Test', client as any)
     expect(createFn).toHaveBeenCalledWith(
-      expect.objectContaining({ max_tokens: 1024 }),
+      expect.objectContaining({ max_tokens: 1024, temperature: 0 }),
     )
   })
 

@@ -1,6 +1,6 @@
 import { ParsedSession } from './parser'
 import { ParsedConversation } from './conversation'
-import { ScoreResult, getISOWeekKey, BEHAVIORS } from './scoring'
+import { ScoreResult, getISOWeekKey, BEHAVIORS, CONFIG_ELIGIBLE_BEHAVIORS } from './scoring'
 import { estimateSessionCost, loadPricing, PricingData } from './pricing'
 
 /** Get the actual prompt count (messages with content), falling back to user_message_count for legacy ParsedSession */
@@ -159,7 +159,7 @@ export function joinConversationsWithScores(
     // Compute effective score: conversation behavior OR config behavior
     if (configBehaviors && score.fluency_behaviors) {
       const effectiveCount = BEHAVIORS.filter(b =>
-        score.fluency_behaviors![b] || configBehaviors[b]
+        score.fluency_behaviors![b] || (CONFIG_ELIGIBLE_BEHAVIORS.has(b) && configBehaviors[b])
       ).length
       scoreMap.set(score.session_id, Math.round((effectiveCount / BEHAVIORS.length) * 100))
     } else {
