@@ -65,7 +65,7 @@ GitHub-repo-scoped task suggestions — CodeFluent detects your current workspac
 
 ### Conversations
 
-Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use. CodeFluent assembles **conversations** by pooling all messages per project, sorting by timestamp, and splitting at inactivity gaps (default: 60 minutes). Each conversation represents one focused interaction — the natural unit for fluency scoring.
+Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use. CodeFluent assembles **conversations** by pooling all messages per project, sorting by timestamp, and splitting at inactivity gaps (default: 60 minutes). Each conversation represents one focused interaction — the same unit of analysis used by Anthropic's AI Fluency Index, making benchmark comparisons directly meaningful.
 
 The inactivity threshold is configurable via the `codefluent.conversation.inactivityGapMinutes` VS Code setting.
 
