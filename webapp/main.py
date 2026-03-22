@@ -549,14 +549,14 @@ def _compute_session_aggregates(sessions: list) -> dict:
 
     total_tokens_sum = sum(s["total_tokens"] for s in sessions)
     total_prompts = sum(s.get("prompt_count", 0) for s in sessions)
-    cache_hit_values = [s["cache_hit_rate"] for s in sessions if s["cache_hit_rate"] > 0]
+    avg_cache_hit_rate = sum(s["cache_hit_rate"] for s in sessions) / n
     total_cost = sum(s.get("estimated_cost", 0) for s in sessions)
 
     return {
         "avg_tokens_per_conversation": round(total_tokens_sum / n),
         "avg_tokens_per_session": round(total_tokens_sum / n),  # deprecated alias
         "avg_tokens_per_prompt": round(total_tokens_sum / total_prompts) if total_prompts > 0 else 0,
-        "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
+        "avg_cache_hit_rate": round(avg_cache_hit_rate, 4),
         "total_conversations": n,
         "total_sessions": n,  # deprecated alias
         "total_estimated_cost": round(total_cost, 2),
@@ -583,14 +583,14 @@ def _compute_weekly_analytics(sessions: list) -> list:
         week_sessions = group["sessions"]
         n = len(week_sessions)
         total_tokens = sum(s["total_tokens"] for s in week_sessions)
-        cache_hit_values = [s["cache_hit_rate"] for s in week_sessions if s["cache_hit_rate"] > 0]
+        avg_cache = sum(s["cache_hit_rate"] for s in week_sessions) / n if n else 0
 
         weekly.append({
             "week": week_key,
             "total_tokens": total_tokens,
             "avg_tokens_per_conversation": round(total_tokens / n) if n else 0,
             "avg_tokens_per_session": round(total_tokens / n) if n else 0,  # deprecated alias
-            "avg_cache_hit_rate": round(sum(cache_hit_values) / len(cache_hit_values), 2) if cache_hit_values else 0,
+            "avg_cache_hit_rate": round(avg_cache, 4),
             "conversation_count": n,
             "session_count": n,  # deprecated alias
         })
