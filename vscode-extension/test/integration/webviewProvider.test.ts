@@ -952,13 +952,20 @@ describe('CodeFluentViewProvider', () => {
       expect(getAllConversations).toHaveBeenCalledTimes(1)
     })
 
-    it('runScoring uses session cache instead of re-parsing', async () => {
+    it('runScoring always fetches fresh conversations instead of using cache', async () => {
       process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key'
-      const mockSessions = {
+      const staleConversations = {
         conversations: [{ id: 's1', user_prompts: ['hi'], used_plan_mode: false, thinking_count: 0, tools_used: [] }],
         metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
       }
-      ;(getAllConversations as jest.Mock).mockReturnValue(mockSessions)
+      const freshConversations = {
+        conversations: [
+          { id: 's1', user_prompts: ['hi'], used_plan_mode: false, thinking_count: 0, tools_used: [] },
+          { id: 's2', user_prompts: ['new session'], used_plan_mode: false, thinking_count: 0, tools_used: [] },
+        ],
+        metadata: { total_sessions: 2, total_projects: 1, total_prompts: 2, extracted_at: '' },
+      }
+      ;(getAllConversations as jest.Mock).mockReturnValue(staleConversations)
       ;(scoreConversations as jest.Mock).mockResolvedValue({ results: {}, stats: { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 } })
       ;(computeAggregate as jest.Mock).mockReturnValue({})
 
@@ -966,15 +973,27 @@ describe('CodeFluentViewProvider', () => {
       await sendMessage({ type: 'getSessions', requestId: 'req-cache-6' })
       ;(getAllConversations as jest.Mock).mockClear()
 
-      // Now run scoring — should use cached sessions
+      // Update mock to return fresh data (simulates new JSONL files on disk)
+      ;(getAllConversations as jest.Mock).mockReturnValue(freshConversations)
+
+      // Now run scoring — should fetch fresh, not use cache
       await sendMessage({
         type: 'runScoring',
         requestId: 'req-cache-7',
-        payload: { session_ids: ['s1'] },
+        payload: { session_ids: ['s1', 's2'] },
       })
 
-      // getAllSessions should NOT have been called again
-      expect(getAllConversations).not.toHaveBeenCalled()
+      // getAllConversations SHOULD have been called to get fresh data
+      expect(getAllConversations).toHaveBeenCalledTimes(1)
+
+      // scoreConversations should see both conversations (including the new one)
+      expect(scoreConversations).toHaveBeenCalledWith(
+        ['s1', 's2'],
+        expect.objectContaining({ s2: expect.objectContaining({ id: 's2' }) }),
+        expect.any(Object),
+        expect.any(Object),
+        false,
+      )
 
       delete process.env.ANTHROPIC_API_KEY
     })
@@ -1513,6 +1532,46 @@ describe('CodeFluentViewProvider', () => {
       )
 
       ;(vscode.workspace as any).workspaceFolders = undefined
+    })
+
+    it('always fetches fresh conversations instead of using cache', async () => {
+      const staleConversations = {
+        conversations: [
+          { id: 's1', project: 'proj', user_prompts: ['hi'], total_tokens: 1000 },
+        ],
+        metadata: { total_sessions: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
+      }
+      const freshConversations = {
+        conversations: [
+          { id: 's1', project: 'proj', user_prompts: ['hi'], total_tokens: 1000 },
+          { id: 's2', project: 'proj', user_prompts: ['new'], total_tokens: 2000 },
+        ],
+        metadata: { total_sessions: 2, total_projects: 1, total_prompts: 2, extracted_at: '' },
+      }
+      ;(getAllConversations as jest.Mock).mockReturnValue(staleConversations)
+      ;(buildConversationAnalytics as jest.Mock).mockReturnValue({
+        conversations: [], sessions: [], aggregates: {}, weekly: [],
+      })
+
+      // Prime the cache
+      await sendMessage({ type: 'getSessionAnalytics', requestId: 'req-analytics-fresh-1' })
+      ;(getAllConversations as jest.Mock).mockClear()
+
+      // Update mock to return fresh data
+      ;(getAllConversations as jest.Mock).mockReturnValue(freshConversations)
+
+      // Analytics should fetch fresh, not use cache
+      await sendMessage({ type: 'getSessionAnalytics', requestId: 'req-analytics-fresh-2' })
+
+      expect(getAllConversations).toHaveBeenCalledTimes(1)
+      expect(buildConversationAnalytics).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 's1' }),
+          expect.objectContaining({ id: 's2' }),
+        ]),
+        expect.any(Array),
+        undefined,
+      )
     })
   })
 })

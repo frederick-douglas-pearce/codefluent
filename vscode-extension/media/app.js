@@ -693,9 +693,27 @@ document.getElementById('run-scoring-btn').addEventListener('click', () => {
 })
 
 async function runScoring(scopeValue) {
+  const btn = document.getElementById('run-scoring-btn')
+  btn.disabled = true
+  btn.textContent = 'Loading sessions...'
+
+  // Always fetch fresh conversations before scoring
+  try {
+    state.conversations = await postMessageRequest('getConversations')
+    updateTimeScopeCounts()
+  } catch (e) {
+    document.getElementById('fluency-results').innerHTML =
+      '<p class="empty-state">Failed to load conversations. Please try again.</p>'
+    btn.disabled = false
+    btn.textContent = 'Run Analysis'
+    return
+  }
+
   if (!state.conversations?.conversations?.length) {
     document.getElementById('fluency-results').innerHTML =
-      '<p class="empty-state">Conversations still loading — please wait a moment and try again.</p>'
+      '<p class="empty-state">No conversations found. Check your session data path.</p>'
+    btn.disabled = false
+    btn.textContent = 'Run Analysis'
     return
   }
 
@@ -703,6 +721,8 @@ async function runScoring(scopeValue) {
   if (ids.length === 0) {
     document.getElementById('fluency-results').innerHTML =
       '<p class="empty-state">No conversations found in the selected time range.</p>'
+    btn.disabled = false
+    btn.textContent = 'Run Analysis'
     return
   }
 
@@ -713,8 +733,6 @@ async function runScoring(scopeValue) {
   s.conversationScope = scopeValue
   vscode.setState(s)
 
-  const btn = document.getElementById('run-scoring-btn')
-  btn.disabled = true
   btn.textContent = 'Analyzing...'
   showLoader('fluency-results')
 
