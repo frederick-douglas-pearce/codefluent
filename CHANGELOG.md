@@ -5,6 +5,14 @@ All notable changes to the CodeFluent project will be documented in this file. T
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1](https://github.com/frederick-douglas-pearce/codefluent/compare/v1.0.0...v1.0.1) (2026-03-25)
+
+
+### Bug Fixes
+
+* Run Analysis scores stale conversation data instead of latest sessions ([#151](https://github.com/frederick-douglas-pearce/codefluent/issues/151)) ([ffa5d05](https://github.com/frederick-douglas-pearce/codefluent/commit/ffa5d057eeec229570994de6c68628d23209f41e))
+* Run Analysis scores stale conversation data instead of latest sessions ([#151](https://github.com/frederick-douglas-pearce/codefluent/issues/151)) ([32fc95b](https://github.com/frederick-douglas-pearce/codefluent/commit/32fc95b64d4f93b9259b0a1e3493537083d70c58))
+
 ## [1.0.0](https://github.com/frederick-douglas-pearce/codefluent/compare/v0.3.0...v1.0.0) (2026-03-22)
 
 
