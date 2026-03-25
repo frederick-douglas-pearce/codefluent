@@ -259,8 +259,10 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     const client = new Anthropic({ apiKey })
     const cached = this.cache.read()
-    const convData = this.dataCache.getConversations().data || getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
-    const conversations = convData.conversations || convData.sessions || []
+    // Always fetch fresh conversations when user explicitly runs scoring
+    const convData = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+    this.dataCache.setConversations(convData)
+    const conversations = convData.conversations || []
     const allConversations = Object.fromEntries(conversations.map((c: any) => [c.id, c]))
 
     const { results, stats } = await scoreConversations(conversationIds, allConversations, cached, client, force)
@@ -408,8 +410,10 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
   private async handleGetConversationAnalytics(payload?: { project?: string }) {
     const project = payload?.project ?? this.getWorkspaceProjectName()
-    const convData = this.dataCache.getConversations().data || getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
-    let conversations = convData.conversations || convData.sessions || []
+    // Always fetch fresh conversations for analytics
+    const convData = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+    this.dataCache.setConversations(convData)
+    let conversations = convData.conversations || []
     if (project) {
       conversations = conversations.filter((c: any) => c.project === project)
     }

@@ -1200,25 +1200,52 @@ document.getElementById('run-scoring-btn').addEventListener('click', () => {
 })
 
 async function runScoring(scopeValue) {
-  if (!state.conversations?.conversations?.length) return
+  const btn = document.getElementById('run-scoring-btn')
+  btn.disabled = true
+  btn.textContent = 'Loading sessions...'
+
+  // Always fetch fresh conversations before scoring
+  try {
+    const freshConversations = await fetch(buildConversationsUrl()).then(r => r.json())
+    state.conversations = freshConversations
+    updateTimeScopeCounts()
+  } catch (e) {
+    document.getElementById('fluency-results').innerHTML =
+      '<p class="empty-state">Failed to load conversations. Please try again.</p>'
+    btn.disabled = false
+    btn.textContent = 'Run Analysis'
+    return
+  }
+
+  if (!state.conversations?.conversations?.length) {
+    document.getElementById('fluency-results').innerHTML =
+      '<p class="empty-state">No conversations found. Check your data path setting.</p>'
+    btn.disabled = false
+    btn.textContent = 'Run Analysis'
+    return
+  }
 
   const { ids, description } = resolveConversationIds(scopeValue, getFilteredConversations())
   if (ids.length === 0) {
     document.getElementById('fluency-results').innerHTML =
       '<p class="empty-state">No conversations found in the selected time range.</p>'
+    btn.disabled = false
+    btn.textContent = 'Run Analysis'
     return
   }
 
   const forceRescore = document.getElementById('force-rescore').checked
   if (forceRescore && ids.length > 20) {
-    if (!confirm(`Force Rescore will re-score all ${ids.length} conversations using the Anthropic API. Continue?`)) return
+    if (!confirm(`Force Rescore will re-score all ${ids.length} conversations using the Anthropic API. Continue?`)) {
+      btn.disabled = false
+      btn.textContent = 'Run Analysis'
+      return
+    }
   }
 
   // Persist selection
   localStorage.setItem('codefluent-conversation-scope', scopeValue)
 
-  const btn = document.getElementById('run-scoring-btn')
-  btn.disabled = true
   btn.textContent = 'Analyzing...'
   showLoader('fluency-results')
 
