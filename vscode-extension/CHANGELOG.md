@@ -5,6 +5,14 @@ Extension-specific changes. For the full project changelog (including webapp and
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-03-25
+
+### Fixed
+
+- Run Analysis now always fetches fresh conversation data instead of using stale cache, ensuring new Claude Code sessions are included in scoring (#151)
+- Conversation analytics also fetch fresh data on each request (#151)
+- Both VS Code extension and webapp frontends refresh conversations before scoring (#151)
+
 ## [1.0.0] - 2026-03-22
 
 ### ⚠ BREAKING CHANGES

@@ -145,11 +145,11 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 617 tests)
+npm test                   # Jest (unit + integration, 618 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-1.0.0.vsix
+code --install-extension codefluent-1.0.1.vsix
 
 # Debug: press F5 in VS Code with vscode-extension/ open
 
@@ -274,7 +274,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (617 tests) in `vscode-extension/`, `pytest` (450 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (618 tests) in `vscode-extension/`, `pytest` (450 tests) in `webapp/`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
@@ -284,7 +284,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 617 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 618 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -506,7 +506,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 617 Jest tests (16 suites)
+npm test                   # Runs all 618 Jest tests (16 suites)
 
 # Test structure:
 # test/unit/config.test.ts                     — centralized config module (defaults, VS Code overrides, display config)

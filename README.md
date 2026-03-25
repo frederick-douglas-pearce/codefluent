@@ -71,7 +71,7 @@ cd codefluent/vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-1.0.0.vsix
+code --install-extension codefluent-1.0.1.vsix
 ```
 
 **Windows (PowerShell):**
@@ -82,7 +82,7 @@ cd codefluent\vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-1.0.0.vsix
+code --install-extension codefluent-1.0.1.vsix
 ```
 
 Then reload VS Code. The CodeFluent icon appears in the activity bar.
@@ -382,7 +382,7 @@ The project has **1067 automated tests** across both interfaces:
 
 ```bash
 cd vscode-extension
-npm test                   # 617 tests across 16 suites (Jest)
+npm test                   # 618 tests across 16 suites (Jest)
 
 cd webapp
 uv run pytest tests/ -v    # 450 tests across 9 suites (pytest)

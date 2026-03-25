@@ -38,9 +38,9 @@ Then open `http://localhost:8000`. See [`webapp/README.md`](webapp/README.md) fo
 
 ## Running Tests
 
-The project has **1067 automated tests** across both interfaces. All must pass before merging.
+The project has **1068 automated tests** across both interfaces. All must pass before merging.
 
-### VS Code Extension (617 tests, 16 suites)
+### VS Code Extension (618 tests, 16 suites)
 
 ```bash
 cd vscode-extension
@@ -185,7 +185,7 @@ CodeFluent ships **two production interfaces**: the VS Code extension and the we
 
 Before submitting a pull request, verify:
 
-- [ ] `npm test` passes (617+ extension tests green)
+- [ ] `npm test` passes (618+ extension tests green)
 - [ ] `uv run pytest` passes (450+ webapp tests green)
 - [ ] No regressions in existing functionality
 - [ ] New features include test coverage
