@@ -278,8 +278,8 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
-- **`release.yml`** — Triggered by version tags: builds VSIX, publishes to Marketplace, uploads to GitHub Release
-- **`release-please.yml`** — Auto-creates release PRs with changelog + version bumps from conventional commits
+- **`release-please.yml`** — Auto-creates release PRs with changelog + version bumps from conventional commits. When a release is created, chains into a `build-release` job that builds VSIX, publishes to Marketplace, uploads to GitHub Release, and marks the release as non-draft.
+- **`release.yml`** — Manual fallback (`workflow_dispatch` only) for retrying failed releases or manual tag releases. Not triggered automatically.
 
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
