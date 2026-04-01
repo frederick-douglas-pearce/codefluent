@@ -13,8 +13,88 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  build-release:
+    name: Build & Release
+    needs: release-please
+    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        working-directory: vscode-extension
+        run: npm ci
+
+      - name: Compile TypeScript
+        working-directory: vscode-extension
+        run: npm run compile
+
+      - name: Run tests
+        working-directory: vscode-extension
+        run: npm test
+
+      - name: Verify version matches tag
+        working-directory: vscode-extension
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "Tag: $TAG, package.json version: $PKG_VERSION"
+          if [ "v$PKG_VERSION" != "$TAG" ]; then
+            echo "ERROR: package.json version ($PKG_VERSION) does not match tag ($TAG)"
+            exit 1
+          fi
+
+      - name: Package VSIX
+        working-directory: vscode-extension
+        run: npx @vscode/vsce package --allow-missing-repository
+
+      - name: Verify VSIX size
+        working-directory: vscode-extension
+        run: |
+          VSIX=$(ls *.vsix)
+          SIZE=$(stat --format=%s "$VSIX")
+          echo "VSIX: $VSIX ($SIZE bytes)"
+          if [ "$SIZE" -lt 500000 ]; then
+            echo "ERROR: VSIX is too small (<500KB) — node_modules likely excluded"
+            exit 1
+          fi
+          echo "vsix_path=vscode-extension/$VSIX" >> "$GITHUB_ENV"
+          echo "vsix_name=$VSIX" >> "$GITHUB_ENV"
+
+      - name: Publish to VS Code Marketplace
+        working-directory: vscode-extension
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx @vscode/vsce publish --pat "$VSCE_PAT"
+
+      - name: Upload VSIX to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          gh release upload "$TAG" "${{ env.vsix_path }}#${{ env.vsix_name }}" --clobber
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          gh release edit "$TAG" --draft=false
