@@ -23,6 +23,7 @@ import subprocess
 from anthropic import Anthropic
 from extract_prompts import get_all_sessions
 from conversations import get_all_conversations
+from agent_metrics import compute_agent_metrics
 
 BEHAVIORS = [
     "iteration_and_refinement", "clarifying_goals", "specifying_format",
@@ -531,6 +532,25 @@ async def get_session_analytics_deprecated(
 ):
     """Deprecated: Use /api/conversation-analytics instead."""
     return await get_conversation_analytics(data_path=data_path, project=project)
+
+
+@app.get("/api/agent-metrics")
+async def get_agent_metrics(
+    data_path: str = Query(default=None, max_length=1000),
+    project: str = Query(default=None, max_length=500),
+):
+    """Return agent behavior metrics computed from conversation data."""
+    try:
+        data_dir = _resolve_data_dir(data_path)
+        conv_data = get_all_conversations(data_dir, project=project, max_files=200)
+        conversations = conv_data.get("conversations", [])
+        if project:
+            conversations = [c for c in conversations if c.get("project") == project]
+        return compute_agent_metrics(conversations)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
 
 
 def _compute_session_aggregates(sessions: list) -> dict:

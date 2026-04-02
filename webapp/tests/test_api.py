@@ -902,3 +902,35 @@ class TestGetUsage:
         data = resp.json()
         assert "monthly" in data
         assert "daily" not in data
+
+
+class TestGetAgentMetrics:
+    def test_returns_200_with_expected_schema(self, client, mock_sessions_dir):
+        resp = client.get("/api/agent-metrics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "tool_diversity_index" in data
+        assert "plan_mode_adoption_rate" in data
+        assert "avg_cache_hit_rate" in data
+        assert "thinking_utilization_rate" in data
+        assert "avg_prompt_length" in data
+        assert "conversation_count" in data
+        assert isinstance(data["conversation_count"], int)
+
+    def test_returns_zeros_with_no_data(self, client, tmp_path):
+        empty_dir = tmp_path / "empty_sessions"
+        empty_dir.mkdir()
+        resp = client.get("/api/agent-metrics", params={"data_path": str(empty_dir)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["conversation_count"] == 0
+        assert data["tool_diversity_index"] == 0
+
+    def test_project_filtering(self, client, mock_sessions_dir):
+        resp = client.get("/api/agent-metrics", params={
+            "data_path": str(mock_sessions_dir),
+            "project": "nonexistent-project",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["conversation_count"] == 0
