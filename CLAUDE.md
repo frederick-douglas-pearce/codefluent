@@ -39,7 +39,11 @@ codefluent/
 │   ├── UI_SPEC.md             # Frontend design spec
 │   ├── REFERENCES.md          # Research papers and docs links
 │   ├── SESSION_DATA.md        # Session data format, availability, scope
-│   └── DEMO_SCRIPT.md         # 3-minute demo script
+│   ├── DEMO_SCRIPT.md         # 3-minute demo script
+│   ├── RELEASE_ROADMAP.md     # Epic definitions, release mapping, issue tracker
+│   ├── NEW_METRICS_RESEARCH.md          # Agent behavior + outcome metrics research
+│   ├── TASK_CLASSIFICATION_RESEARCH.md  # Task taxonomy + classification approach
+│   └── CCA_FEATURE_RESEARCH.md          # CCA-F exam feature extraction
 ├── vscode-extension/          # VS Code extension (PRIMARY)
 │   ├── package.json           # Extension manifest + dependencies
 │   ├── tsconfig.json          # TypeScript config
@@ -130,6 +134,7 @@ When adding features or changing architecture, check this list for files that ma
 | `docs/SESSION_DATA.md` | JSONL data format, availability, scope | Changing parser behavior or supported data formats |
 | `docs/REFERENCES.md` | Research papers and external docs links | Adding new research foundations or external references |
 | `docs/DEMO_SCRIPT.md` | 3-minute demo walkthrough | Changing demo flow or feature highlights |
+| `docs/RELEASE_ROADMAP.md` | Epic definitions, release mapping, issue tracker | Completing epics, changing priorities, adding/closing issues |
 | Memory files (`~/.claude/projects/.../memory/`) | Test counts, lessons learned, project phase | Changing test counts, learning new project conventions |
 
 ## Key Commands
