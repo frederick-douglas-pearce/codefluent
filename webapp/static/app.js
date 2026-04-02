@@ -1777,8 +1777,8 @@ async function loadConversationsExplorer() {
   document.getElementById('conversations-table-container').style.display = 'none'
   document.getElementById('conversations-empty').style.display = 'none'
   try {
-    const project = getSelectedProjectEncoded ? getSelectedProjectEncoded() : ''
-    const dataPath = document.getElementById('data-path')?.value || ''
+    const project = typeof getSelectedProject === 'function' ? getSelectedProject() : ''
+    const dataPath = getDataPath ? getDataPath() : (document.getElementById('data-path')?.value || '')
     const params = new URLSearchParams()
     if (dataPath) params.set('data_path', dataPath)
     if (project) params.set('project', project)
