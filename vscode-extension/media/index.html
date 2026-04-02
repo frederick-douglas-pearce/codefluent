@@ -181,20 +181,16 @@
           <h2>Conversation Explorer</h2>
           <p>Browse your Claude Code conversations — structure, patterns, and engagement over time.</p>
         </div>
-        <div id="conversations-summary-cards" class="pace-grid" style="display:none"></div>
+        <div id="conversations-summary-cards" class="pace-grid" style="display:none; margin-bottom: 24px"></div>
         <div id="conversations-charts-row" style="display:none">
-          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px">
-            <div class="pace-card">
-              <div class="pace-card-title">Conversations per Week</div>
-              <div class="chart-container" style="height:250px; position:relative">
-                <canvas id="conv-per-week-chart"></canvas>
-              </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px">
+            <div class="chart-container" style="margin-bottom: 0">
+              <h3>Conversations per Week</h3>
+              <canvas id="conv-per-week-chart"></canvas>
             </div>
-            <div class="pace-card">
-              <div class="pace-card-title">Conversation Length Distribution</div>
-              <div class="chart-container" style="height:250px; position:relative">
-                <canvas id="conv-length-chart"></canvas>
-              </div>
+            <div class="chart-container" style="margin-bottom: 0">
+              <h3>Conversation Length Distribution</h3>
+              <canvas id="conv-length-chart"></canvas>
             </div>
           </div>
         </div>
