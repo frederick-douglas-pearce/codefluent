@@ -119,6 +119,21 @@ All data stays on your machine. CodeFluent reads local session files and makes d
 | **ccusage returns no data** | Click the Refresh button in the Usage tab. Ensure Node.js and npm are on PATH so `npx ccusage` works. |
 | **Extension doesn't activate** | Look for the CodeFluent icon in the activity bar. If missing, try reloading the window (`Ctrl+Shift+P` → "Reload Window"). |
 
+## Roadmap
+
+**Coming soon:**
+- **Conversations tab** — visualize conversation structure, length distributions, and engagement patterns with interactive charts
+- **Agent metrics** — tool diversity, plan mode adoption, cache efficiency, and thinking utilization computed from your session data
+- **Task classification** — automatic categorization of conversations by task type (feature, bug fix, refactor, debug, etc.)
+- **Configuration maturity** — assess your `.claude/` directory setup (hooks, rules, commands, skills) against best practices
+
+**Planned:**
+- **CCA readiness assessment** — radar chart mapping your usage to Claude Certified Architect competency domains
+- **Interaction quality metrics** — error recovery patterns, verification behavior, learning trajectory
+- **Outcome metrics** — commit quality analysis, MCP integration assessment
+
+See the [Release Roadmap](https://github.com/frederick-douglas-pearce/codefluent/blob/main/docs/RELEASE_ROADMAP.md) for details, or browse [open milestones](https://github.com/frederick-douglas-pearce/codefluent/milestones) on GitHub.
+
 ## Research Foundations
 
 CodeFluent's scoring framework is grounded in published Anthropic research:

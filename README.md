@@ -413,6 +413,21 @@ Commit messages use [Conventional Commits](https://www.conventionalcommits.org/)
 
 Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setup, code conventions, security rules, and the PR checklist.
 
+## Roadmap
+
+**Coming soon:**
+- **Conversations tab** — visualize conversation structure, length distributions, and engagement patterns with interactive charts
+- **Agent metrics** — tool diversity, plan mode adoption, cache efficiency, and thinking utilization computed from your session data
+- **Task classification** — automatic categorization of conversations by task type (feature, bug fix, refactor, debug, etc.)
+- **Configuration maturity** — assess your `.claude/` directory setup (hooks, rules, commands, skills) against best practices
+
+**Planned:**
+- **CCA readiness assessment** — radar chart mapping your usage to Claude Certified Architect competency domains
+- **Interaction quality metrics** — error recovery patterns, verification behavior, learning trajectory
+- **Outcome metrics** — commit quality analysis, MCP integration assessment
+
+See the [Release Roadmap](docs/RELEASE_ROADMAP.md) for details, or browse [open milestones](https://github.com/frederick-douglas-pearce/codefluent/milestones) on GitHub.
+
 ## Research Foundations
 
 - [Anthropic AI Fluency Index](https://www.anthropic.com/research/AI-fluency-index) (Feb 2026) — 11 behavioral indicators and population benchmarks
