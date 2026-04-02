@@ -33,6 +33,7 @@
       <button class="tab" data-tab="optimizer">Prompt Optimizer</button>
       <button class="tab" data-tab="quickwins">Quick Wins</button>
       <button class="tab" data-tab="usage">Usage</button>
+      <button class="tab" data-tab="conversations">Conversations</button>
     </nav>
 
     <main class="content">
@@ -171,6 +172,62 @@
             </table>
           </div>
           <button class="conversation-show-more-btn" id="conversation-table-show-more" style="display:none;">Show more</button>
+        </div>
+      </div>
+
+      <!-- Conversations Tab -->
+      <div id="tab-conversations" class="tab-panel">
+        <div class="section-header">
+          <h2>Conversation Explorer</h2>
+          <p>Browse your Claude Code conversations — structure, patterns, and engagement over time.</p>
+        </div>
+        <div id="conversations-summary-cards" class="pace-grid" style="display:none"></div>
+        <div id="conversations-charts-row" style="display:none">
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px">
+            <div class="pace-card">
+              <div class="pace-card-title">Conversations per Week</div>
+              <div class="chart-container" style="height:250px; position:relative">
+                <canvas id="conv-per-week-chart"></canvas>
+              </div>
+            </div>
+            <div class="pace-card">
+              <div class="pace-card-title">Conversation Length Distribution</div>
+              <div class="chart-container" style="height:250px; position:relative">
+                <canvas id="conv-length-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="conversations-table-container" style="display:none">
+          <div class="table-wrapper">
+            <table class="conversation-table" id="conversations-list-table">
+              <thead>
+                <tr>
+                  <th data-sort="date" class="sortable sorted-desc">Date</th>
+                  <th data-sort="project" class="sortable">Project</th>
+                  <th data-sort="prompts" class="sortable">Prompts</th>
+                  <th data-sort="duration" class="sortable">Duration</th>
+                  <th data-sort="tokens" class="sortable">Tokens</th>
+                  <th data-sort="cost" class="sortable">Cost</th>
+                  <th data-sort="cache" class="sortable">Cache %</th>
+                  <th data-sort="tools" class="sortable">Tools</th>
+                  <th data-sort="score" class="sortable">Score</th>
+                </tr>
+              </thead>
+              <tbody id="conversations-list-tbody"></tbody>
+            </table>
+          </div>
+          <div id="conversations-show-more" style="display:none; text-align:center; padding:12px">
+            <button class="btn btn-secondary" id="conversations-show-more-btn">Show more</button>
+          </div>
+        </div>
+        <div id="conversations-empty" style="display:none">
+          <div class="empty-state-box">
+            <p class="empty-state">No conversation data found. Make sure your session data path is set correctly.</p>
+          </div>
+        </div>
+        <div id="conversations-loading" style="display:none">
+          <div class="loading-indicator">Loading conversations...</div>
         </div>
       </div>
     </main>

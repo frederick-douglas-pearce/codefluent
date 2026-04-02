@@ -244,3 +244,27 @@ class TestWebappXSSVectors:
     def test_no_inline_onclick_handlers(self):
         import re
         assert not re.search(r'onclick\s*=\s*"', self.src)
+
+    def test_conversations_tab_exists_in_html(self):
+        html_path = Path(__file__).parent.parent / "static" / "index.html"
+        html = html_path.read_text()
+        assert 'id="tab-conversations"' in html
+        assert 'id="conversations-list-table"' in html
+        assert 'data-tab="conversations"' in html
+
+    def test_conversations_tab_no_inline_onclick(self):
+        html_path = Path(__file__).parent.parent / "static" / "index.html"
+        html = html_path.read_text()
+        import re
+        conv_match = re.search(r'id="tab-conversations".*?</div>\s*</div>\s*</div>', html, re.DOTALL)
+        if conv_match:
+            assert not re.search(r'onclick\s*=', conv_match.group(0))
+
+    def test_conversations_list_escapes_dynamic_content(self):
+        assert 'escapeHtml(date)' in self.src
+        assert 'escapeHtml(dur)' in self.src
+        assert 'escapeHtml(tokens)' in self.src
+        assert 'escapeHtml(cost)' in self.src
+        assert 'escapeHtml(cache)' in self.src
+        assert 'escapeHtml(String(tools))' in self.src
+        assert 'escapeHtml(String(score))' in self.src

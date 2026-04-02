@@ -26,8 +26,12 @@ window.addEventListener('message', event => {
   if (msg.type === 'conversationsUpdated') {
     state.conversations = msg.data
     state.conversationAnalytics = null  // Invalidate so Usage tab re-fetches
+    state.conversationsExplorer = null  // Invalidate so Conversations tab re-fetches
     if (document.querySelector('.tab.active')?.dataset?.tab === 'usage') {
       loadConversationAnalytics()
+    }
+    if (document.querySelector('.tab.active')?.dataset?.tab === 'conversations') {
+      loadConversationsExplorer()
     }
     return
   }
@@ -67,6 +71,7 @@ let state = {
   quickwins: null,
   optimizer: null,
   conversationAnalytics: null,
+  conversationsExplorer: null,
   activeTab: 'fluency'
 }
 
@@ -279,6 +284,10 @@ function switchTab(tabName) {
 
   if (tabName === 'usage') {
     loadConversationAnalytics()
+  }
+
+  if (tabName === 'conversations') {
+    if (!state.conversationsExplorer) loadConversationsExplorer()
   }
 }
 
@@ -508,6 +517,27 @@ document.addEventListener('click', (e) => {
   if (target.id === 'conversation-table-show-more') {
     conversationTableShowCount += 10
     if (state.conversationAnalytics) renderConversationTokenTable(state.conversationAnalytics.conversations)
+    return
+  }
+
+  // Conversations list table sort headers
+  const convListSortTh = target.closest('#conversations-list-table th.sortable')
+  if (convListSortTh) {
+    const col = convListSortTh.dataset.sort
+    if (conversationsListSort.column === col) {
+      conversationsListSort.direction = conversationsListSort.direction === 'asc' ? 'desc' : 'asc'
+    } else {
+      conversationsListSort.column = col
+      conversationsListSort.direction = 'desc'
+    }
+    if (state.conversationsExplorer) renderConversationsListTable(state.conversationsExplorer.conversations)
+    return
+  }
+
+  // Conversations list show more
+  if (target.id === 'conversations-show-more-btn') {
+    conversationsListShowCount += 20
+    if (state.conversationsExplorer) renderConversationsListTable(state.conversationsExplorer.conversations)
     return
   }
 
@@ -1646,6 +1676,225 @@ function renderScoreCorrelation(conversations) {
       }
     })
   }
+}
+
+// --- Conversations Explorer ---
+let conversationsListSort = { column: 'date', direction: 'desc' }
+let conversationsListShowCount = 20
+
+function formatDuration(minutes) {
+  if (minutes < 1) return '<1m'
+  if (minutes < 60) return Math.round(minutes) + 'm'
+  const h = Math.floor(minutes / 60)
+  const m = Math.round(minutes % 60)
+  return m > 0 ? h + 'h ' + m + 'm' : h + 'h'
+}
+
+async function loadConversationsExplorer() {
+  document.getElementById('conversations-loading').style.display = ''
+  document.getElementById('conversations-summary-cards').style.display = 'none'
+  document.getElementById('conversations-charts-row').style.display = 'none'
+  document.getElementById('conversations-table-container').style.display = 'none'
+  document.getElementById('conversations-empty').style.display = 'none'
+  try {
+    state.conversationsExplorer = await postMessageRequest('getConversationAnalytics', {})
+    renderConversationsExplorer()
+  } catch (e) {
+    document.getElementById('conversations-loading').style.display = 'none'
+    document.getElementById('conversations-empty').style.display = ''
+  }
+}
+
+function renderConversationsExplorer() {
+  const data = state.conversationsExplorer
+  if (!data || !data.conversations || data.conversations.length === 0) {
+    document.getElementById('conversations-loading').style.display = 'none'
+    document.getElementById('conversations-empty').style.display = ''
+    return
+  }
+  document.getElementById('conversations-loading').style.display = 'none'
+  document.getElementById('conversations-empty').style.display = 'none'
+
+  renderConversationsSummaryCards(data)
+  renderConversationsCharts(data)
+  renderConversationsListTable(data.conversations)
+}
+
+function renderConversationsSummaryCards(data) {
+  const container = document.getElementById('conversations-summary-cards')
+  const convs = data.conversations
+  const total = convs.length
+  const avgPrompts = total > 0 ? Math.round(convs.reduce((s, c) => s + (c.prompt_count || 0), 0) / total) : 0
+
+  const durations = convs.filter(c => c.started_at && c.ended_at).map(c => {
+    return (new Date(c.ended_at) - new Date(c.started_at)) / 60000
+  })
+  const avgDuration = durations.length > 0 ? Math.round(durations.reduce((s, d) => s + d, 0) / durations.length) : 0
+
+  const scored = convs.filter(c => c.overall_score != null)
+  const avgScore = scored.length > 0 ? Math.round(scored.reduce((s, c) => s + c.overall_score, 0) / scored.length) : null
+
+  container.innerHTML = `
+    <div class="pace-card">
+      <div class="pace-card-title">Total Conversations</div>
+      <div class="pace-card-value">${escapeHtml(String(total))}</div>
+    </div>
+    <div class="pace-card">
+      <div class="pace-card-title">Avg Prompts</div>
+      <div class="pace-card-value">${escapeHtml(String(avgPrompts))}</div>
+      <div class="pace-card-detail">per conversation</div>
+    </div>
+    <div class="pace-card">
+      <div class="pace-card-title">Avg Duration</div>
+      <div class="pace-card-value">${escapeHtml(formatDuration(avgDuration))}</div>
+      <div class="pace-card-detail">per conversation</div>
+    </div>
+    <div class="pace-card">
+      <div class="pace-card-title">Avg Score</div>
+      <div class="pace-card-value">${avgScore != null ? escapeHtml(String(avgScore)) : '\u2014'}</div>
+      <div class="pace-card-detail">${escapeHtml(String(scored.length))} scored</div>
+    </div>
+  `
+  container.style.display = ''
+}
+
+function renderConversationsCharts(data) {
+  const convs = data.conversations
+
+  // 1. Conversations per week (bar chart)
+  destroyChart('convPerWeek')
+  const weeklyData = (data.weekly || []).sort((a, b) => a.week.localeCompare(b.week))
+  if (weeklyData.length > 0) {
+    charts.convPerWeek = new Chart(document.getElementById('conv-per-week-chart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: weeklyData.map(w => w.week),
+        datasets: [{
+          label: 'Conversations',
+          data: weeklyData.map(w => w.conversation_count),
+          backgroundColor: '#D97706',
+          borderRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, ticks: { stepSize: 1 } },
+          x: { ticks: { maxRotation: 45 } }
+        }
+      }
+    })
+  }
+
+  // 2. Conversation length distribution (histogram)
+  const bins = [
+    { label: '1-3', min: 1, max: 3, count: 0 },
+    { label: '4-10', min: 4, max: 10, count: 0 },
+    { label: '11-20', min: 11, max: 20, count: 0 },
+    { label: '21-50', min: 21, max: 50, count: 0 },
+    { label: '50+', min: 51, max: Infinity, count: 0 }
+  ]
+  convs.forEach(c => {
+    const pc = c.prompt_count || 0
+    const bin = bins.find(b => pc >= b.min && pc <= b.max)
+    if (bin) bin.count++
+  })
+
+  destroyChart('convLength')
+  charts.convLength = new Chart(document.getElementById('conv-length-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: bins.map(b => b.label + ' prompts'),
+      datasets: [{
+        label: 'Conversations',
+        data: bins.map(b => b.count),
+        backgroundColor: '#059669',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+        x: {}
+      }
+    }
+  })
+
+  document.getElementById('conversations-charts-row').style.display = ''
+}
+
+function renderConversationsListTable(conversations) {
+  const tbody = document.getElementById('conversations-list-tbody')
+  if (!tbody) return
+
+  const sorted = [...conversations].sort((a, b) => {
+    const col = conversationsListSort.column
+    const dir = conversationsListSort.direction === 'asc' ? 1 : -1
+    switch (col) {
+      case 'date': return dir * ((a.started_at || '').localeCompare(b.started_at || ''))
+      case 'project': return dir * ((a.project || '').localeCompare(b.project || ''))
+      case 'prompts': return dir * ((a.prompt_count || 0) - (b.prompt_count || 0))
+      case 'duration': {
+        const durA = (a.started_at && a.ended_at) ? new Date(a.ended_at) - new Date(a.started_at) : 0
+        const durB = (b.started_at && b.ended_at) ? new Date(b.ended_at) - new Date(b.started_at) : 0
+        return dir * (durA - durB)
+      }
+      case 'tokens': return dir * ((a.total_tokens || 0) - (b.total_tokens || 0))
+      case 'cost': return dir * ((a.estimated_cost || 0) - (b.estimated_cost || 0))
+      case 'cache': return dir * ((a.cache_hit_rate || 0) - (b.cache_hit_rate || 0))
+      case 'tools': return dir * ((a.tool_use_count || 0) - (b.tool_use_count || 0))
+      case 'score': return dir * ((a.overall_score ?? -1) - (b.overall_score ?? -1))
+      default: return 0
+    }
+  })
+
+  const visible = sorted.slice(0, conversationsListShowCount)
+  tbody.innerHTML = visible.map(c => {
+    const date = c.started_at ? new Date(c.started_at).toLocaleDateString() : '\u2014'
+    const dur = (c.started_at && c.ended_at) ? formatDuration((new Date(c.ended_at) - new Date(c.started_at)) / 60000) : '\u2014'
+    const tokens = (c.total_tokens || 0).toLocaleString()
+    const cost = c.estimated_cost != null && c.estimated_cost > 0 ? '$' + c.estimated_cost.toFixed(2) : '\u2014'
+    const cache = c.cache_hit_rate != null ? (c.cache_hit_rate * 100).toFixed(1) + '%' : '\u2014'
+    const tools = c.tool_use_count || 0
+    const score = c.overall_score != null ? c.overall_score : '\u2014'
+
+    return `<tr>
+      <td>${escapeHtml(date)}</td>
+      <td>${escapeHtml(c.project || '\u2014')}</td>
+      <td>${escapeHtml(String(c.prompt_count || 0))}</td>
+      <td>${escapeHtml(dur)}</td>
+      <td>${escapeHtml(tokens)}</td>
+      <td>${escapeHtml(cost)}</td>
+      <td>${escapeHtml(cache)}</td>
+      <td>${escapeHtml(String(tools))}</td>
+      <td>${escapeHtml(String(score))}</td>
+    </tr>`
+  }).join('')
+
+  // Update sort indicators
+  document.querySelectorAll('#conversations-list-table th').forEach(th => {
+    th.classList.remove('sorted-asc', 'sorted-desc')
+    if (th.dataset.sort === conversationsListSort.column) {
+      th.classList.add(conversationsListSort.direction === 'asc' ? 'sorted-asc' : 'sorted-desc')
+    }
+  })
+
+  // Show more button
+  const showMoreDiv = document.getElementById('conversations-show-more')
+  const remaining = sorted.length - conversationsListShowCount
+  if (remaining > 0) {
+    showMoreDiv.style.display = ''
+    document.getElementById('conversations-show-more-btn').textContent = `Show ${remaining} more conversation${remaining !== 1 ? 's' : ''}`
+  } else {
+    showMoreDiv.style.display = 'none'
+  }
+
+  document.getElementById('conversations-table-container').style.display = ''
 }
 
 // --- Load cached scores ---

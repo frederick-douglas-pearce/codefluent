@@ -224,7 +224,7 @@ The webview uses nonce-based CSP (`script-src 'nonce-{{nonce}}'`). This means:
 The webapp uses a project dropdown (populated from session data) to scope features to a specific project:
 - **Quick Wins:** Sends `project_path_encoded` to `/api/quickwins?project=...`, backend detects GitHub repo via `git remote get-url origin` in the decoded project directory
 - **Prompt Optimizer:** Sends `project_path_encoded` so the backend can find and score the project's `CLAUDE.md`
-- **Settings bar visibility per tab:** Data path shown only on Fluency Score; project dropdown on Fluency Score, Prompt Optimizer, Quick Wins, and Usage (for conversation analytics filtering); settings bar hidden on Recommendations
+- **Settings bar visibility per tab:** Data path shown only on Fluency Score; project dropdown on Fluency Score, Prompt Optimizer, Quick Wins, Usage, and Conversations; settings bar hidden on Recommendations
 - Frontend resolves `project_path_encoded` from session data via `getSelectedProjectEncoded()` (short name → encoded path lookup)
 
 ### Webapp API Endpoints (Conversation Redesign)
@@ -552,8 +552,8 @@ uv run pytest tests/ -v    # Runs all webapp tests (450 tests, 9 suites)
 
 Run before merging PRs that touch webapp UI or API. Start the server with `uv run uvicorn main:app --port 8001`, then verify:
 
-1. **Tab navigation** — all 5 tabs switch correctly, correct panel is visible
-2. **Settings bar visibility** — data path input shows only on Fluency Score; project dropdown shows on Fluency Score, Optimizer, Quick Wins, Usage; settings bar hidden on Recommendations
+1. **Tab navigation** — all 6 tabs switch correctly, correct panel is visible
+2. **Settings bar visibility** — data path input shows only on Fluency Score; project dropdown shows on Fluency Score, Optimizer, Quick Wins, Usage, Conversations; settings bar hidden on Recommendations
 3. **Project dropdown** — populates from session data when data path is set
 4. **Fluency scoring** — Run Scoring button triggers analysis, results display with score ring and behavior bars
 5. **Prompt Optimizer** — paste prompt, click Optimize, input/output scores and optimized prompt appear
