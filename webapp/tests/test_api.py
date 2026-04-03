@@ -614,6 +614,14 @@ class TestSessionAnalytics:
         assert "tokens_per_prompt" in session
         assert "cache_hit_rate" in session
 
+    def test_includes_ended_at_and_tool_use_count(self, client, mock_sessions_dir):
+        """Conversation analytics includes ended_at and tool_use_count for Conversations tab."""
+        resp = client.get("/api/conversation-analytics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        session = resp.json()["conversations"][0]
+        assert "ended_at" in session
+        assert "tool_use_count" in session
+
     def test_deprecated_endpoint_alias(self, client, mock_sessions_dir):
         """The old /api/session-analytics endpoint still works."""
         resp = client.get("/api/session-analytics", params={"data_path": str(mock_sessions_dir)})

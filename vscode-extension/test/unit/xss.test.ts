@@ -177,6 +177,31 @@ describe('XSS vector coverage in media/app.js (VS Code extension)', () => {
   test('renderOptimizerBehaviorTags escapes behavior labels', () => {
     expect(src).toMatch(/escapeHtml\(BEHAVIOR_LABELS\[key\]\s*\|\|\s*key\)/)
   })
+
+  test('conversations tab exists in webapp index.html', () => {
+    const htmlPath = path.resolve(__dirname, '../../../webapp/static/index.html')
+    const html = fs.readFileSync(htmlPath, 'utf-8')
+    expect(html).toContain('id="tab-conversations"')
+    expect(html).toContain('id="conversations-list-table"')
+    expect(html).toContain('data-tab="conversations"')
+  })
+
+  test('webapp conversations tab has no inline onclick handlers', () => {
+    const htmlPath = path.resolve(__dirname, '../../../webapp/static/index.html')
+    const html = fs.readFileSync(htmlPath, 'utf-8')
+    const convSection = html.match(/id="tab-conversations"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/)?.[0] || ''
+    expect(convSection).not.toMatch(/onclick\s*=/)
+  })
+
+  test('webapp renderConversationsListTable escapes dynamic content', () => {
+    expect(src).toContain('escapeHtml(date)')
+    expect(src).toContain('escapeHtml(dur)')
+    expect(src).toContain('escapeHtml(tokens)')
+    expect(src).toContain('escapeHtml(cost)')
+    expect(src).toContain('escapeHtml(cache)')
+    expect(src).toContain('escapeHtml(String(tools))')
+    expect(src).toContain('escapeHtml(String(score))')
+  })
 })
 
 // --- 3. Accessibility and Onboarding verification ---
@@ -352,5 +377,31 @@ describe('XSS vector coverage in webapp/static/app.js', () => {
 
   test('renderOptimizerBehaviorTags escapes behavior labels', () => {
     expect(src).toMatch(/escapeHtml\(BEHAVIOR_LABELS\[key\]\s*\|\|\s*key\)/)
+  })
+
+  test('conversations tab exists in extension index.html', () => {
+    const htmlPath = path.resolve(__dirname, '../../media/index.html')
+    const html = fs.readFileSync(htmlPath, 'utf-8')
+    expect(html).toContain('id="tab-conversations"')
+    expect(html).toContain('id="conversations-list-table"')
+    expect(html).toContain('id="conversations-summary-cards"')
+    expect(html).toContain('data-tab="conversations"')
+  })
+
+  test('extension conversations tab has no inline onclick handlers', () => {
+    const htmlPath = path.resolve(__dirname, '../../media/index.html')
+    const html = fs.readFileSync(htmlPath, 'utf-8')
+    const convSection = html.match(/id="tab-conversations"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/)?.[0] || ''
+    expect(convSection).not.toMatch(/onclick\s*=/)
+  })
+
+  test('extension renderConversationsListTable escapes dynamic content', () => {
+    expect(src).toContain('escapeHtml(date)')
+    expect(src).toContain('escapeHtml(dur)')
+    expect(src).toContain('escapeHtml(tokens)')
+    expect(src).toContain('escapeHtml(cost)')
+    expect(src).toContain('escapeHtml(cache)')
+    expect(src).toContain('escapeHtml(String(tools))')
+    expect(src).toContain('escapeHtml(String(score))')
   })
 })
