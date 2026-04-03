@@ -472,10 +472,20 @@ async def get_conversation_analytics(
                 config_behaviors = entry["fluency_behaviors"]
                 break  # Use first available config (typically one workspace)
 
+        # Build content_hash reverse index for score lookup fallback
+        score_hash_index = {}
+        for key, entry in cached_scores.items():
+            if entry.get("content_hash"):
+                score_hash_index[entry["content_hash"]] = key
+
         # Build session analytics with token data + optional score + cost
         analytics_sessions = []
         for s in sessions_list:
             score_entry = cached_scores.get(s["id"], {})
+            if not score_entry and s.get("content_hash"):
+                fallback_key = score_hash_index.get(s["content_hash"])
+                if fallback_key:
+                    score_entry = cached_scores.get(fallback_key, {})
             overall_score = None
             if "overall_score" in score_entry and score_entry.get("prompt_version") == SCORING_PROMPT_VERSION:
                 # Compute effective score: session behavior OR config behavior
@@ -715,13 +725,29 @@ async def score_conversations_endpoint(request: ScoreRequest):
     conv_data = get_all_conversations(data_dir)
     all_conversations = {c["id"]: c for c in conv_data["conversations"]}
 
+    # Build content_hash reverse index for fallback lookup
+    hash_index = {}
+    for key, entry in cached.items():
+        if entry.get("content_hash"):
+            hash_index[entry["content_hash"]] = key
+
     results = {}
     for sid in conversation_ids:
-        if sid in cached and not force and cached[sid].get("prompt_version") == SCORING_PROMPT_VERSION:
-            results[sid] = cached[sid]
+        session = all_conversations.get(sid)
+        content_hash = session.get("content_hash") if session else None
+
+        # Try direct ID lookup first, then content_hash fallback
+        cache_entry = cached.get(sid)
+        if not cache_entry and content_hash and content_hash in hash_index:
+            cache_entry = cached[hash_index[content_hash]]
+
+        if cache_entry and not force and cache_entry.get("prompt_version") == SCORING_PROMPT_VERSION:
+            results[sid] = cache_entry
+            # Re-key under new ID if found via hash fallback
+            if sid not in cached:
+                cached[sid] = cache_entry
             continue
 
-        session = all_conversations.get(sid)
         if not session or not session["user_prompts"]:
             continue
 
@@ -752,6 +778,8 @@ async def score_conversations_endpoint(request: ScoreRequest):
                 json.loads(text), sid, len(session.get("user_prompts", []))
             )
             score["prompt_version"] = SCORING_PROMPT_VERSION
+            if content_hash:
+                score["content_hash"] = content_hash
             results[sid] = score
             cached[sid] = score
         except Exception as e:

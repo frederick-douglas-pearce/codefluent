@@ -154,16 +154,23 @@ export function joinConversationsWithScores(
   configBehaviors?: Record<string, boolean>,
 ): EnrichedConversation[] {
   const scoreMap = new Map<string, number | null>()
+  // Build content_hash → score reverse index for fallback lookup
+  const hashScoreMap = new Map<string, number | null>()
   for (const score of scores) {
     if (score.overall_score == null) continue
     // Compute effective score: conversation behavior OR config behavior
+    let effectiveScore: number | null
     if (configBehaviors && score.fluency_behaviors) {
       const effectiveCount = BEHAVIORS.filter(b =>
         score.fluency_behaviors![b] || (CONFIG_ELIGIBLE_BEHAVIORS.has(b) && configBehaviors[b])
       ).length
-      scoreMap.set(score.session_id, Math.round((effectiveCount / BEHAVIORS.length) * 100))
+      effectiveScore = Math.round((effectiveCount / BEHAVIORS.length) * 100)
     } else {
-      scoreMap.set(score.session_id, score.overall_score ?? null)
+      effectiveScore = score.overall_score ?? null
+    }
+    scoreMap.set(score.session_id, effectiveScore)
+    if (score.content_hash) {
+      hashScoreMap.set(score.content_hash, effectiveScore)
     }
   }
 
@@ -192,9 +199,16 @@ export function joinConversationsWithScores(
       estimated_cost = cost.total_cost
     }
 
+    // Try direct ID lookup, then content_hash fallback
+    let overallScore = scoreMap.get(conv.id) ?? null
+    if (overallScore === null && 'content_hash' in conv) {
+      const hash = (conv as ParsedConversation).content_hash
+      if (hash) overallScore = hashScoreMap.get(hash) ?? null
+    }
+
     return {
       ...rest,
-      overall_score: scoreMap.get(conv.id) ?? null,
+      overall_score: overallScore,
       estimated_cost,
     }
   })

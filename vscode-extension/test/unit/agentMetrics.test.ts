@@ -4,6 +4,7 @@ import { ParsedConversation } from '../../src/conversation'
 function makeConversation(overrides: Partial<ParsedConversation> = {}): ParsedConversation {
   return {
     id: 'conv-1',
+    content_hash: '-home-test-project:2026-01-06T10:00:00Z:2:hello world',
     project: 'test-project',
     project_path_encoded: '-home-test-project',
     session_ids: ['sess-1'],

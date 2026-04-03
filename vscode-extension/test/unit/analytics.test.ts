@@ -321,6 +321,22 @@ describe('joinSessionsWithScores', () => {
     expect(result[0].total_tokens).toBe(5000)
     expect(result[0].overall_score).toBe(90)
   })
+
+  it('falls back to content_hash when ID does not match score', () => {
+    const contentHash = '-home-test-project:2026-01-06T10:00:00Z:2:hello'
+    // Conversation has a new ID but same content_hash
+    const session = {
+      ...makeSession({ id: 'new-id' }),
+      content_hash: contentHash,
+      prompt_count: 2,
+      prompt_timestamps: ['2026-01-06T10:00:00Z'],
+    }
+    // Score was cached under old ID but has content_hash
+    const scores = [makeScoreResult({ session_id: 'old-id', overall_score: 85, content_hash: contentHash })]
+    const result = joinSessionsWithScores([session as any], scores)
+
+    expect(result[0].overall_score).toBe(85)
+  })
 })
 
 // --- buildSessionAnalytics ---
