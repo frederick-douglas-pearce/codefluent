@@ -1689,6 +1689,20 @@ function renderScoreCorrelation(conversations) {
 let conversationsListSort = { column: 'date', direction: 'desc' }
 let conversationsListShowCount = 20
 
+// ISO 8601 week key — matches backend getISOWeekKey() in scoring.ts
+function getISOWeekKey(dateStr) {
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return null
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  const dayOfWeek = date.getUTCDay() || 7 // Monday=1, Sunday=7
+  // Set to nearest Thursday (ISO week date algorithm)
+  date.setUTCDate(date.getUTCDate() + 4 - dayOfWeek)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+  const year = date.getUTCFullYear()
+  return `${year}-W${String(weekNum).padStart(2, '0')}`
+}
+
 function formatDuration(minutes) {
   if (minutes < 1) return '<1m'
   if (minutes < 60) return Math.round(minutes) + 'm'
@@ -1938,15 +1952,8 @@ function renderConversationsCharts(data) {
   const weeklyPrompts = {}
   convs.forEach(c => {
     if (!c.started_at) return
-    const d = new Date(c.started_at)
-    const dayOfWeek = d.getUTCDay() || 7
-    const monday = new Date(d)
-    monday.setUTCDate(d.getUTCDate() - dayOfWeek + 1)
-    const year = monday.getUTCFullYear()
-    const jan1 = new Date(Date.UTC(year, 0, 1))
-    const daysSinceJan1 = Math.floor((monday - jan1) / 86400000)
-    const weekNum = Math.ceil((daysSinceJan1 + jan1.getUTCDay() + 1) / 7)
-    const key = `${year}-W${String(weekNum).padStart(2, '0')}`
+    const key = getISOWeekKey(c.started_at)
+    if (!key) return
     if (!weeklyPrompts[key]) weeklyPrompts[key] = { total: 0, count: 0 }
     weeklyPrompts[key].total += (c.prompt_count || 0)
     weeklyPrompts[key].count++
@@ -1983,6 +1990,92 @@ function renderConversationsCharts(data) {
       }
     })
   }
+
+  // 5. Inter-prompt gap distribution with threshold line
+  // Collect all prompt timestamps across all conversations, compute gaps between consecutive prompts
+  const allPromptTimestamps = []
+  convs.forEach(c => {
+    if (c.prompt_timestamps && c.prompt_timestamps.length > 0) {
+      c.prompt_timestamps.forEach(t => allPromptTimestamps.push(new Date(t).getTime()))
+    }
+  })
+  allPromptTimestamps.sort((a, b) => a - b)
+
+  const gapBins = [
+    { label: '<1m', min: 0, max: 1, count: 0 },
+    { label: '1-5m', min: 1, max: 5, count: 0 },
+    { label: '5-15m', min: 5, max: 15, count: 0 },
+    { label: '15-30m', min: 15, max: 30, count: 0 },
+    { label: '30m-1h', min: 30, max: 60, count: 0 },
+    { label: '1-2h', min: 60, max: 120, count: 0 },
+    { label: '2-4h', min: 120, max: 240, count: 0 },
+    { label: '4h+', min: 240, max: Infinity, count: 0 }
+  ]
+
+  for (let i = 1; i < allPromptTimestamps.length; i++) {
+    const gap = (allPromptTimestamps[i] - allPromptTimestamps[i - 1]) / 60000
+    const bin = gapBins.find(b => gap >= b.min && gap < b.max)
+    if (bin) bin.count++
+  }
+
+  const gapMinutes = DISPLAY_CONFIG?.['conversation.inactivityGapMinutes'] || 60
+
+  const thresholdLinePlugin = {
+    id: 'thresholdLine',
+    afterDraw(chart) {
+      const threshold = chart.options.plugins.thresholdLine?.value
+      if (threshold == null) return
+      const { ctx, chartArea, scales } = chart
+      const bins = chart.options.plugins.thresholdLine?.bins || []
+      const binIndex = bins.findIndex(b => threshold >= b.min && threshold < b.max)
+      if (binIndex < 0) return
+
+      const x = scales.x.getPixelForValue(binIndex)
+      const { top, bottom } = chartArea
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.setLineDash([6, 4])
+      ctx.lineWidth = 2
+      ctx.strokeStyle = '#DC2626'
+      ctx.moveTo(x, top)
+      ctx.lineTo(x, bottom)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = '#DC2626'
+      ctx.font = '11px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(threshold + 'm threshold', x, top + 12)
+      ctx.restore()
+    }
+  }
+
+  destroyChart('convGap')
+  charts.convGap = new Chart(document.getElementById('conv-gap-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: gapBins.map(b => b.label),
+      datasets: [{
+        label: 'Gaps',
+        data: gapBins.map(b => b.count),
+        backgroundColor: '#6366F1',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        thresholdLine: { value: gapMinutes, bins: gapBins }
+      },
+      scales: {
+        y: { beginAtZero: true },
+        x: {}
+      }
+    },
+    plugins: [thresholdLinePlugin]
+  })
 
   document.getElementById('conversations-charts-row').style.display = ''
 }

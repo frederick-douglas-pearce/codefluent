@@ -10,6 +10,7 @@ function makeConversation(overrides: Partial<ParsedConversation> = {}): ParsedCo
     started_at: '2026-01-06T10:00:00Z', // Monday of 2026-W02
     ended_at: '2026-01-06T11:00:00Z',
     user_prompts: ['hello world', 'fix the bug'],
+    prompt_timestamps: ['2026-01-06T10:00:00Z', '2026-01-06T10:30:00Z'],
     prompt_count: 2,
     user_message_count: 2,
     assistant_message_count: 3,

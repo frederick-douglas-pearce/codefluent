@@ -505,6 +505,7 @@ async def get_conversation_analytics(
                 "total_cache_read_tokens": s.get("total_cache_read_tokens", 0),
                 "tokens_per_prompt": s.get("tokens_per_prompt", 0),
                 "cache_hit_rate": s.get("cache_hit_rate", 0),
+                "prompt_timestamps": s.get("prompt_timestamps", []),
                 "overall_score": overall_score,
                 "estimated_cost": round(estimated_cost, 4),
             })

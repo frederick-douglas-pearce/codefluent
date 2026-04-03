@@ -253,6 +253,7 @@ class TestWebappXSSVectors:
         assert 'data-tab="conversations"' in html
         assert 'id="conv-duration-chart"' in html
         assert 'id="conv-avg-length-chart"' in html
+        assert 'id="conv-gap-chart"' in html
 
     def test_conversations_tab_no_inline_onclick(self):
         html_path = Path(__file__).parent.parent / "static" / "index.html"

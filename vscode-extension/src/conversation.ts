@@ -11,6 +11,7 @@ export interface ParsedConversation {
   started_at: string | null
   ended_at: string | null
   user_prompts: string[]
+  prompt_timestamps: string[]
   prompt_count: number
   user_message_count: number
   assistant_message_count: number
@@ -78,6 +79,7 @@ export function buildConversations(
 
   for (const bucket of buckets) {
     const userPrompts: string[] = []
+    const promptTimestamps: string[] = []
     let userMsgCount = 0
     let assistantMsgCount = 0
     let toolUseCount = 0
@@ -101,6 +103,7 @@ export function buildConversations(
       if (msg.type === 'user') {
         userMsgCount++
         if (msg.content) userPrompts.push(msg.content)
+        if (msg.content && msg.timestamp) promptTimestamps.push(msg.timestamp)
         if (msg.used_plan_mode) usedPlanMode = true
       } else if (msg.type === 'assistant') {
         assistantMsgCount++
@@ -146,6 +149,7 @@ export function buildConversations(
       started_at: timestamps[0] || null,
       ended_at: timestamps[timestamps.length - 1] || null,
       user_prompts: userPrompts,
+      prompt_timestamps: promptTimestamps.sort(),
       prompt_count: promptCount,
       user_message_count: userMsgCount,
       assistant_message_count: assistantMsgCount,

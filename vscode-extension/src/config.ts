@@ -24,10 +24,13 @@ export function getConfig<T extends ConfigValue = ConfigValue>(key: string): T {
 
 export function getDisplayConfig(): Record<string, ConfigValue> {
   const d = loadDefaults()
-  return Object.fromEntries(
+  const display = Object.fromEntries(
     Object.entries(d).filter(([k]) => k.startsWith('display.'))
       .map(([k, v]) => [k, getConfig(k)])
   )
+  // Include conversation gap config for frontend chart rendering
+  display['conversation.inactivityGapMinutes'] = getConfig('conversation.inactivityGapMinutes')
+  return display
 }
 
 /** For testing: reset cached defaults */

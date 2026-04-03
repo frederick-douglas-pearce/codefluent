@@ -43,8 +43,11 @@ def get_config(key: str):
 
 
 def get_display_config() -> dict:
-    """Return all display.* config values."""
-    return {k: get_config(k) for k in _load_defaults() if k.startswith("display.")}
+    """Return all display.* config values plus conversation gap config for frontend charts."""
+    result = {k: get_config(k) for k in _load_defaults() if k.startswith("display.")}
+    # Include conversation gap config for frontend chart rendering
+    result["conversation.inactivityGapMinutes"] = get_config("conversation.inactivityGapMinutes")
+    return result
 
 
 def reset_config_cache() -> None:

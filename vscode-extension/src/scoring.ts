@@ -427,7 +427,7 @@ export function getISOWeekKey(dateStr: string): { key: string; monday: string } 
   if (isNaN(d.getTime())) return null
 
   // ISO week: week starts on Monday, week 1 contains Jan 4
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
   const dayOfWeek = date.getUTCDay() || 7 // Monday=1, Sunday=7
   // Set to nearest Thursday (ISO week date algorithm)
   date.setUTCDate(date.getUTCDate() + 4 - dayOfWeek)
