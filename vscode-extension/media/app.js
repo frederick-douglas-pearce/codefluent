@@ -2040,18 +2040,18 @@ async function toggleConversationDetail(row) {
 
   const detailRow = document.createElement('tr')
   detailRow.className = 'conversation-detail-row'
-  detailRow.innerHTML = `<td colspan="9" class="conversation-detail"><em>Loading...</em></td>`
+  detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Loading...</em></td>`
   row.after(detailRow)
 
   try {
     const conv = await fetchConversationDetail(convId)
     if (!conv) {
-      detailRow.innerHTML = `<td colspan="9" class="conversation-detail"><em>Conversation not found</em></td>`
+      detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Conversation not found</em></td>`
       return
     }
-    detailRow.innerHTML = `<td colspan="9" class="conversation-detail">${renderConversationDetailContent(conv)}</td>`
+    detailRow.innerHTML = `<td colspan="9" class="conv-detail-content">${renderConversationDetailContent(conv)}</td>`
   } catch (e) {
-    detailRow.innerHTML = `<td colspan="9" class="conversation-detail"><em>Failed to load details</em></td>`
+    detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Failed to load details</em></td>`
   }
 }
 
