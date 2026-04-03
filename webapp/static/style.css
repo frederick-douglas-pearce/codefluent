@@ -986,7 +986,7 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 
 /* Conversation Detail View */
 .conv-detail-content {
-  padding: 16px 12px !important;
+  padding: 20px 24px !important;
   background: var(--bg-primary);
   border-bottom: 2px solid var(--accent);
   white-space: normal !important;
