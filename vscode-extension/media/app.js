@@ -1693,12 +1693,17 @@ function formatDuration(minutes) {
 async function loadConversationsExplorer() {
   document.getElementById('conversations-loading').style.display = ''
   document.getElementById('conversations-summary-cards').style.display = 'none'
+  document.getElementById('agent-metrics-section').style.display = 'none'
   document.getElementById('conversations-charts-row').style.display = 'none'
   document.getElementById('conversations-table-container').style.display = 'none'
   document.getElementById('conversations-empty').style.display = 'none'
   try {
     state.conversationsExplorer = await postMessageRequest('getConversationAnalytics', {})
     renderConversationsExplorer()
+    try {
+      const agentData = await postMessageRequest('getAgentMetrics', {})
+      renderAgentMetrics(agentData)
+    } catch (_e) { /* agent metrics are supplementary */ }
   } catch (e) {
     document.getElementById('conversations-loading').style.display = 'none'
     document.getElementById('conversations-empty').style.display = ''
@@ -1718,6 +1723,64 @@ function renderConversationsExplorer() {
   renderConversationsSummaryCards(data)
   renderConversationsCharts(data)
   renderConversationsListTable(data.conversations)
+}
+
+function renderAgentMetrics(metrics) {
+  const container = document.getElementById('agent-metrics-cards')
+  const section = document.getElementById('agent-metrics-section')
+  if (!metrics || !container || !section) return
+
+  // Destroy previous sparkline charts
+  for (let i = 0; i < 4; i++) {
+    destroyChart('agentSparkline' + i)
+  }
+
+  const items = [
+    { title: 'Tool Diversity', value: metrics.tool_diversity_index, detail: 'unique tools / total uses', key: 'tool_diversity_index', color: '#D97706' },
+    { title: 'Plan Mode Adoption', value: metrics.plan_mode_adoption_rate, detail: 'conversations using plan mode', key: 'plan_mode_adoption_rate', color: '#2563EB' },
+    { title: 'Cache Efficiency', value: metrics.avg_cache_hit_rate, detail: 'average cache hit rate', key: 'avg_cache_hit_rate', color: '#059669' },
+    { title: 'Thinking Utilization', value: metrics.thinking_utilization_rate, detail: 'responses using extended thinking', key: 'thinking_utilization_rate', color: '#7C3AED' }
+  ]
+
+  container.innerHTML = items.map(function(item, i) {
+    return '<div class="pace-card">' +
+      '<div class="pace-card-title">' + escapeHtml(item.title) + '</div>' +
+      '<div class="pace-card-value">' + escapeHtml(String(Math.round(item.value * 100))) + '%</div>' +
+      '<div class="pace-card-detail">' + escapeHtml(item.detail) + '</div>' +
+      '<div style="height:40px; margin-top:8px"><canvas id="agent-sparkline-' + i + '" style="width:100%; height:40px"></canvas></div>' +
+      '</div>'
+  }).join('')
+
+  if (metrics.weekly && metrics.weekly.length > 1) {
+    items.forEach(function(item, i) {
+      var canvas = document.getElementById('agent-sparkline-' + i)
+      if (!canvas) return
+      var weeks = metrics.weekly.map(function(w) { return w.week })
+      var values = metrics.weekly.map(function(w) { return w[item.key] })
+      charts['agentSparkline' + i] = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: weeks,
+          datasets: [{
+            data: values,
+            borderColor: item.color,
+            borderWidth: 1.5,
+            pointRadius: 0,
+            tension: 0.3,
+            fill: false
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          scales: { x: { display: false }, y: { display: false } }
+        }
+      })
+    })
+  }
+
+  section.style.display = ''
 }
 
 function renderConversationsSummaryCards(data) {

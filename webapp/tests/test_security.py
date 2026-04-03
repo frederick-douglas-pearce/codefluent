@@ -268,3 +268,23 @@ class TestWebappXSSVectors:
         assert 'escapeHtml(cache)' in self.src
         assert 'escapeHtml(String(tools))' in self.src
         assert 'escapeHtml(String(score))' in self.src
+
+    def test_agent_metrics_section_exists_in_html(self):
+        html_path = Path(__file__).parent.parent / "static" / "index.html"
+        html = html_path.read_text()
+        assert 'id="agent-metrics-section"' in html
+        assert 'id="agent-metrics-cards"' in html
+
+    def test_agent_metrics_section_no_inline_onclick(self):
+        html_path = Path(__file__).parent.parent / "static" / "index.html"
+        html = html_path.read_text()
+        import re
+        section_match = re.search(r'id="agent-metrics-section".*?</div>\s*</div>', html, re.DOTALL)
+        if section_match:
+            assert not re.search(r'onclick\s*=', section_match.group(0))
+
+    def test_render_agent_metrics_escapes_dynamic_content(self):
+        assert 'escapeHtml(item.title)' in self.src
+        assert 'escapeHtml(item.detail)' in self.src
+        import re
+        assert re.search(r'escapeHtml\(String\(Math\.round\(item\.value \* 100\)\)\)', self.src)

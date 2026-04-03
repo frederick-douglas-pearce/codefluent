@@ -934,6 +934,30 @@ class TestGetAgentMetrics:
         assert data["conversation_count"] == 0
         assert data["tool_diversity_index"] == 0
 
+    def test_returns_weekly_field(self, client, mock_sessions_dir):
+        resp = client.get("/api/agent-metrics", params={"data_path": str(mock_sessions_dir)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "weekly" in data
+        assert isinstance(data["weekly"], list)
+        if len(data["weekly"]) > 0:
+            week = data["weekly"][0]
+            assert "week" in week
+            assert "tool_diversity_index" in week
+            assert "plan_mode_adoption_rate" in week
+            assert "avg_cache_hit_rate" in week
+            assert "thinking_utilization_rate" in week
+            assert "conversation_count" in week
+
+    def test_weekly_empty_when_no_data(self, client, tmp_path):
+        empty_dir = tmp_path / "empty_sessions"
+        empty_dir.mkdir()
+        resp = client.get("/api/agent-metrics", params={"data_path": str(empty_dir)})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "weekly" in data
+        assert data["weekly"] == []
+
     def test_project_filtering(self, client, mock_sessions_dir):
         resp = client.get("/api/agent-metrics", params={
             "data_path": str(mock_sessions_dir),
