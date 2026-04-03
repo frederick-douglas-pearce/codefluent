@@ -9,6 +9,19 @@ from config import get_config
 CLAUDE_DATA_DIR = Path.home() / ".claude" / "projects"
 
 
+def compute_content_hash(
+    project_path_encoded: str,
+    prompt_timestamps: list[str],
+    started_at: str | None,
+    user_prompts: list[str],
+    prompt_count: int,
+) -> str:
+    """Compute a stable fingerprint for a conversation, independent of index position."""
+    ts = prompt_timestamps[0] if prompt_timestamps else (started_at or "unknown")
+    prefix = user_prompts[0][:50] if user_prompts else ""
+    return f"{project_path_encoded}:{ts}:{prompt_count}:{prefix}"
+
+
 def build_conversations(
     messages: list[dict],
     project: str,
@@ -120,8 +133,13 @@ def build_conversations(
         cache_hit_denom = total_cache_read_tokens + total_input_tokens + total_cache_creation_tokens
         cache_hit_rate = total_cache_read_tokens / cache_hit_denom if cache_hit_denom > 0 else 0
 
+        content_hash = compute_content_hash(
+            project_path_encoded, sorted(prompt_timestamps), timestamps[0] if timestamps else None, user_prompts, prompt_count,
+        )
+
         conversations.append({
             "id": "",  # filled below
+            "content_hash": content_hash,
             "project": project,
             "project_path_encoded": project_path_encoded,
             "session_ids": sorted(session_ids),

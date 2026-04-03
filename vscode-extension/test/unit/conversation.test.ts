@@ -5,7 +5,7 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { parseSessionMessages, TimestampedMessage } from '../../src/parser'
-import { buildConversations, getAllConversations, ParsedConversation } from '../../src/conversation'
+import { buildConversations, getAllConversations, ParsedConversation, computeContentHash } from '../../src/conversation'
 
 const mockFs = fs as jest.Mocked<typeof fs>
 const mockOs = os as jest.Mocked<typeof os>
@@ -1011,5 +1011,107 @@ describe('getAllConversations', () => {
 
     const result = getAllConversations()
     expect(result.conversations).toHaveLength(1)
+  })
+})
+
+// ─── computeContentHash ────────────────────────────────────────────
+
+describe('computeContentHash', () => {
+  it('produces a stable hash from conversation properties', () => {
+    const hash = computeContentHash(
+      '-home-test-project',
+      ['2026-03-01T10:00:00.000Z'],
+      '2026-03-01T10:00:00.000Z',
+      ['Hello world'],
+      1,
+    )
+    expect(hash).toBe('-home-test-project:2026-03-01T10:00:00.000Z:1:Hello world')
+  })
+
+  it('uses first prompt timestamp over started_at', () => {
+    const hash = computeContentHash(
+      '-home-proj',
+      ['2026-03-01T10:05:00.000Z', '2026-03-01T10:10:00.000Z'],
+      '2026-03-01T10:00:00.000Z',
+      ['First prompt', 'Second prompt'],
+      2,
+    )
+    expect(hash).toContain('2026-03-01T10:05:00.000Z')
+    expect(hash).not.toContain('2026-03-01T10:00:00.000Z')
+  })
+
+  it('falls back to started_at when no prompt timestamps', () => {
+    const hash = computeContentHash('-home-proj', [], '2026-03-01T10:00:00.000Z', ['Prompt'], 1)
+    expect(hash).toContain('2026-03-01T10:00:00.000Z')
+  })
+
+  it('uses "unknown" when no timestamps available', () => {
+    const hash = computeContentHash('-home-proj', [], null, ['Prompt'], 1)
+    expect(hash).toContain(':unknown:')
+  })
+
+  it('truncates first prompt to 50 chars', () => {
+    const longPrompt = 'A'.repeat(100)
+    const hash = computeContentHash('-proj', ['ts'], null, [longPrompt], 1)
+    expect(hash).toBe(`-proj:ts:1:${'A'.repeat(50)}`)
+  })
+
+  it('handles empty user_prompts', () => {
+    const hash = computeContentHash('-proj', ['ts'], null, [], 0)
+    expect(hash).toBe('-proj:ts:0:')
+  })
+})
+
+// ─── content_hash in buildConversations ─────────────────────────────
+
+describe('buildConversations content_hash', () => {
+  function makeTimestampedMsg(type: string, timestamp: string, content?: string, extra: Record<string, any> = {}): any {
+    return {
+      type,
+      timestamp,
+      session_id: 'sess-1',
+      file_position: 0,
+      content: type === 'user' ? (content || 'Prompt') : undefined,
+      ...extra,
+    }
+  }
+
+  it('sets content_hash on each conversation', () => {
+    const messages = [
+      makeTimestampedMsg('user', '2026-03-01T10:00:00.000Z', 'Hello'),
+      makeTimestampedMsg('assistant', '2026-03-01T10:00:05.000Z'),
+    ]
+    const convs = buildConversations(messages, 'proj', '-home-proj', 60)
+    expect(convs).toHaveLength(1)
+    expect(convs[0].content_hash).toBe('-home-proj:2026-03-01T10:00:00.000Z:1:Hello')
+  })
+
+  it('content_hash is stable regardless of index position', () => {
+    // Two conversations from same project
+    const messages = [
+      makeTimestampedMsg('user', '2026-03-01T10:00:00.000Z', 'First conv'),
+      makeTimestampedMsg('assistant', '2026-03-01T10:00:05.000Z'),
+      // 2 hour gap -> new conversation
+      makeTimestampedMsg('user', '2026-03-01T12:00:00.000Z', 'Second conv'),
+      makeTimestampedMsg('assistant', '2026-03-01T12:00:05.000Z'),
+    ]
+    const convs = buildConversations(messages, 'proj', '-home-proj', 60)
+    expect(convs).toHaveLength(2)
+    const hash0 = convs[0].content_hash
+    const hash1 = convs[1].content_hash
+
+    // Now prepend a new conversation (simulating new data shifting indices)
+    const newMessages = [
+      makeTimestampedMsg('user', '2026-03-01T08:00:00.000Z', 'New early conv'),
+      makeTimestampedMsg('assistant', '2026-03-01T08:00:05.000Z'),
+      ...messages,
+    ]
+    const newConvs = buildConversations(newMessages, 'proj', '-home-proj', 60)
+    expect(newConvs).toHaveLength(3)
+
+    // IDs shifted (old conv:000 is now conv:001), but content_hashes remain the same
+    expect(newConvs[1].id).not.toBe(convs[0].id) // same content, different index-based ID
+    expect(newConvs[1].content_hash).toBe(hash0) // old conv 0 is now at index 1
+    expect(newConvs[2].content_hash).toBe(hash1) // old conv 1 is now at index 2
   })
 })

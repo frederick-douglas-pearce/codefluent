@@ -209,6 +209,53 @@ describe('scoreSessions', () => {
     expect(results['sess-2'].overall_score).toBe(80)
   })
 
+  // --- content_hash cache fallback ---
+
+  it('falls back to content_hash when ID does not match cache', async () => {
+    const contentHash = '-home-test-project:2026-01-01T00:00:00Z:2:Implement a login page'
+    const cachedScore = makeScoreResult({ session_id: 'old-id', content_hash: contentHash, overall_score: 75 })
+    const client = makeMockClient(makeApiResponse({ overall_score: 50 }))
+    const sessions = {
+      'new-id': makeSession({ id: 'new-id', content_hash: contentHash } as any),
+    }
+
+    const { results, stats } = await scoreSessions(
+      ['new-id'], sessions, { 'old-id': cachedScore }, client
+    )
+
+    expect(client.messages.create).not.toHaveBeenCalled()
+    expect(results['new-id'].overall_score).toBe(75)
+    expect(stats.cached).toBe(1)
+  })
+
+  it('re-keys cached entry under new ID after hash fallback', async () => {
+    const contentHash = '-home-test-project:2026-01-01T00:00:00Z:2:Implement a login page'
+    const cachedScore = makeScoreResult({ session_id: 'old-id', content_hash: contentHash, overall_score: 75 })
+    const client = makeMockClient(makeApiResponse({ overall_score: 50 }))
+    const cached: Record<string, any> = { 'old-id': cachedScore }
+    const sessions = {
+      'new-id': makeSession({ id: 'new-id', content_hash: contentHash } as any),
+    }
+
+    await scoreSessions(['new-id'], sessions, cached, client)
+
+    expect(cached['new-id']).toBeDefined()
+    expect(cached['new-id'].overall_score).toBe(75)
+  })
+
+  it('stores content_hash on newly scored results', async () => {
+    const client = makeMockClient(makeApiResponse({ overall_score: 70 }))
+    const contentHash = '-home-test-project:2026-01-01T00:00:00Z:2:Implement a login page'
+    const sessions = {
+      'sess-1': makeSession({ content_hash: contentHash } as any),
+    }
+    const cached: Record<string, any> = {}
+
+    await scoreSessions(['sess-1'], sessions, cached, client)
+
+    expect(cached['sess-1'].content_hash).toBe(contentHash)
+  })
+
   // --- Skipping invalid sessions ---
 
   it('skips sessions not present in allSessions', async () => {

@@ -5,6 +5,7 @@ import { TimestampedMessage, SessionMessagesResult, parseSessionMessages } from 
 
 export interface ParsedConversation {
   id: string
+  content_hash: string
   project: string
   project_path_encoded: string
   session_ids: string[]
@@ -39,6 +40,18 @@ export interface ConversationsResult {
     total_prompts: number
     extracted_at: string
   }
+}
+
+export function computeContentHash(
+  projectPathEncoded: string,
+  promptTimestamps: string[],
+  startedAt: string | null,
+  userPrompts: string[],
+  promptCount: number,
+): string {
+  const ts = promptTimestamps[0] || startedAt || 'unknown'
+  const prefix = (userPrompts[0] || '').slice(0, 50)
+  return `${projectPathEncoded}:${ts}:${promptCount}:${prefix}`
 }
 
 export function buildConversations(
@@ -141,8 +154,13 @@ export function buildConversations(
     const cacheHitDenom = totalCacheReadTokens + totalInputTokens + totalCacheCreationTokens
     const cacheHitRate = cacheHitDenom > 0 ? totalCacheReadTokens / cacheHitDenom : 0
 
+    const contentHash = computeContentHash(
+      projectPathEncoded, promptTimestamps.sort(), timestamps[0] || null, userPrompts, promptCount,
+    )
+
     conversations.push({
       id: '', // filled below with zero-padded index
+      content_hash: contentHash,
       project,
       project_path_encoded: projectPathEncoded,
       session_ids: Array.from(sessionIds).sort(),

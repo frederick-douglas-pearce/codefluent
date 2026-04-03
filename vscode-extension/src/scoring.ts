@@ -23,6 +23,7 @@ export interface ScoreResult {
   low_confidence?: boolean
   suspicious_perfect_score?: boolean
   prompt_version?: string
+  content_hash?: string
 }
 
 export interface AggregateResult {
@@ -310,14 +311,32 @@ export async function scoreConversations(
   const results: Record<string, ScoreResult> = {}
   const stats: ScoringStats = { scored: 0, cached: 0, skipped_no_prompts: 0, errored: 0 }
 
+  // Build content_hash → cached key reverse index for fallback lookup
+  const hashIndex: Record<string, string> = {}
+  for (const [key, entry] of Object.entries(cached)) {
+    if (entry.content_hash) hashIndex[entry.content_hash] = key
+  }
+
   for (const cid of conversationIds) {
-    if (cached[cid] && !forceRescore && cached[cid].prompt_version === SCORING_PROMPT_VERSION) {
-      results[cid] = cached[cid]
+    const conversation = allConversations[cid]
+    const contentHash = (conversation as any)?.content_hash as string | undefined
+
+    // Try direct ID lookup first, then fallback to content_hash
+    let cacheEntry = cached[cid]
+    if (!cacheEntry && contentHash && hashIndex[contentHash]) {
+      cacheEntry = cached[hashIndex[contentHash]]
+    }
+
+    if (cacheEntry && !forceRescore && cacheEntry.prompt_version === SCORING_PROMPT_VERSION) {
+      results[cid] = cacheEntry
+      // Re-key under new ID if found via hash fallback
+      if (!cached[cid]) {
+        cached[cid] = cacheEntry
+      }
       stats.cached++
       continue
     }
 
-    const conversation = allConversations[cid]
     if (!conversation || !conversation.user_prompts.length) {
       stats.skipped_no_prompts++
       continue
@@ -351,6 +370,7 @@ export async function scoreConversations(
       }
       const score = validateScoreResult(JSON.parse(text), cid, conversation.user_prompts.length)
       score.prompt_version = SCORING_PROMPT_VERSION
+      if (contentHash) score.content_hash = contentHash
       results[cid] = score
       cached[cid] = score
       stats.scored++
@@ -452,9 +472,13 @@ export function computeScoreHistory(
   configBehaviors?: Record<string, boolean>,
 ): ScoreHistoryEntry[] {
   const timestamps = new Map<string, string>()
+  const hashTimestamps = new Map<string, string>()
   for (const c of conversations) {
     if (c.started_at) {
       timestamps.set(c.id, c.started_at)
+      if ('content_hash' in c && (c as ParsedConversation).content_hash) {
+        hashTimestamps.set((c as ParsedConversation).content_hash, c.started_at)
+      }
     }
   }
 
@@ -463,7 +487,11 @@ export function computeScoreHistory(
 
   for (const [sid, score] of Object.entries(scores)) {
     if (!score.fluency_behaviors) continue
-    const timestamp = timestamps.get(sid)
+    let timestamp = timestamps.get(sid)
+    // Fallback: match via content_hash when ID has shifted
+    if (!timestamp && score.content_hash) {
+      timestamp = hashTimestamps.get(score.content_hash)
+    }
     if (!timestamp) continue
 
     const weekInfo = getISOWeekKey(timestamp)

@@ -739,3 +739,69 @@ class TestGetAllConversations:
         (tmp_path / "stray.txt").write_text("not a dir")
         result = get_all_conversations(data_dir=tmp_path, gap_minutes=60)
         assert result["metadata"]["total_conversations"] == 1
+
+
+# ─── compute_content_hash ───────────────────────────────────────────
+
+class TestComputeContentHash:
+    def test_basic_hash(self):
+        from conversations import compute_content_hash
+        h = compute_content_hash("-home-proj", ["2026-03-01T10:00:00.000Z"], "2026-03-01T10:00:00.000Z", ["Hello"], 1)
+        assert h == "-home-proj:2026-03-01T10:00:00.000Z:1:Hello"
+
+    def test_uses_first_prompt_timestamp(self):
+        from conversations import compute_content_hash
+        h = compute_content_hash("-proj", ["2026-03-01T10:05:00.000Z", "2026-03-01T10:10:00.000Z"], "2026-03-01T10:00:00.000Z", ["P1", "P2"], 2)
+        assert "10:05:00" in h
+        assert "10:00:00" not in h
+
+    def test_falls_back_to_started_at(self):
+        from conversations import compute_content_hash
+        h = compute_content_hash("-proj", [], "2026-03-01T10:00:00.000Z", ["P"], 1)
+        assert "2026-03-01T10:00:00.000Z" in h
+
+    def test_unknown_when_no_timestamps(self):
+        from conversations import compute_content_hash
+        h = compute_content_hash("-proj", [], None, ["P"], 1)
+        assert ":unknown:" in h
+
+    def test_truncates_first_prompt(self):
+        from conversations import compute_content_hash
+        h = compute_content_hash("-proj", ["ts"], None, ["A" * 100], 1)
+        assert h == f"-proj:ts:1:{'A' * 50}"
+
+
+class TestContentHashInBuildConversations:
+    def test_content_hash_set_on_conversations(self):
+        msgs = [
+            _make_user_message("2026-03-01T10:00:00.000Z", "Hello"),
+            _make_assistant_message("2026-03-01T10:00:05.000Z"),
+        ]
+        convs = build_conversations(msgs, "proj", "-home-proj", 60)
+        assert len(convs) == 1
+        assert convs[0]["content_hash"] == "-home-proj:2026-03-01T10:00:00.000Z:1:Hello"
+
+    def test_content_hash_stable_after_reindex(self):
+        """When new data shifts indices, content_hash stays the same."""
+        msgs = [
+            _make_user_message("2026-03-01T10:00:00.000Z", "First"),
+            _make_assistant_message("2026-03-01T10:00:05.000Z"),
+            _make_user_message("2026-03-01T12:00:00.000Z", "Second"),
+            _make_assistant_message("2026-03-01T12:00:05.000Z"),
+        ]
+        convs = build_conversations(msgs, "proj", "-home-proj", 60)
+        assert len(convs) == 2
+        hash0, hash1 = convs[0]["content_hash"], convs[1]["content_hash"]
+
+        # Add a new earlier conversation
+        new_msgs = [
+            _make_user_message("2026-03-01T08:00:00.000Z", "New early"),
+            _make_assistant_message("2026-03-01T08:00:05.000Z"),
+        ] + msgs
+        new_convs = build_conversations(new_msgs, "proj", "-home-proj", 60)
+        assert len(new_convs) == 3
+
+        # IDs shifted (old conv:000 is now conv:001) but hashes stayed the same
+        assert new_convs[1]["id"] != convs[0]["id"]  # same content, different index-based ID
+        assert new_convs[1]["content_hash"] == hash0
+        assert new_convs[2]["content_hash"] == hash1
