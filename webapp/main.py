@@ -23,7 +23,7 @@ import subprocess
 from anthropic import Anthropic
 from extract_prompts import get_all_sessions
 from conversations import get_all_conversations
-from agent_metrics import compute_agent_metrics
+from agent_metrics import compute_agent_metrics, compute_weekly_agent_metrics
 
 BEHAVIORS = [
     "iteration_and_refinement", "clarifying_goals", "specifying_format",
@@ -548,7 +548,9 @@ async def get_agent_metrics(
         conversations = conv_data.get("conversations", [])
         if project:
             conversations = [c for c in conversations if c.get("project") == project]
-        return compute_agent_metrics(conversations)
+        result = compute_agent_metrics(conversations)
+        result["weekly"] = compute_weekly_agent_metrics(conversations)
+        return result
     except HTTPException:
         raise
     except Exception as e:

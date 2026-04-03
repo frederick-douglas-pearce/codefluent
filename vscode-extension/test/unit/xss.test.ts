@@ -404,4 +404,24 @@ describe('XSS vector coverage in webapp/static/app.js', () => {
     expect(src).toContain('escapeHtml(String(tools))')
     expect(src).toContain('escapeHtml(String(score))')
   })
+
+  test('agent-metrics-section exists in extension index.html', () => {
+    const htmlPath = path.resolve(__dirname, '../../media/index.html')
+    const html = fs.readFileSync(htmlPath, 'utf-8')
+    expect(html).toContain('id="agent-metrics-section"')
+    expect(html).toContain('id="agent-metrics-cards"')
+  })
+
+  test('agent-metrics-section has no inline onclick handlers', () => {
+    const htmlPath = path.resolve(__dirname, '../../media/index.html')
+    const html = fs.readFileSync(htmlPath, 'utf-8')
+    const section = html.match(/id="agent-metrics-section"[\s\S]*?<\/div>\s*<\/div>/)?.[0] || ''
+    expect(section).not.toMatch(/onclick\s*=/)
+  })
+
+  test('renderAgentMetrics escapes dynamic content', () => {
+    expect(src).toContain('escapeHtml(item.title)')
+    expect(src).toContain('escapeHtml(item.detail)')
+    expect(src).toMatch(/escapeHtml\(String\(Math\.round\(item\.value \* 100\)\)\)/)
+  })
 })

@@ -10,7 +10,7 @@ import { ScoreCache } from './cache'
 import { DataCache } from './dataCache'
 import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
 import { buildConversationAnalytics } from './analytics'
-import { computeAgentMetrics, AgentMetrics } from './agentMetrics'
+import { computeAgentMetrics, computeWeeklyAgentMetrics, AgentMetrics, WeeklyAgentMetrics } from './agentMetrics'
 import { getConfig, getDisplayConfig } from './config'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
@@ -412,7 +412,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     return response
   }
 
-  private async handleGetAgentMetrics(payload?: { project?: string }): Promise<AgentMetrics> {
+  private async handleGetAgentMetrics(payload?: { project?: string }): Promise<AgentMetrics & { weekly: WeeklyAgentMetrics[] }> {
     const project = payload?.project ?? this.getWorkspaceProjectName()
     const convData = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
     this.dataCache.setConversations(convData)
@@ -420,7 +420,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     if (project) {
       conversations = conversations.filter((c: any) => c.project === project)
     }
-    return computeAgentMetrics(conversations)
+    const metrics = computeAgentMetrics(conversations)
+    const weekly = computeWeeklyAgentMetrics(conversations)
+    return { ...metrics, weekly }
   }
 
   private async handleGetConversationAnalytics(payload?: { project?: string }) {
