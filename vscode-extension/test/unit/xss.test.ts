@@ -202,6 +202,17 @@ describe('XSS vector coverage in media/app.js (VS Code extension)', () => {
     expect(src).toContain('escapeHtml(String(tools))')
     expect(src).toContain('escapeHtml(String(score))')
   })
+
+  test('webapp renderConversationDetailContent escapes all user content', () => {
+    expect(src).toContain('escapeHtml(model)')
+    expect(src).toContain('escapeHtml(branch)')
+    expect(src).toContain('escapeHtml(version)')
+    expect(src).toContain('escapeHtml(planMode)')
+    expect(src).toContain('escapeHtml(started)')
+    expect(src).toContain('escapeHtml(ended)')
+    expect(src).toContain('escapeHtml(t)')  // tool name
+    expect(src).toContain('escapeHtml(p)')  // prompt text
+  })
 })
 
 // --- 3. Accessibility and Onboarding verification ---
@@ -423,5 +434,16 @@ describe('XSS vector coverage in webapp/static/app.js', () => {
     expect(src).toContain('escapeHtml(item.title)')
     expect(src).toContain('escapeHtml(item.detail)')
     expect(src).toMatch(/escapeHtml\(String\(Math\.round\(item\.value \* 100\)\)\)/)
+  })
+
+  test('extension renderConversationDetailContent escapes all user content', () => {
+    expect(src).toContain('escapeHtml(model)')
+    expect(src).toContain('escapeHtml(branch)')
+    expect(src).toContain('escapeHtml(version)')
+    expect(src).toContain('escapeHtml(planMode)')
+    expect(src).toContain('escapeHtml(started)')
+    expect(src).toContain('escapeHtml(ended)')
+    expect(src).toContain('escapeHtml(t)')  // tool name
+    expect(src).toContain('escapeHtml(p)')  // prompt text
   })
 })

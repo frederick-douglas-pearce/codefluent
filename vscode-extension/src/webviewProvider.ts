@@ -180,6 +180,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getSessionAnalytics': // deprecated alias
           data = await this.handleGetConversationAnalytics(payload)
           break
+        case 'getConversationDetail':
+          data = await this.handleGetConversationDetail(payload)
+          break
         case 'getAgentMetrics':
           data = await this.handleGetAgentMetrics(payload)
           break
@@ -445,6 +448,14 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const configBehaviors = configEntry?.fluency_behaviors as Record<string, boolean> | undefined
 
     return buildConversationAnalytics(conversations, scores as any[], configBehaviors)
+  }
+
+  private async handleGetConversationDetail(payload?: { conversationId?: string }) {
+    const conversationId = payload?.conversationId
+    if (!conversationId) return null
+    const convData = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+    const conversations = convData.conversations || []
+    return conversations.find((c: any) => c.id === conversationId) || null
   }
 
   private mergeWithConfig(

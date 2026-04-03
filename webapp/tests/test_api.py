@@ -879,6 +879,64 @@ class TestSessionAnalytics:
         assert "model" in session
 
 
+class TestConversationDetail:
+    def test_returns_full_conversation_with_prompts_and_tools(self, client, mock_sessions_dir):
+        # First get a valid conversation ID
+        conv_resp = client.get("/api/conversations", params={"data_path": str(mock_sessions_dir)})
+        assert conv_resp.status_code == 200
+        conversation_id = conv_resp.json()["conversations"][0]["id"]
+
+        resp = client.get("/api/conversation-detail", params={
+            "conversation_id": conversation_id,
+            "data_path": str(mock_sessions_dir),
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == conversation_id
+        assert "user_prompts" in data
+        assert "tools_used" in data
+        assert isinstance(data["user_prompts"], list)
+        assert isinstance(data["tools_used"], list)
+        assert len(data["user_prompts"]) > 0
+
+    def test_returns_404_for_unknown_id(self, client, mock_sessions_dir):
+        resp = client.get("/api/conversation-detail", params={
+            "conversation_id": "nonexistent-id",
+            "data_path": str(mock_sessions_dir),
+        })
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"].lower()
+
+    def test_requires_conversation_id(self, client):
+        resp = client.get("/api/conversation-detail")
+        assert resp.status_code == 422  # FastAPI validation error (missing required param)
+
+    def test_rejects_relative_data_path(self, client):
+        resp = client.get("/api/conversation-detail", params={
+            "conversation_id": "some-id",
+            "data_path": "relative/path",
+        })
+        assert resp.status_code == 400
+        assert "absolute" in resp.json()["detail"].lower()
+
+    def test_includes_metadata_fields(self, client, mock_sessions_dir):
+        conv_resp = client.get("/api/conversations", params={"data_path": str(mock_sessions_dir)})
+        conversation_id = conv_resp.json()["conversations"][0]["id"]
+
+        resp = client.get("/api/conversation-detail", params={
+            "conversation_id": conversation_id,
+            "data_path": str(mock_sessions_dir),
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "model" in data
+        assert "started_at" in data
+        assert "ended_at" in data
+        assert "project" in data
+        assert "tool_use_count" in data
+        assert "prompt_count" in data
+
+
 class TestGetUsage:
     def test_returns_empty_when_no_data(self, client):
         resp = client.get("/api/usage")
