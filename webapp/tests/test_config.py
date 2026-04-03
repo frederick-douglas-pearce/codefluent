@@ -58,11 +58,11 @@ class TestGetConfig:
 
 
 class TestGetDisplayConfig:
-    def test_returns_only_display_keys(self):
+    def test_returns_display_keys_plus_conversation_gap(self):
         display = get_display_config()
         assert len(display) > 0
         for key in display:
-            assert key.startswith("display.")
+            assert key.startswith("display.") or key == "conversation.inactivityGapMinutes"
 
     def test_includes_all_display_keys(self):
         display = get_display_config()
@@ -70,6 +70,10 @@ class TestGetDisplayConfig:
         assert "display.scoreColorAmber" in display
         assert "display.sparklineMaxWeeks" in display
         assert "display.dataCacheTtlMinutes" in display
+
+    def test_includes_conversation_gap_for_frontend_charts(self):
+        display = get_display_config()
+        assert display["conversation.inactivityGapMinutes"] == 60
 
 
 class TestDefaultsIntegrity:

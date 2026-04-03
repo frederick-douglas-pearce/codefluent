@@ -186,6 +186,7 @@ describe('XSS vector coverage in media/app.js (VS Code extension)', () => {
     expect(html).toContain('data-tab="conversations"')
     expect(html).toContain('id="conv-duration-chart"')
     expect(html).toContain('id="conv-avg-length-chart"')
+    expect(html).toContain('id="conv-gap-chart"')
   })
 
   test('webapp conversations tab has no inline onclick handlers', () => {
@@ -401,6 +402,7 @@ describe('XSS vector coverage in webapp/static/app.js', () => {
     expect(html).toContain('data-tab="conversations"')
     expect(html).toContain('id="conv-duration-chart"')
     expect(html).toContain('id="conv-avg-length-chart"')
+    expect(html).toContain('id="conv-gap-chart"')
   })
 
   test('extension conversations tab has no inline onclick handlers', () => {

@@ -1984,6 +1984,92 @@ function renderConversationsCharts(data) {
     })
   }
 
+  // 5. Inter-prompt gap distribution with threshold line
+  // Collect all prompt timestamps across all conversations, compute gaps between consecutive prompts
+  const allPromptTimestamps = []
+  convs.forEach(c => {
+    if (c.prompt_timestamps && c.prompt_timestamps.length > 0) {
+      c.prompt_timestamps.forEach(t => allPromptTimestamps.push(new Date(t).getTime()))
+    }
+  })
+  allPromptTimestamps.sort((a, b) => a - b)
+
+  const gapBins = [
+    { label: '<1m', min: 0, max: 1, count: 0 },
+    { label: '1-5m', min: 1, max: 5, count: 0 },
+    { label: '5-15m', min: 5, max: 15, count: 0 },
+    { label: '15-30m', min: 15, max: 30, count: 0 },
+    { label: '30m-1h', min: 30, max: 60, count: 0 },
+    { label: '1-2h', min: 60, max: 120, count: 0 },
+    { label: '2-4h', min: 120, max: 240, count: 0 },
+    { label: '4h+', min: 240, max: Infinity, count: 0 }
+  ]
+
+  for (let i = 1; i < allPromptTimestamps.length; i++) {
+    const gap = (allPromptTimestamps[i] - allPromptTimestamps[i - 1]) / 60000
+    const bin = gapBins.find(b => gap >= b.min && gap < b.max)
+    if (bin) bin.count++
+  }
+
+  const gapMinutes = DISPLAY_CONFIG?.['conversation.inactivityGapMinutes'] || 60
+
+  const thresholdLinePlugin = {
+    id: 'thresholdLine',
+    afterDraw(chart) {
+      const threshold = chart.options.plugins.thresholdLine?.value
+      if (threshold == null) return
+      const { ctx, chartArea, scales } = chart
+      const bins = chart.options.plugins.thresholdLine?.bins || []
+      const binIndex = bins.findIndex(b => threshold >= b.min && threshold < b.max)
+      if (binIndex < 0) return
+
+      const x = scales.x.getPixelForValue(binIndex)
+      const { top, bottom } = chartArea
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.setLineDash([6, 4])
+      ctx.lineWidth = 2
+      ctx.strokeStyle = '#DC2626'
+      ctx.moveTo(x, top)
+      ctx.lineTo(x, bottom)
+      ctx.stroke()
+      ctx.setLineDash([])
+      ctx.fillStyle = '#DC2626'
+      ctx.font = '11px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(threshold + 'm threshold', x, top - 8)
+      ctx.restore()
+    }
+  }
+
+  destroyChart('convGap')
+  charts.convGap = new Chart(document.getElementById('conv-gap-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: gapBins.map(b => b.label),
+      datasets: [{
+        label: 'Gaps',
+        data: gapBins.map(b => b.count),
+        backgroundColor: '#6366F1',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        thresholdLine: { value: gapMinutes, bins: gapBins }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+        x: {}
+      }
+    },
+    plugins: [thresholdLinePlugin]
+  })
+
   document.getElementById('conversations-charts-row').style.display = ''
 }
 

@@ -53,6 +53,7 @@ def build_conversations(
 
     for bucket in buckets:
         user_prompts = []
+        prompt_timestamps: list[str] = []
         user_msg_count = 0
         assistant_msg_count = 0
         tool_use_count = 0
@@ -79,6 +80,8 @@ def build_conversations(
                 user_msg_count += 1
                 if msg.get("content"):
                     user_prompts.append(msg["content"])
+                    if msg.get("timestamp"):
+                        prompt_timestamps.append(msg["timestamp"])
                 if msg.get("used_plan_mode"):
                     used_plan_mode = True
             elif msg["type"] == "assistant":
@@ -125,6 +128,7 @@ def build_conversations(
             "started_at": timestamps[0] if timestamps else None,
             "ended_at": timestamps[-1] if timestamps else None,
             "user_prompts": user_prompts,
+            "prompt_timestamps": sorted(prompt_timestamps),
             "prompt_count": prompt_count,
             "user_message_count": user_msg_count,
             "assistant_message_count": assistant_msg_count,

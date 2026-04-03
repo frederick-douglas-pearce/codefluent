@@ -47,12 +47,12 @@ describe('getConfig', () => {
 })
 
 describe('getDisplayConfig', () => {
-  it('returns only display.* keys', () => {
+  it('returns display.* keys plus conversation gap config', () => {
     const displayConfig = getDisplayConfig()
     const keys = Object.keys(displayConfig)
     expect(keys.length).toBeGreaterThan(0)
     for (const key of keys) {
-      expect(key).toMatch(/^display\./)
+      expect(key).toMatch(/^(display\.|conversation\.inactivityGapMinutes)/)
     }
   })
 
@@ -62,6 +62,11 @@ describe('getDisplayConfig', () => {
     expect('display.scoreColorAmber' in displayConfig).toBe(true)
     expect('display.sparklineMaxWeeks' in displayConfig).toBe(true)
     expect('display.dataCacheTtlMinutes' in displayConfig).toBe(true)
+  })
+
+  it('includes conversation.inactivityGapMinutes for frontend charts', () => {
+    const displayConfig = getDisplayConfig()
+    expect(displayConfig['conversation.inactivityGapMinutes']).toBe(60)
   })
 
   it('applies VS Code overrides for display keys', () => {
