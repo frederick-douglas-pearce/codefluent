@@ -1689,6 +1689,20 @@ function renderScoreCorrelation(conversations) {
 let conversationsListSort = { column: 'date', direction: 'desc' }
 let conversationsListShowCount = 20
 
+// ISO 8601 week key — matches backend getISOWeekKey() in scoring.ts
+function getISOWeekKey(dateStr) {
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return null
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()))
+  const dayOfWeek = date.getUTCDay() || 7 // Monday=1, Sunday=7
+  // Set to nearest Thursday (ISO week date algorithm)
+  date.setUTCDate(date.getUTCDate() + 4 - dayOfWeek)
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1))
+  const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+  const year = date.getUTCFullYear()
+  return `${year}-W${String(weekNum).padStart(2, '0')}`
+}
+
 function formatDuration(minutes) {
   if (minutes < 1) return '<1m'
   if (minutes < 60) return Math.round(minutes) + 'm'
@@ -1938,15 +1952,8 @@ function renderConversationsCharts(data) {
   const weeklyPrompts = {}
   convs.forEach(c => {
     if (!c.started_at) return
-    const d = new Date(c.started_at)
-    const dayOfWeek = d.getUTCDay() || 7
-    const monday = new Date(d)
-    monday.setUTCDate(d.getUTCDate() - dayOfWeek + 1)
-    const year = monday.getUTCFullYear()
-    const jan1 = new Date(Date.UTC(year, 0, 1))
-    const daysSinceJan1 = Math.floor((monday - jan1) / 86400000)
-    const weekNum = Math.ceil((daysSinceJan1 + jan1.getUTCDay() + 1) / 7)
-    const key = `${year}-W${String(weekNum).padStart(2, '0')}`
+    const key = getISOWeekKey(c.started_at)
+    if (!key) return
     if (!weeklyPrompts[key]) weeklyPrompts[key] = { total: 0, count: 0 }
     weeklyPrompts[key].total += (c.prompt_count || 0)
     weeklyPrompts[key].count++
