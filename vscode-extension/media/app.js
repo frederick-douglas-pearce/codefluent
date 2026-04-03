@@ -2038,7 +2038,7 @@ function renderConversationsCharts(data) {
       ctx.fillStyle = '#DC2626'
       ctx.font = '11px sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText(threshold + 'm threshold', x, top - 8)
+      ctx.fillText(threshold + 'm threshold', x, top + 12)
       ctx.restore()
     }
   }
@@ -2063,7 +2063,7 @@ function renderConversationsCharts(data) {
         thresholdLine: { value: gapMinutes, bins: gapBins }
       },
       scales: {
-        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+        y: { beginAtZero: true },
         x: {}
       }
     },
