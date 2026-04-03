@@ -989,10 +989,13 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   padding: 16px 12px !important;
   background: var(--bg-primary);
   border-bottom: 2px solid var(--accent);
+  white-space: normal !important;
+  word-break: break-word;
 }
 .conversation-detail-row td {
   padding: 0 !important;
   border-bottom: none !important;
+  white-space: normal !important;
 }
 .detail-grid {
   display: flex;
@@ -1017,6 +1020,11 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
 .detail-meta strong {
   color: var(--text-primary);
 }
+.detail-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
 .detail-tools .tool-tag {
   display: inline-block;
   padding: 2px 8px;
@@ -1025,7 +1033,6 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
-  margin: 2px;
 }
 .detail-prompts {
   max-height: 300px;
