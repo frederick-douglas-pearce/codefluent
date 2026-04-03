@@ -541,6 +541,13 @@ document.addEventListener('click', (e) => {
     return
   }
 
+  // Conversation row click for detail view
+  const convRow = target.closest('#conversations-list-tbody tr')
+  if (convRow && !target.closest('.conversation-detail-row')) {
+    toggleConversationDetail(convRow)
+    return
+  }
+
   // Conversation item expand/collapse
   const conversationItem = target.closest('.conversation-item')
   if (conversationItem) {
@@ -1891,7 +1898,10 @@ function renderConversationsCharts(data) {
   document.getElementById('conversations-charts-row').style.display = ''
 }
 
+let expandedConversationId = null
+
 function renderConversationsListTable(conversations) {
+  expandedConversationId = null
   const tbody = document.getElementById('conversations-list-tbody')
   if (!tbody) return
 
@@ -1926,7 +1936,7 @@ function renderConversationsListTable(conversations) {
     const tools = c.tool_use_count || 0
     const score = c.overall_score != null ? c.overall_score : '\u2014'
 
-    return `<tr>
+    return `<tr data-conv-id="${escapeHtml(c.id || c.session_id || '')}">
       <td>${escapeHtml(date)}</td>
       <td>${escapeHtml(c.project || '\u2014')}</td>
       <td>${escapeHtml(String(c.prompt_count || 0))}</td>
@@ -1958,6 +1968,91 @@ function renderConversationsListTable(conversations) {
   }
 
   document.getElementById('conversations-table-container').style.display = ''
+}
+
+// --- Conversation Detail View ---
+async function fetchConversationDetail(convId) {
+  return await postMessageRequest('getConversationDetail', { conversationId: convId })
+}
+
+function renderConversationDetailContent(conv) {
+  const model = conv.model || '\u2014'
+  const branch = conv.git_branch || '\u2014'
+  const version = conv.claude_code_version || '\u2014'
+  const planMode = conv.used_plan_mode ? 'Yes' : 'No'
+  const thinking = conv.thinking_count || 0
+  const started = conv.started_at ? new Date(conv.started_at).toLocaleString() : '\u2014'
+  const ended = conv.ended_at ? new Date(conv.ended_at).toLocaleString() : '\u2014'
+
+  const toolsHtml = (conv.tools_used || []).map(t =>
+    `<span class="tool-tag">${escapeHtml(t)}</span>`
+  ).join('') || '<em>No tools used</em>'
+
+  const promptsHtml = (conv.user_prompts || []).map((p, i) =>
+    `<div class="prompt-item">
+      <span class="prompt-number">${i + 1}.</span>
+      <span class="prompt-text">${escapeHtml(p)}</span>
+    </div>`
+  ).join('') || '<em>No prompts</em>'
+
+  return `
+    <div class="detail-grid">
+      <div class="detail-section">
+        <h4>Metadata</h4>
+        <div class="detail-meta">
+          <span><strong>Model:</strong> ${escapeHtml(model)}</span>
+          <span><strong>Branch:</strong> ${escapeHtml(branch)}</span>
+          <span><strong>Version:</strong> ${escapeHtml(version)}</span>
+          <span><strong>Plan Mode:</strong> ${escapeHtml(planMode)}</span>
+          <span><strong>Thinking:</strong> ${thinking} blocks</span>
+          <span><strong>Started:</strong> ${escapeHtml(started)}</span>
+          <span><strong>Ended:</strong> ${escapeHtml(ended)}</span>
+        </div>
+      </div>
+      <div class="detail-section">
+        <h4>Tools Used (${conv.tool_use_count || 0} invocations)</h4>
+        <div class="detail-tools">${toolsHtml}</div>
+      </div>
+      <div class="detail-section">
+        <h4>User Prompts (${(conv.user_prompts || []).length})</h4>
+        <div class="detail-prompts">${promptsHtml}</div>
+      </div>
+    </div>
+  `
+}
+
+async function toggleConversationDetail(row) {
+  const convId = row.dataset.convId
+  if (!convId) return
+
+  const existingDetail = document.querySelector('.conversation-detail-row')
+  const existingExpanded = document.querySelector('tr.expanded')
+  if (existingDetail) existingDetail.remove()
+  if (existingExpanded) existingExpanded.classList.remove('expanded')
+
+  if (expandedConversationId === convId) {
+    expandedConversationId = null
+    return
+  }
+
+  expandedConversationId = convId
+  row.classList.add('expanded')
+
+  const detailRow = document.createElement('tr')
+  detailRow.className = 'conversation-detail-row'
+  detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Loading...</em></td>`
+  row.after(detailRow)
+
+  try {
+    const conv = await fetchConversationDetail(convId)
+    if (!conv) {
+      detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Conversation not found</em></td>`
+      return
+    }
+    detailRow.innerHTML = `<td colspan="9" class="conv-detail-content">${renderConversationDetailContent(conv)}</td>`
+  } catch (e) {
+    detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Failed to load details</em></td>`
+  }
 }
 
 // --- Load cached scores ---

@@ -288,3 +288,19 @@ class TestWebappXSSVectors:
         assert 'escapeHtml(item.detail)' in self.src
         import re
         assert re.search(r'escapeHtml\(String\(Math\.round\(item\.value \* 100\)\)\)', self.src)
+
+    def test_conversation_detail_escapes_all_user_content(self):
+        assert 'escapeHtml(model)' in self.src
+        assert 'escapeHtml(branch)' in self.src
+        assert 'escapeHtml(version)' in self.src
+        assert 'escapeHtml(planMode)' in self.src
+        assert 'escapeHtml(started)' in self.src
+        assert 'escapeHtml(ended)' in self.src
+        assert 'escapeHtml(t)' in self.src  # tool name
+        assert 'escapeHtml(p)' in self.src  # prompt text
+
+    def test_conversation_detail_no_inline_onclick(self):
+        import re
+        detail_fn = re.search(r'function renderConversationDetailContent[\s\S]*?^}', self.src, re.MULTILINE)
+        if detail_fn:
+            assert not re.search(r'onclick\s*=', detail_fn.group(0))

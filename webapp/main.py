@@ -536,6 +536,28 @@ async def get_session_analytics_deprecated(
     return await get_conversation_analytics(data_path=data_path, project=project)
 
 
+@app.get("/api/conversation-detail")
+async def get_conversation_detail(
+    conversation_id: str = Query(max_length=500),
+    data_path: str = Query(default=None, max_length=1000),
+):
+    """Return full conversation data including user_prompts and tools_used for a single conversation."""
+    if not conversation_id or not conversation_id.strip():
+        raise HTTPException(status_code=400, detail="conversation_id is required")
+    try:
+        data_dir = _resolve_data_dir(data_path)
+        conv_data = get_all_conversations(data_dir, max_files=200)
+        conversations = conv_data.get("conversations", [])
+        for c in conversations:
+            if c.get("id") == conversation_id:
+                return c
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
+
+
 @app.get("/api/agent-metrics")
 async def get_agent_metrics(
     data_path: str = Query(default=None, max_length=1000),

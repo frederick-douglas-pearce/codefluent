@@ -434,6 +434,53 @@ describe('CodeFluentViewProvider', () => {
     })
   })
 
+  describe('message handling: getConversationDetail', () => {
+    it('returns full conversation data for a valid conversation ID', async () => {
+      const mockConversations = {
+        conversations: [
+          { id: 'conv-1', project: 'proj', user_prompts: ['hello'], tools_used: ['Edit'] },
+          { id: 'conv-2', project: 'proj', user_prompts: ['bye'], tools_used: ['Read'] },
+        ],
+        metadata: { total_conversations: 2 },
+      }
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockConversations)
+
+      await sendMessage({ type: 'getConversationDetail', requestId: 'req-detail-1', payload: { conversationId: 'conv-1' } })
+
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getConversationDetail',
+        requestId: 'req-detail-1',
+        data: expect.objectContaining({ id: 'conv-1', user_prompts: ['hello'], tools_used: ['Edit'] }),
+      })
+    })
+
+    it('returns null for unknown conversation ID', async () => {
+      const mockConversations = {
+        conversations: [{ id: 'conv-1', project: 'proj', user_prompts: ['hello'] }],
+        metadata: { total_conversations: 1 },
+      }
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockConversations)
+
+      await sendMessage({ type: 'getConversationDetail', requestId: 'req-detail-2', payload: { conversationId: 'nonexistent' } })
+
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getConversationDetail',
+        requestId: 'req-detail-2',
+        data: null,
+      })
+    })
+
+    it('returns null when no conversationId provided', async () => {
+      await sendMessage({ type: 'getConversationDetail', requestId: 'req-detail-3', payload: {} })
+
+      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
+        type: 'getConversationDetail',
+        requestId: 'req-detail-3',
+        data: null,
+      })
+    })
+  })
+
   describe('message handling: runScoring', () => {
     const fakeSession = {
       id: 'sess-1',
