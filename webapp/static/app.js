@@ -1985,6 +1985,95 @@ function renderConversationsCharts(data) {
     }
   })
 
+  // 3. Duration distribution (histogram)
+  const durationBins = [
+    { label: '<5m', min: 0, max: 5, count: 0 },
+    { label: '5-15m', min: 5, max: 15, count: 0 },
+    { label: '15-30m', min: 15, max: 30, count: 0 },
+    { label: '30m-1h', min: 30, max: 60, count: 0 },
+    { label: '1-2h', min: 60, max: 120, count: 0 },
+    { label: '2h+', min: 120, max: Infinity, count: 0 }
+  ]
+  convs.forEach(c => {
+    if (!c.started_at || !c.ended_at) return
+    const dur = (new Date(c.ended_at) - new Date(c.started_at)) / 60000
+    const bin = durationBins.find(b => dur >= b.min && dur < b.max)
+    if (bin) bin.count++
+  })
+
+  destroyChart('convDuration')
+  charts.convDuration = new Chart(document.getElementById('conv-duration-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: durationBins.map(b => b.label),
+      datasets: [{
+        label: 'Conversations',
+        data: durationBins.map(b => b.count),
+        backgroundColor: '#7C3AED',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+        x: {}
+      }
+    }
+  })
+
+  // 4. Average conversation length trend (line chart)
+  const weeklyPrompts = {}
+  convs.forEach(c => {
+    if (!c.started_at) return
+    const d = new Date(c.started_at)
+    const dayOfWeek = d.getUTCDay() || 7
+    const monday = new Date(d)
+    monday.setUTCDate(d.getUTCDate() - dayOfWeek + 1)
+    const year = monday.getUTCFullYear()
+    const jan1 = new Date(Date.UTC(year, 0, 1))
+    const daysSinceJan1 = Math.floor((monday - jan1) / 86400000)
+    const weekNum = Math.ceil((daysSinceJan1 + jan1.getUTCDay() + 1) / 7)
+    const key = `${year}-W${String(weekNum).padStart(2, '0')}`
+    if (!weeklyPrompts[key]) weeklyPrompts[key] = { total: 0, count: 0 }
+    weeklyPrompts[key].total += (c.prompt_count || 0)
+    weeklyPrompts[key].count++
+  })
+  const avgWeeks = Object.keys(weeklyPrompts).sort()
+  const avgValues = avgWeeks.map(w => Math.round(weeklyPrompts[w].total / weeklyPrompts[w].count * 10) / 10)
+
+  destroyChart('convAvgLength')
+  if (avgWeeks.length > 0) {
+    charts.convAvgLength = new Chart(document.getElementById('conv-avg-length-chart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: avgWeeks,
+        datasets: [{
+          label: 'Avg Prompts',
+          data: avgValues,
+          borderColor: '#2563EB',
+          backgroundColor: '#2563EB',
+          tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          borderWidth: 2,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true },
+          x: { ticks: { maxRotation: 45 } }
+        }
+      }
+    })
+  }
+
   document.getElementById('conversations-charts-row').style.display = ''
 }
 
