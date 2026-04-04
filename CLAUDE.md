@@ -63,7 +63,10 @@ codefluent/
 │   │   ├── cache.ts           # Persistent score caching (globalStorageUri)
 │   │   ├── dataCache.ts       # Conversation/usage data caching (stale-while-revalidate)
 │   │   ├── conversation.ts    # Conversation assembly (gap-based splitting from session files)
-│   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
+│   │   ├── platform.ts        # Cross-platform shell, terminal, subprocess helpers
+│   │   ├── taskClassification.ts  # Heuristic task type classifier (branch prefix + keyword regex)
+│   │   ├── antiPatterns.ts    # Structured output anti-pattern detection in user prompts
+│   │   └── configScanner.ts   # .claude/ directory maturity scanner (hooks, rules, commands, skills, MCP)
 │   ├── media/
 │   │   ├── index.html         # Webview HTML template (nonce-based CSP)
 │   │   ├── app.js             # Frontend logic, charts, IPC
@@ -71,7 +74,7 @@ codefluent/
 │   │   ├── icon.svg           # Activity bar icon (amber brackets)
 │   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
 │   ├── test/
-│   │   ├── unit/{analytics,config,conversation,scoring,quickwins,xss,platform,prompts,cache,dataCache,parser,recommendations,usage}.test.ts
+│   │   ├── unit/{analytics,config,conversation,scoring,quickwins,xss,platform,prompts,cache,dataCache,parser,recommendations,usage,agentMetrics,taskClassification,antiPatterns,configScanner}.test.ts
 │   │   └── integration/{extension,webviewProvider}.test.ts
 │   └── out/                   # Compiled JS (gitignored)
 ├── webapp/                    # FastAPI web app
@@ -79,6 +82,9 @@ codefluent/
 │   ├── main.py                # FastAPI backend (scoring, optimizer, quickwins, usage)
 │   ├── conversations.py       # Python conversation assembly equivalent
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
+│   ├── task_classification.py # Heuristic task type classifier
+│   ├── anti_patterns.py       # Structured output anti-pattern detection
+│   ├── config_scanner.py      # .claude/ directory maturity scanner
 │   ├── static/
 │   │   ├── index.html         # Web frontend HTML
 │   │   ├── app.js             # Frontend logic, charts, project scoping
@@ -150,7 +156,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 618 tests)
+npm test                   # Jest (unit + integration, 794 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -202,6 +208,7 @@ The webview (browser context) communicates with the extension host (Node context
 | `getConversationAnalytics` | webview -> ext | Returns per-conversation token metrics (efficiency, cost, cache ratios) |
 | `getSessionAnalytics` | webview -> ext | Deprecated alias for `getConversationAnalytics` (kept for backward compatibility) |
 | `getConfig` | webview -> ext | Returns display config values from `shared/defaults.json` + VS Code settings |
+| `getConfigMaturity` | webview -> ext | Scans `.claude/` directory for configuration maturity assessment |
 | `copyToClipboard` | webview -> ext | Copies text via `vscode.env.clipboard` |
 | `runInTerminal` | webview -> ext | Opens terminal, runs `claude "<prompt>"` |
 
@@ -232,6 +239,7 @@ The webapp uses a project dropdown (populated from session data) to scope featur
 - `GET /api/sessions` — Deprecated alias for `/api/conversations`
 - `GET /api/conversation-analytics` — Primary endpoint, returns per-conversation token metrics
 - `GET /api/session-analytics` — Deprecated alias for `/api/conversation-analytics`
+- `GET /api/config-maturity` — Scans `.claude/` directory for configuration maturity assessment
 
 ### Terminal Launch
 "Run" buttons create terminals with `shellPath: '/bin/bash'` and `shellArgs: ['--norc', '--noprofile']` to bypass shell init scripts (venv activation, etc.), while preserving `PATH` from the extension host process.
@@ -279,7 +287,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (618 tests) in `vscode-extension/`, `pytest` (450 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (794 tests) in `vscode-extension/`, `pytest` (630 tests) in `webapp/`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
 - **`security-review.yml`** — Runs on every PR: grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml)
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
@@ -289,7 +297,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 618 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 794 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -511,7 +519,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 618 Jest tests (16 suites)
+npm test                   # Runs all 794 Jest tests (20 suites)
 
 # Test structure:
 # test/unit/config.test.ts                     — centralized config module (defaults, VS Code overrides, display config)
@@ -528,12 +536,16 @@ npm test                   # Runs all 618 Jest tests (16 suites)
 # test/unit/usage.test.ts                      — ccusage CLI bridge, data formatting
 # test/unit/analytics.test.ts                  — conversation analytics, efficiency metrics, cost calculations
 # test/unit/pricing.test.ts                    — token pricing lookup, model matching, fallback rates
+# test/unit/agentMetrics.test.ts               — agent metrics computation, per-conversation, weekly aggregation
+# test/unit/taskClassification.test.ts         — branch prefix mapping, keyword regex, classification priority
+# test/unit/antiPatterns.test.ts               — structured output anti-pattern detection, false positive avoidance
+# test/unit/configScanner.test.ts              — .claude/ directory scanning, frontmatter parsing, error resilience
 # test/integration/extension.test.ts           — activation, status bar, commands
 # test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests, optimizer IPC
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (450 tests, 9 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (630 tests, 12 suites)
 
 # Test structure:
 # tests/test_conversations.py    — conversation assembly, gap-based splitting, boundary detection
@@ -545,6 +557,9 @@ uv run pytest tests/ -v    # Runs all webapp tests (450 tests, 9 suites)
 # tests/test_config.py           — centralized config module (defaults, env vars, config.json overrides)
 # tests/test_analyze_gaps.py     — inter-prompt gap analysis, histogram generation
 # tests/test_eval.py             — eval framework (scorer, checks, report, CLI, golden set integration)
+# tests/test_task_classification.py — branch prefix mapping, keyword regex, classification priority
+# tests/test_anti_patterns.py    — structured output anti-pattern detection, false positives
+# tests/test_config_scanner.py   — .claude/ directory scanning, frontmatter parsing, endpoint tests
 # tests/conftest.py              — shared fixtures (TestClient, mock Anthropic, mock sessions)
 ```
 
