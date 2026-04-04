@@ -13,7 +13,7 @@ import * as path from 'path'
 import * as os from 'os'
 
 export interface ConfigurationMaturity {
-  hooks: { configured: boolean; count: number; events: string[]; handlerTypes: string[] }
+  hooks: { configured: boolean; count: number; events: string[]; handlerTypes: string[]; matchers: string[] }
   rules: { count: number; hasPathScoping: boolean }
   commands: { count: number }
   skills: { count: number; hasFrontmatter: boolean }
@@ -94,6 +94,7 @@ function scanHooks(projectRoot: string | undefined, homeDir: string): Configurat
     count: 0,
     events: [],
     handlerTypes: [],
+    matchers: [],
   }
 
   const settingsPaths: string[] = [
@@ -105,6 +106,7 @@ function scanHooks(projectRoot: string | undefined, homeDir: string): Configurat
 
   const allEvents = new Set<string>()
   const allHandlerTypes = new Set<string>()
+  const allMatchers = new Set<string>()
   let totalCount = 0
 
   for (const settingsPath of settingsPaths) {
@@ -116,6 +118,7 @@ function scanHooks(projectRoot: string | undefined, homeDir: string): Configurat
       allEvents.add(event)
       for (const entry of entries) {
         const entryObj = entry as any
+        if (entryObj?.matcher) allMatchers.add(entryObj.matcher)
         const hooks = entryObj?.hooks
         if (Array.isArray(hooks)) {
           for (const hook of hooks) {
@@ -131,6 +134,7 @@ function scanHooks(projectRoot: string | undefined, homeDir: string): Configurat
   result.count = totalCount
   result.events = Array.from(allEvents).sort()
   result.handlerTypes = Array.from(allHandlerTypes).sort()
+  result.matchers = Array.from(allMatchers).sort()
   return result
 }
 

@@ -107,6 +107,7 @@ describe('scanConfigurationMaturity', () => {
         count: 0,
         events: [],
         handlerTypes: [],
+        matchers: [],
       })
     })
 
@@ -124,6 +125,7 @@ describe('scanConfigurationMaturity', () => {
       expect(result.hooks.count).toBe(1)
       expect(result.hooks.events).toEqual(['PreToolUse'])
       expect(result.hooks.handlerTypes).toEqual(['command'])
+      expect(result.hooks.matchers).toEqual(['Bash'])
     })
 
     it('detects hooks from user settings.json', () => {
@@ -162,6 +164,7 @@ describe('scanConfigurationMaturity', () => {
       expect(result.hooks.configured).toBe(true)
       expect(result.hooks.count).toBe(2)
       expect(result.hooks.events).toEqual(['PostToolUse', 'PreToolUse'])
+      expect(result.hooks.matchers).toEqual(['Bash', 'Edit'])
     })
 
     it('handles malformed JSON in settings.json', () => {
