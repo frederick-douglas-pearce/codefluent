@@ -131,6 +131,30 @@ const HIGH_QUALITY_PATTERNS = ['conceptual_inquiry', 'generation_then_comprehens
 
 const PATTERN_COLORS = ['#D97706', '#059669', '#2563EB', '#DC2626', '#7C3AED', '#EC4899']
 
+const TASK_TYPE_LABELS = {
+  feature: 'Feature',
+  bug_fix: 'Bug Fix',
+  refactor: 'Refactor',
+  debug: 'Debug',
+  test: 'Test',
+  docs: 'Docs',
+  chore: 'Chore',
+  exploration: 'Exploration',
+}
+
+const TASK_TYPE_COLORS = {
+  feature: '#2563EB',
+  bug_fix: '#DC2626',
+  refactor: '#D97706',
+  debug: '#7C3AED',
+  test: '#059669',
+  docs: '#0891B2',
+  chore: '#6B7280',
+  exploration: '#EC4899',
+}
+
+const TASK_TYPE_UNCLASSIFIED_COLOR = '#9CA3AF'
+
 const TOTAL_BEHAVIORS = 11
 
 // Only these behaviors can be credited from CLAUDE.md config (meta-interaction rules).
@@ -1845,6 +1869,64 @@ function renderConversationsSummaryCards(data) {
 function renderConversationsCharts(data) {
   const convs = data.conversations
 
+  // Task type distribution (doughnut)
+  destroyChart('convTaskType')
+  const taskTypeCounts = {}
+  convs.forEach(c => {
+    const tt = c.heuristic_task_type || 'unclassified'
+    taskTypeCounts[tt] = (taskTypeCounts[tt] || 0) + 1
+  })
+  const taskTypeEntries = Object.entries(taskTypeCounts).sort((a, b) => b[1] - a[1])
+  const totalConvs = convs.length
+
+  if (taskTypeEntries.length > 0) {
+    charts.convTaskType = new Chart(document.getElementById('conv-task-type-chart').getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: taskTypeEntries.map(([t]) =>
+          t === 'unclassified' ? 'Unclassified' : (TASK_TYPE_LABELS[t] || t)
+        ),
+        datasets: [{
+          data: taskTypeEntries.map(([, c]) => c),
+          backgroundColor: taskTypeEntries.map(([t]) =>
+            t === 'unclassified' ? TASK_TYPE_UNCLASSIFIED_COLOR : (TASK_TYPE_COLORS[t] || '#9CA3AF')
+          ),
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function(ctx) {
+                const count = ctx.raw
+                const pct = totalConvs > 0 ? (count / totalConvs * 100).toFixed(1) : '0.0'
+                return ctx.label + ': ' + count + ' (' + pct + '%)'
+              }
+            }
+          }
+        }
+      }
+    })
+  }
+
+  // Render task type legend
+  const taskTypeLegendEl = document.getElementById('conv-task-type-legend')
+  if (taskTypeLegendEl) {
+    taskTypeLegendEl.innerHTML = taskTypeEntries.map(([t, count]) => {
+      const label = t === 'unclassified' ? 'Unclassified' : (TASK_TYPE_LABELS[t] || t)
+      const color = t === 'unclassified' ? TASK_TYPE_UNCLASSIFIED_COLOR : (TASK_TYPE_COLORS[t] || '#9CA3AF')
+      const pct = totalConvs > 0 ? (count / totalConvs * 100).toFixed(1) : '0.0'
+      return '<div class="task-type-legend-item">' +
+        '<span class="task-type-swatch" style="background:' + color + '"></span>' +
+        '<span>' + escapeHtml(label) + '</span>' +
+        '<span class="task-type-legend-count">' + count + ' (' + pct + '%)</span>' +
+      '</div>'
+    }).join('')
+  }
+
   // 1. Conversations per week (bar chart)
   destroyChart('convPerWeek')
   const weeklyData = (data.weekly || []).sort((a, b) => a.week.localeCompare(b.week))
@@ -2104,6 +2186,7 @@ function renderConversationsListTable(conversations) {
       case 'cache': return dir * ((a.cache_hit_rate || 0) - (b.cache_hit_rate || 0))
       case 'tools': return dir * ((a.tool_use_count || 0) - (b.tool_use_count || 0))
       case 'score': return dir * ((a.overall_score ?? -1) - (b.overall_score ?? -1))
+      case 'task_type': return dir * ((a.heuristic_task_type || 'zzz').localeCompare(b.heuristic_task_type || 'zzz'))
       default: return 0
     }
   })
@@ -2117,6 +2200,9 @@ function renderConversationsListTable(conversations) {
     const cache = c.cache_hit_rate != null ? (c.cache_hit_rate * 100).toFixed(1) + '%' : '\u2014'
     const tools = c.tool_use_count || 0
     const score = c.overall_score != null ? c.overall_score : '\u2014'
+    const taskTypeLabel = c.heuristic_task_type
+      ? (TASK_TYPE_LABELS[c.heuristic_task_type] || c.heuristic_task_type)
+      : '\u2014'
 
     return `<tr data-conv-id="${escapeHtml(c.id || c.session_id || '')}">
       <td>${escapeHtml(date)}</td>
@@ -2128,6 +2214,7 @@ function renderConversationsListTable(conversations) {
       <td>${escapeHtml(cache)}</td>
       <td>${escapeHtml(String(tools))}</td>
       <td>${escapeHtml(String(score))}</td>
+      <td>${escapeHtml(taskTypeLabel)}</td>
     </tr>`
   }).join('')
 
@@ -2165,6 +2252,9 @@ function renderConversationDetailContent(conv) {
   const thinking = conv.thinking_count || 0
   const started = conv.started_at ? new Date(conv.started_at).toLocaleString() : '\u2014'
   const ended = conv.ended_at ? new Date(conv.ended_at).toLocaleString() : '\u2014'
+  const taskType = conv.heuristic_task_type
+    ? (TASK_TYPE_LABELS[conv.heuristic_task_type] || conv.heuristic_task_type)
+    : 'Unclassified'
 
   const toolsHtml = (conv.tools_used || []).map(t =>
     `<span class="tool-tag">${escapeHtml(t)}</span>`
@@ -2187,6 +2277,7 @@ function renderConversationDetailContent(conv) {
           <span><strong>Version:</strong> ${escapeHtml(version)}</span>
           <span><strong>Plan Mode:</strong> ${escapeHtml(planMode)}</span>
           <span><strong>Thinking:</strong> ${thinking} blocks</span>
+          <span><strong>Task Type:</strong> ${escapeHtml(taskType)}</span>
           <span><strong>Started:</strong> ${escapeHtml(started)}</span>
           <span><strong>Ended:</strong> ${escapeHtml(ended)}</span>
         </div>
@@ -2222,18 +2313,18 @@ async function toggleConversationDetail(row) {
 
   const detailRow = document.createElement('tr')
   detailRow.className = 'conversation-detail-row'
-  detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Loading...</em></td>`
+  detailRow.innerHTML = `<td colspan="10" class="conv-detail-content"><em>Loading...</em></td>`
   row.after(detailRow)
 
   try {
     const conv = await fetchConversationDetail(convId)
     if (!conv) {
-      detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Conversation not found</em></td>`
+      detailRow.innerHTML = `<td colspan="10" class="conv-detail-content"><em>Conversation not found</em></td>`
       return
     }
-    detailRow.innerHTML = `<td colspan="9" class="conv-detail-content">${renderConversationDetailContent(conv)}</td>`
+    detailRow.innerHTML = `<td colspan="10" class="conv-detail-content">${renderConversationDetailContent(conv)}</td>`
   } catch (e) {
-    detailRow.innerHTML = `<td colspan="9" class="conv-detail-content"><em>Failed to load details</em></td>`
+    detailRow.innerHTML = `<td colspan="10" class="conv-detail-content"><em>Failed to load details</em></td>`
   }
 }
 

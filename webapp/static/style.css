@@ -1034,6 +1034,30 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   font-size: 12px;
   font-weight: 500;
 }
+.task-type-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+.task-type-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.task-type-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.task-type-legend-count {
+  color: var(--text-tertiary, var(--text-secondary));
+  font-variant-numeric: tabular-nums;
+}
 .detail-prompts {
   max-height: 300px;
   overflow-y: auto;

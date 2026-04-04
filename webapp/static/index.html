@@ -179,6 +179,11 @@
         </div>
         <div id="conversations-charts-row" style="display:none">
           <div class="chart-container">
+            <h3>Task Type Distribution</h3>
+            <canvas id="conv-task-type-chart"></canvas>
+            <div id="conv-task-type-legend" class="task-type-legend"></div>
+          </div>
+          <div class="chart-container">
             <h3>Conversations per Week</h3>
             <canvas id="conv-per-week-chart"></canvas>
           </div>
@@ -213,6 +218,7 @@
                   <th data-sort="cache" class="sortable">Cache %</th>
                   <th data-sort="tools" class="sortable">Tools</th>
                   <th data-sort="score" class="sortable">Score</th>
+                  <th data-sort="task_type" class="sortable">Type</th>
                 </tr>
               </thead>
               <tbody id="conversations-list-tbody"></tbody>
