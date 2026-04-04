@@ -72,6 +72,8 @@ let state = {
   optimizer: null,
   conversationAnalytics: null,
   conversationsExplorer: null,
+  configMaturity: null,
+  enforcementGaps: null,
   activeTab: 'fluency'
 }
 
@@ -312,6 +314,10 @@ function switchTab(tabName) {
 
   if (tabName === 'conversations') {
     if (!state.conversationsExplorer) loadConversationsExplorer()
+  }
+
+  if (tabName === 'config' && !state.configMaturity) {
+    loadConfigMaturity()
   }
 }
 
@@ -569,6 +575,14 @@ document.addEventListener('click', (e) => {
   const convRow = target.closest('#conversations-list-tbody tr')
   if (convRow && !target.closest('.conversation-detail-row')) {
     toggleConversationDetail(convRow)
+    return
+  }
+
+  // Show more gaps button
+  if (target.id === 'show-more-gaps-btn') {
+    const hiddenGaps = document.querySelectorAll('.gap-item.gap-hidden')
+    hiddenGaps.forEach(el => el.classList.remove('gap-hidden'))
+    target.remove()
     return
   }
 
@@ -2339,6 +2353,221 @@ async function loadCachedScores() {
   } catch (e) {
     // Silently ignore — user can still run manual scoring
   }
+}
+
+// --- Config Maturity ---
+function computeMaturityScore(maturity, gaps) {
+  const breakdown = []
+
+  // CLAUDE.md (20 pts)
+  const claudeMd = maturity?.claudeMd || {}
+  const claudeItems = []
+  const claudePresent = claudeMd.present || false
+  claudeItems.push({ label: 'CLAUDE.md present', status: claudePresent ? 'done' : 'missing', detail: claudePresent ? 'Found in project' : 'Create a CLAUDE.md to guide Claude' })
+  const claudeMultiple = (claudeMd.locations?.length || 0) > 1
+  claudeItems.push({ label: 'Multiple locations', status: claudeMultiple ? 'done' : 'missing', detail: claudeMultiple ? `${claudeMd.locations.length} locations found` : 'Add CLAUDE.md at multiple directory levels' })
+  const claudeImports = claudeMd.hasImports || false
+  claudeItems.push({ label: 'Uses @imports', status: claudeImports ? 'done' : 'missing', detail: claudeImports ? 'Modular configuration via imports' : 'Use @import to split config into modules' })
+  const claudeEarned = (claudePresent ? 10 : 0) + (claudeMultiple ? 5 : 0) + (claudeImports ? 5 : 0)
+  breakdown.push({ category: 'CLAUDE.md', earned: claudeEarned, max: 20, items: claudeItems })
+
+  // Hooks (20 pts)
+  const hooks = maturity?.hooks || {}
+  const hookItems = []
+  const hooksConfigured = hooks.configured || false
+  hookItems.push({ label: 'Hooks configured', status: hooksConfigured ? 'done' : 'missing', detail: hooksConfigured ? 'Hook system is active' : 'Add hooks to .claude/settings.json' })
+  const hookEvents = hooks.events || []
+  const hookMultiEvent = hookEvents.length >= 2
+  hookItems.push({ label: '2+ hook events', status: hookMultiEvent ? 'done' : hookEvents.length === 1 ? 'partial' : 'missing', detail: hookMultiEvent ? `${hookEvents.length} events: ${hookEvents.join(', ')}` : hookEvents.length === 1 ? `1 event: ${hookEvents[0]}` : 'Add hooks for multiple events' })
+  const hookMatchers = hooks.hasMatchers || false
+  hookItems.push({ label: 'File matchers', status: hookMatchers ? 'done' : 'missing', detail: hookMatchers ? 'Hooks use file pattern matching' : 'Add file matchers to scope hooks' })
+  const hooksEarned = (hooksConfigured ? 10 : 0) + (hookMultiEvent ? 5 : hookEvents.length === 1 ? 2 : 0) + (hookMatchers ? 5 : 0)
+  breakdown.push({ category: 'Hooks', earned: hooksEarned, max: 20, items: hookItems })
+
+  // Rules (15 pts)
+  const rules = maturity?.rules || {}
+  const ruleItems = []
+  const ruleCount = rules.count || 0
+  ruleItems.push({ label: 'Rules defined', status: ruleCount > 0 ? 'done' : 'missing', detail: ruleCount > 0 ? `${ruleCount} rule${ruleCount !== 1 ? 's' : ''} found` : 'Add .mdc rule files to .claude/rules/' })
+  const ruleScoping = rules.hasPathScoping || false
+  ruleItems.push({ label: 'Path scoping', status: ruleScoping ? 'done' : 'missing', detail: ruleScoping ? 'Rules use path-based scoping' : 'Scope rules to specific file patterns' })
+  const rulesEarned = (ruleCount > 0 ? 10 : 0) + (ruleScoping ? 5 : 0)
+  breakdown.push({ category: 'Rules', earned: rulesEarned, max: 15, items: ruleItems })
+
+  // Commands (10 pts)
+  const commands = maturity?.commands || {}
+  const cmdItems = []
+  const cmdCount = commands.count || 0
+  cmdItems.push({ label: 'Custom commands', status: cmdCount > 0 ? 'done' : 'missing', detail: cmdCount > 0 ? `${cmdCount} command${cmdCount !== 1 ? 's' : ''} defined` : 'Add slash commands to .claude/commands/' })
+  const cmdMany = cmdCount >= 3
+  cmdItems.push({ label: '3+ commands', status: cmdMany ? 'done' : cmdCount > 0 ? 'partial' : 'missing', detail: cmdMany ? 'Rich command library' : 'Add more commands for common workflows' })
+  const cmdEarned = (cmdCount > 0 ? 5 : 0) + (cmdMany ? 5 : cmdCount > 0 ? 2 : 0)
+  breakdown.push({ category: 'Commands', earned: cmdEarned, max: 10, items: cmdItems })
+
+  // MCP (10 pts)
+  const mcp = maturity?.mcp || {}
+  const mcpItems = []
+  const mcpConfigured = mcp.configured || false
+  mcpItems.push({ label: 'MCP configured', status: mcpConfigured ? 'done' : 'missing', detail: mcpConfigured ? 'MCP servers are set up' : 'Configure MCP servers for extended capabilities' })
+  const mcpServerCount = mcp.serverCount || 0
+  const mcpMultiple = mcpServerCount >= 2
+  mcpItems.push({ label: '2+ MCP servers', status: mcpMultiple ? 'done' : mcpServerCount === 1 ? 'partial' : 'missing', detail: mcpMultiple ? `${mcpServerCount} servers configured` : mcpServerCount === 1 ? '1 server configured' : 'Add multiple MCP servers' })
+  const mcpEarned = (mcpConfigured ? 5 : 0) + (mcpMultiple ? 5 : mcpServerCount === 1 ? 2 : 0)
+  breakdown.push({ category: 'MCP', earned: mcpEarned, max: 10, items: mcpItems })
+
+  // Skills (10 pts)
+  const skills = maturity?.skills || {}
+  const skillItems = []
+  const skillCount = skills.count || 0
+  skillItems.push({ label: 'Custom skills', status: skillCount > 0 ? 'done' : 'missing', detail: skillCount > 0 ? `${skillCount} skill${skillCount !== 1 ? 's' : ''} defined` : 'Add skill files to .claude/skills/' })
+  const skillFrontmatter = skills.hasFrontmatter || false
+  skillItems.push({ label: 'Frontmatter metadata', status: skillFrontmatter ? 'done' : 'missing', detail: skillFrontmatter ? 'Skills use structured frontmatter' : 'Add frontmatter to skill files for better discovery' })
+  const skillsEarned = (skillCount > 0 ? 5 : 0) + (skillFrontmatter ? 5 : 0)
+  breakdown.push({ category: 'Skills', earned: skillsEarned, max: 10, items: skillItems })
+
+  // Permissions (5 pts)
+  const permissions = maturity?.permissions || {}
+  const permItems = []
+  const permConfigured = permissions.configured || false
+  permItems.push({ label: 'Permissions configured', status: permConfigured ? 'done' : 'missing', detail: permConfigured ? 'Permission boundaries are set' : 'Configure permissions in .claude/settings.json' })
+  const permEarned = permConfigured ? 5 : 0
+  breakdown.push({ category: 'Permissions', earned: permEarned, max: 5, items: permItems })
+
+  // Enforcement (10 pts)
+  const stmtCount = gaps?.enforcementStatements?.length || 0
+  const coveredCount = gaps?.coveredCount || 0
+  const enfItems = []
+  const enfRatio = stmtCount > 0 ? coveredCount / stmtCount : 0
+  const enfEarned = Math.round(enfRatio * 10)
+  enfItems.push({ label: 'Enforcement coverage', status: enfRatio >= 0.8 ? 'done' : enfRatio > 0 ? 'partial' : 'missing', detail: stmtCount > 0 ? `${coveredCount} of ${stmtCount} statements covered by hooks` : 'No enforcement statements found in CLAUDE.md' })
+  breakdown.push({ category: 'Enforcement', earned: enfEarned, max: 10, items: enfItems })
+
+  const score = breakdown.reduce((sum, b) => sum + b.earned, 0)
+  const maxScore = 100
+  let tier = 'Beginner'
+  if (score > 75) tier = 'Expert'
+  else if (score > 50) tier = 'Advanced'
+  else if (score > 25) tier = 'Intermediate'
+
+  return { score, tier, maxScore, breakdown }
+}
+
+async function loadConfigMaturity() {
+  const container = document.getElementById('config-maturity-content')
+  container.innerHTML = '<div class="empty-state-box"><div class="empty-state-icon">&#x2699;</div><p class="empty-state">Loading configuration data...</p></div>'
+  try {
+    const [maturity, gaps] = await Promise.all([
+      postMessageRequest('getConfigMaturity'),
+      postMessageRequest('getEnforcementGaps'),
+    ])
+    state.configMaturity = maturity
+    state.enforcementGaps = gaps
+    renderConfigMaturity()
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state-box"><p class="empty-state">Failed to load configuration data: ${escapeHtml(e.message)}</p></div>`
+  }
+}
+
+function renderConfigMaturity() {
+  const container = document.getElementById('config-maturity-content')
+  const result = computeMaturityScore(state.configMaturity, state.enforcementGaps)
+  const { score, tier, breakdown } = result
+
+  const circumference = 2 * Math.PI * 52
+  const offset = circumference * (1 - score / 100)
+  const tierClass = tier.toLowerCase()
+  const tierColors = { beginner: '#DC2626', intermediate: '#D97706', advanced: '#D97706', expert: '#059669' }
+  const scoreColor = tierColors[tierClass] || '#D97706'
+
+  let html = ''
+
+  // Section A: Score Ring + Tier Badge
+  html += `
+    <div class="maturity-score-section">
+      <div class="score-ring">
+        <svg viewBox="0 0 120 120" class="score-svg">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="8"/>
+          <circle cx="60" cy="60" r="52" fill="none" stroke="${scoreColor}" stroke-width="8"
+            stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"
+            transform="rotate(-90 60 60)"/>
+        </svg>
+        <div class="score-text">
+          <span class="score-value" style="color: ${scoreColor}">${score}</span>
+          <span class="score-label">/ 100</span>
+        </div>
+      </div>
+      <div class="maturity-tier maturity-tier-${tierClass}">${escapeHtml(tier)}</div>
+      <p style="margin-top: 4px; color: var(--text-secondary)">Your configuration is at the ${escapeHtml(tier)} level.</p>
+    </div>`
+
+  // Section B: Maturity Checklist
+  html += '<div class="maturity-checklist">'
+  for (const cat of breakdown) {
+    html += `
+      <div class="maturity-category">
+        <div class="maturity-category-header">
+          <span>${escapeHtml(cat.category)}</span>
+          <span class="maturity-points">${cat.earned} / ${cat.max}</span>
+        </div>`
+    for (const item of cat.items) {
+      const iconClass = item.status === 'done' ? 'maturity-icon-done' : item.status === 'partial' ? 'maturity-icon-partial' : 'maturity-icon-missing'
+      const icon = item.status === 'done' ? '&#x2713;' : item.status === 'partial' ? '&#x26A0;' : '&#x25CB;'
+      html += `
+        <div class="maturity-item">
+          <span class="maturity-icon ${iconClass}">${icon}</span>
+          <div class="maturity-item-text">
+            ${escapeHtml(item.label)}
+            <div class="maturity-item-detail">${escapeHtml(item.detail)}</div>
+          </div>
+        </div>`
+    }
+    html += '</div>'
+  }
+  html += '</div>'
+
+  // Section C: Enforcement Gap Summary
+  const gaps = state.enforcementGaps || {}
+  const stmtCount = gaps.enforcementStatements?.length || 0
+  const coveredCount = gaps.coveredCount || 0
+  const gapList = gaps.gaps || []
+
+  html += `
+    <h3>Enforcement Gaps</h3>
+    <div class="gap-summary">
+      <div class="gap-summary-card">
+        <div class="gap-summary-stat">${stmtCount}</div>
+        <div class="gap-summary-label">Enforcement statements</div>
+      </div>
+      <div class="gap-summary-card">
+        <div class="gap-summary-stat">${coveredCount}</div>
+        <div class="gap-summary-label">Covered by hooks</div>
+      </div>
+    </div>`
+
+  if (gapList.length > 0) {
+    const INITIAL_GAPS = 5
+    gapList.forEach((gap, i) => {
+      const hiddenClass = i >= INITIAL_GAPS ? ' gap-hidden' : ''
+      const severity = gap.severity || 'medium'
+      const severityClass = severity === 'high' ? 'severity-high' : 'severity-medium'
+      html += `
+        <div class="gap-item${hiddenClass}">
+          <div class="gap-statement">${escapeHtml(gap.statement || '')}</div>
+          <div class="gap-source">${escapeHtml(gap.source || '')}${gap.line ? `, line ${gap.line}` : ''} <span class="severity-badge ${severityClass}">${escapeHtml(severity)}</span></div>
+          ${gap.suggestedHookEvent ? `<div class="gap-suggestion">Suggested hook: <strong>${escapeHtml(gap.suggestedHookEvent)}</strong></div>` : ''}
+        </div>`
+    })
+    if (gapList.length > INITIAL_GAPS) {
+      const remaining = gapList.length - INITIAL_GAPS
+      html += `<button class="btn btn-secondary" id="show-more-gaps-btn">Show ${remaining} more</button>`
+    }
+  } else if (stmtCount > 0) {
+    html += '<p style="color: var(--text-secondary)">All enforcement statements are covered by hooks.</p>'
+  } else {
+    html += '<p style="color: var(--text-secondary)">No enforcement statements found. Add rules to your CLAUDE.md to enable gap analysis.</p>'
+  }
+
+  container.innerHTML = html
 }
 
 // --- Load Benchmarks ---

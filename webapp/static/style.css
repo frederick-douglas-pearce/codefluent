@@ -1092,6 +1092,56 @@ tr.expanded {
   background: var(--bg-hover, var(--bg-card));
 }
 
+/* Config Maturity */
+.maturity-score-section { display: flex; flex-direction: column; align-items: center; margin: 24px 0; }
+.maturity-tier { font-size: 18px; font-weight: 600; margin-top: 8px; }
+.maturity-tier-beginner { color: #DC2626; }
+.maturity-tier-intermediate { color: #D97706; }
+.maturity-tier-advanced { color: #D97706; }
+.maturity-tier-expert { color: #059669; }
+
+.maturity-checklist { margin: 24px 0; }
+.maturity-category { margin-bottom: 16px; }
+.maturity-category-header {
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 600; font-size: 15px; margin-bottom: 8px;
+}
+.maturity-points { font-size: 13px; color: var(--text-secondary); }
+.maturity-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px; background: var(--bg-card);
+  border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 6px; font-size: 14px;
+}
+.maturity-icon { flex-shrink: 0; font-size: 16px; line-height: 1.4; }
+.maturity-icon-done { color: #059669; }
+.maturity-icon-partial { color: #D97706; }
+.maturity-icon-missing { color: var(--text-secondary); }
+.maturity-item-text { flex: 1; }
+.maturity-item-detail { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+.gap-summary { display: flex; gap: 24px; margin-bottom: 16px; }
+.gap-summary-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 20px; flex: 1;
+}
+.gap-summary-stat { font-size: 28px; font-weight: 700; }
+.gap-summary-label { font-size: 13px; color: var(--text-secondary); }
+.gap-item {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+}
+.gap-item.gap-hidden { display: none; }
+.gap-statement { font-size: 14px; font-style: italic; margin-bottom: 6px; }
+.gap-source { font-size: 12px; color: var(--text-secondary); }
+.gap-suggestion { font-size: 13px; color: var(--text-secondary); margin-top: 6px; }
+.severity-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+}
+.severity-high { background: rgba(220,38,38,0.1); color: #DC2626; }
+.severity-medium { background: rgba(217,119,6,0.1); color: #D97706; }
+
 @media (max-width: 768px) {
   .pattern-layout { flex-direction: column; }
   .tabs { overflow-x: auto; }
