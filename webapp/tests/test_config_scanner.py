@@ -87,6 +87,7 @@ class TestScanHooks:
             "count": 0,
             "events": [],
             "handlerTypes": [],
+            "matchers": [],
         }
 
     def test_detects_hooks_from_project_settings(self, tmp_path):
@@ -105,6 +106,7 @@ class TestScanHooks:
         assert result["hooks"]["count"] == 1
         assert result["hooks"]["events"] == ["PreToolUse"]
         assert result["hooks"]["handlerTypes"] == ["command"]
+        assert result["hooks"]["matchers"] == ["Bash"]
 
     def test_detects_hooks_from_user_settings(self, tmp_path):
         home = tmp_path / "home"
@@ -141,6 +143,7 @@ class TestScanHooks:
         result = scan_configuration_maturity(str(project), str(home))
         assert result["hooks"]["count"] == 2
         assert result["hooks"]["events"] == ["PostToolUse", "PreToolUse"]
+        assert result["hooks"]["matchers"] == ["Bash", "Edit"]
 
     def test_handles_malformed_json(self, tmp_path):
         home = tmp_path / "home"

@@ -25,6 +25,7 @@ from extract_prompts import get_all_sessions
 from conversations import get_all_conversations
 from agent_metrics import compute_agent_metrics, compute_weekly_agent_metrics
 from config_scanner import scan_configuration_maturity
+from enforcement_gaps import detect_enforcement_gaps
 
 BEHAVIORS = [
     "iteration_and_refinement", "clarifying_goals", "specifying_format",
@@ -519,6 +520,9 @@ async def get_conversation_analytics(
                 "prompt_timestamps": s.get("prompt_timestamps", []),
                 "overall_score": overall_score,
                 "estimated_cost": round(estimated_cost, 4),
+                "heuristic_task_type": s.get("heuristic_task_type"),
+                "has_structured_output_antipattern": s.get("has_structured_output_antipattern", False),
+                "structured_output_antipattern_count": s.get("structured_output_antipattern_count", 0),
             })
 
         # Compute aggregates
@@ -599,6 +603,31 @@ async def get_config_maturity(project: str = Query(default="", max_length=500)):
         if project:
             project_dir = _decode_project_path(project)
         return scan_configuration_maturity(project_dir)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
+
+
+@app.get("/api/enforcement-gaps")
+async def get_enforcement_gaps(project: str = Query(default="", max_length=500)):
+    """Detect advisory-vs-programmatic enforcement gaps in CLAUDE.md."""
+    try:
+        project_dir = None
+        if project:
+            project_dir = _decode_project_path(project)
+
+        # Read CLAUDE.md
+        if not project_dir:
+            return {"enforcementStatements": [], "gaps": [], "coveredCount": 0}
+
+        claude_md_path = Path(project_dir) / "CLAUDE.md"
+        if not claude_md_path.exists():
+            return {"enforcementStatements": [], "gaps": [], "coveredCount": 0}
+
+        content = claude_md_path.read_text(encoding="utf-8")
+        maturity = scan_configuration_maturity(project_dir)
+        return detect_enforcement_gaps(content, maturity["hooks"])
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

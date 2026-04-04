@@ -13,6 +13,7 @@ import { buildConversationAnalytics } from './analytics'
 import { computeAgentMetrics, computeWeeklyAgentMetrics, AgentMetrics, WeeklyAgentMetrics } from './agentMetrics'
 import { getConfig, getDisplayConfig } from './config'
 import { scanConfigurationMaturity } from './configScanner'
+import { detectEnforcementGaps } from './enforcementGaps'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codefluent.dashboard'
@@ -193,6 +194,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getConfigMaturity':
           data = this.handleGetConfigMaturity()
           break
+        case 'getEnforcementGaps':
+          data = this.handleGetEnforcementGaps()
+          break
         default:
           return
       }
@@ -343,6 +347,24 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   private handleGetConfigMaturity() {
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
     return scanConfigurationMaturity(workspacePath)
+  }
+
+  private handleGetEnforcementGaps() {
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    if (!workspacePath) {
+      return { enforcementStatements: [], gaps: [], coveredCount: 0 }
+    }
+
+    const claudeMdPath = path.join(workspacePath, 'CLAUDE.md')
+    let content: string
+    try {
+      content = fs.readFileSync(claudeMdPath, 'utf8')
+    } catch {
+      return { enforcementStatements: [], gaps: [], coveredCount: 0 }
+    }
+
+    const maturity = scanConfigurationMaturity(workspacePath)
+    return detectEnforcementGaps(content, maturity.hooks)
   }
 
   private async handleOptimizePrompt(payload?: { prompt?: string }): Promise<OptimizeResponse> {
