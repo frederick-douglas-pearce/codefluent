@@ -10,6 +10,7 @@ from extract_prompts import (
     parse_session_file,
     get_all_sessions,
     _get_project_path_encoded,
+    is_clear_command,
 )
 
 
@@ -850,3 +851,25 @@ class TestGetAllSessions:
 
         result = get_all_sessions(tmp_path)
         assert result["metadata"]["total_sessions"] == 1
+
+
+class TestIsClearCommand:
+    """Tests for is_clear_command() detection."""
+
+    def test_true_for_clear_command(self):
+        text = '<command-name>/clear</command-name>\n            <command-message>clear</command-message>\n            <command-args></command-args>'
+        assert is_clear_command(text) is True
+
+    def test_false_for_compact_command(self):
+        text = '<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>'
+        assert is_clear_command(text) is False
+
+    def test_false_for_plain_text(self):
+        assert is_clear_command("please clear the cache") is False
+
+    def test_false_for_empty_string(self):
+        assert is_clear_command("") is False
+
+    def test_true_when_embedded(self):
+        text = "prefix <command-name>/clear</command-name> suffix"
+        assert is_clear_command(text) is True

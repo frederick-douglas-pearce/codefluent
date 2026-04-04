@@ -82,12 +82,20 @@ export function buildConversations(
   let lastUserTimestamp: number | null = null
 
   for (const msg of sorted) {
-    if (msg.type === 'user' && msg.timestamp) {
-      const ts = new Date(msg.timestamp).getTime()
-      if (lastUserTimestamp !== null && (ts - lastUserTimestamp) > gapMs) {
+    if (msg.type === 'user') {
+      // /clear always forces a new conversation boundary
+      if (msg.is_clear_command) {
         buckets.push([])
+        buckets[buckets.length - 1].push(msg)
+        continue
       }
-      lastUserTimestamp = ts
+      if (msg.timestamp) {
+        const ts = new Date(msg.timestamp).getTime()
+        if (lastUserTimestamp !== null && (ts - lastUserTimestamp) > gapMs) {
+          buckets.push([])
+        }
+        lastUserTimestamp = ts
+      }
     }
     buckets[buckets.length - 1].push(msg)
   }
@@ -119,6 +127,7 @@ export function buildConversations(
       if (msg.timestamp) timestamps.push(msg.timestamp)
 
       if (msg.type === 'user') {
+        if (msg.is_clear_command) continue
         userMsgCount++
         if (msg.content) userPrompts.push(msg.content)
         if (msg.content && msg.timestamp) promptTimestamps.push(msg.timestamp)

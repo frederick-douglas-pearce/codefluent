@@ -4,7 +4,7 @@ jest.mock('os')
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { extractUserText, parseSessionFile, getAllSessions } from '../../src/parser'
+import { extractUserText, parseSessionFile, getAllSessions, isClearCommand } from '../../src/parser'
 
 const mockFs = fs as jest.Mocked<typeof fs>
 const mockOs = os as jest.Mocked<typeof os>
@@ -869,5 +869,30 @@ describe('getAllSessions', () => {
     expect(() => getAllSessions()).not.toThrow()
     const result = getAllSessions()
     expect(result.sessions).toHaveLength(2)
+  })
+})
+
+describe('isClearCommand', () => {
+  it('returns true for /clear command XML', () => {
+    const text = '<command-name>/clear</command-name>\n            <command-message>clear</command-message>\n            <command-args></command-args>'
+    expect(isClearCommand(text)).toBe(true)
+  })
+
+  it('returns false for /compact command XML', () => {
+    const text = '<command-name>/compact</command-name>\n            <command-message>compact</command-message>\n            <command-args></command-args>'
+    expect(isClearCommand(text)).toBe(false)
+  })
+
+  it('returns false for plain text containing clear', () => {
+    expect(isClearCommand('please clear the cache')).toBe(false)
+  })
+
+  it('returns false for empty string', () => {
+    expect(isClearCommand('')).toBe(false)
+  })
+
+  it('returns true when /clear tag is embedded in larger content', () => {
+    const text = 'some prefix <command-name>/clear</command-name> some suffix'
+    expect(isClearCommand(text)).toBe(true)
   })
 })

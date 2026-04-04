@@ -56,11 +56,17 @@ def build_conversations(
     last_user_ts: float | None = None
 
     for msg in sorted_msgs:
-        if msg["type"] == "user" and msg.get("timestamp"):
-            ts = _ts_to_ms(msg["timestamp"])
-            if last_user_ts is not None and (ts - last_user_ts) > gap_ms:
+        if msg["type"] == "user":
+            # /clear always forces a new conversation boundary
+            if msg.get("is_clear_command"):
                 buckets.append([])
-            last_user_ts = ts
+                buckets[-1].append(msg)
+                continue
+            if msg.get("timestamp"):
+                ts = _ts_to_ms(msg["timestamp"])
+                if last_user_ts is not None and (ts - last_user_ts) > gap_ms:
+                    buckets.append([])
+                last_user_ts = ts
         buckets[-1].append(msg)
 
     # Build conversations from buckets
@@ -92,6 +98,8 @@ def build_conversations(
                 timestamps.append(msg["timestamp"])
 
             if msg["type"] == "user":
+                if msg.get("is_clear_command"):
+                    continue
                 user_msg_count += 1
                 if msg.get("content"):
                     user_prompts.append(msg["content"])

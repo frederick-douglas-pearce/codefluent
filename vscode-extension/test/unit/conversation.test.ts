@@ -1115,3 +1115,105 @@ describe('buildConversations content_hash', () => {
     expect(newConvs[2].content_hash).toBe(hash1) // old conv 1 is now at index 2
   })
 })
+
+describe('/clear as conversation boundary', () => {
+  function makeMsg(type: string, ts: string, overrides: Partial<TimestampedMessage> = {}): TimestampedMessage {
+    return {
+      type,
+      timestamp: ts,
+      session_id: 'sess-1',
+      file_position: 0,
+      ...overrides,
+    }
+  }
+
+  it('splits conversation at /clear command', () => {
+    const messages: TimestampedMessage[] = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'first prompt', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:05:00Z', { content: 'second prompt', file_position: 1 }),
+      makeMsg('user', '2026-01-01T10:06:00Z', { is_clear_command: true, file_position: 2 }),
+      makeMsg('user', '2026-01-01T10:07:00Z', { content: 'third prompt', file_position: 3 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs).toHaveLength(2)
+    expect(convs[0].user_prompts).toEqual(['first prompt', 'second prompt'])
+    expect(convs[1].user_prompts).toEqual(['third prompt'])
+  })
+
+  it('does not create empty conversation when /clear is at the start', () => {
+    const messages: TimestampedMessage[] = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { is_clear_command: true, file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:01:00Z', { content: 'first prompt', file_position: 1 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs).toHaveLength(1)
+    expect(convs[0].user_prompts).toEqual(['first prompt'])
+  })
+
+  it('does not create empty conversation when /clear is at the end', () => {
+    const messages: TimestampedMessage[] = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'first prompt', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:05:00Z', { is_clear_command: true, file_position: 1 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs).toHaveLength(1)
+    expect(convs[0].user_prompts).toEqual(['first prompt'])
+  })
+
+  it('splits even without inactivity gap', () => {
+    const messages: TimestampedMessage[] = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'prompt 1', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:00:30Z', { is_clear_command: true, file_position: 1 }),
+      makeMsg('user', '2026-01-01T10:01:00Z', { content: 'prompt 2', file_position: 2 }),
+    ]
+    // 60-minute gap, but /clear splits at 30 seconds
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs).toHaveLength(2)
+  })
+
+  it('does NOT split on /compact', () => {
+    const messages: TimestampedMessage[] = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'prompt 1', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:05:00Z', { content: 'compact text', file_position: 1 }),
+      makeMsg('user', '2026-01-01T10:10:00Z', { content: 'prompt 2', file_position: 2 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs).toHaveLength(1)
+    expect(convs[0].user_prompts).toHaveLength(3)
+  })
+
+  it('handles multiple consecutive /clear commands', () => {
+    const messages: TimestampedMessage[] = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'prompt 1', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:05:00Z', { is_clear_command: true, file_position: 1 }),
+      makeMsg('user', '2026-01-01T10:06:00Z', { is_clear_command: true, file_position: 2 }),
+      makeMsg('user', '2026-01-01T10:07:00Z', { content: 'prompt 2', file_position: 3 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs).toHaveLength(2)
+    expect(convs[0].user_prompts).toEqual(['prompt 1'])
+    expect(convs[1].user_prompts).toEqual(['prompt 2'])
+  })
+
+  it('does not count /clear in user_message_count', () => {
+    const messages: TimestampedMessage[] = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'prompt 1', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:05:00Z', { is_clear_command: true, file_position: 1 }),
+      makeMsg('user', '2026-01-01T10:10:00Z', { content: 'prompt 2', file_position: 2 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs[0].user_message_count).toBe(1)
+    expect(convs[1].user_message_count).toBe(1)
+  })
+
+  it('does not include /clear in user_prompts', () => {
+    const messages: TimestampedMessage[] = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'prompt 1', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:05:00Z', { is_clear_command: true, content: undefined, file_position: 1 }),
+      makeMsg('user', '2026-01-01T10:10:00Z', { content: 'prompt 2', file_position: 2 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    const allPrompts = convs.flatMap(c => c.user_prompts)
+    expect(allPrompts).toEqual(['prompt 1', 'prompt 2'])
+  })
+})
