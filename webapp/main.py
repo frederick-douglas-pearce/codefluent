@@ -520,6 +520,9 @@ async def get_conversation_analytics(
                 "prompt_timestamps": s.get("prompt_timestamps", []),
                 "overall_score": overall_score,
                 "estimated_cost": round(estimated_cost, 4),
+                "heuristic_task_type": s.get("heuristic_task_type"),
+                "has_structured_output_antipattern": s.get("has_structured_output_antipattern", False),
+                "structured_output_antipattern_count": s.get("structured_output_antipattern_count", 0),
             })
 
         # Compute aggregates
