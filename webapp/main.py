@@ -24,6 +24,7 @@ from anthropic import Anthropic
 from extract_prompts import get_all_sessions
 from conversations import get_all_conversations
 from agent_metrics import compute_agent_metrics, compute_weekly_agent_metrics
+from config_scanner import scan_configuration_maturity
 
 BEHAVIORS = [
     "iteration_and_refinement", "clarifying_goals", "specifying_format",
@@ -586,6 +587,20 @@ async def get_agent_metrics(
         return result
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
+
+
+@app.get("/api/config-maturity")
+async def get_config_maturity(project: str = Query(default="", max_length=500)):
+    """Scan .claude/ directory for configuration maturity signals."""
+    try:
+        project_dir = None
+        if project:
+            project_dir = _decode_project_path(project)
+        return scan_configuration_maturity(project_dir)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
 
