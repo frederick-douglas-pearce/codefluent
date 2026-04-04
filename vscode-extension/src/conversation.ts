@@ -2,6 +2,8 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { TimestampedMessage, SessionMessagesResult, parseSessionMessages } from './parser'
+import { classifyTask } from './taskClassification'
+import { detectStructuredOutputAntiPattern } from './antiPatterns'
 
 export interface ParsedConversation {
   id: string
@@ -23,6 +25,9 @@ export interface ParsedConversation {
   model: string | null
   claude_code_version: string | null
   git_branch: string | null
+  heuristic_task_type: string | null
+  has_structured_output_antipattern: boolean
+  structured_output_antipattern_count: number
   total_input_tokens: number
   total_output_tokens: number
   total_cache_creation_tokens: number
@@ -158,6 +163,8 @@ export function buildConversations(
       projectPathEncoded, promptTimestamps.sort(), timestamps[0] || null, userPrompts, promptCount,
     )
 
+    const antiPatternResult = detectStructuredOutputAntiPattern(userPrompts)
+
     conversations.push({
       id: '', // filled below with zero-padded index
       content_hash: contentHash,
@@ -178,6 +185,9 @@ export function buildConversations(
       model,
       claude_code_version: version,
       git_branch: gitBranch,
+      heuristic_task_type: classifyTask(gitBranch, userPrompts),
+      has_structured_output_antipattern: antiPatternResult.has_structured_output_antipattern,
+      structured_output_antipattern_count: antiPatternResult.structured_output_antipattern_count,
       total_input_tokens: totalInputTokens,
       total_output_tokens: totalOutputTokens,
       total_cache_creation_tokens: totalCacheCreationTokens,

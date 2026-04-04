@@ -5,6 +5,8 @@ from pathlib import Path
 
 from extract_prompts import parse_session_messages, _get_project_path_encoded, _UUID_PATTERN
 from config import get_config
+from task_classification import classify_task
+from anti_patterns import detect_structured_output_anti_pattern
 
 CLAUDE_DATA_DIR = Path.home() / ".claude" / "projects"
 
@@ -157,6 +159,9 @@ def build_conversations(
             "model": model,
             "claude_code_version": version,
             "git_branch": git_branch,
+            "heuristic_task_type": classify_task(git_branch, user_prompts),
+            **{k: v for k, v in detect_structured_output_anti_pattern(user_prompts).items()
+               if k != "structured_output_antipattern_indices"},
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
             "total_cache_creation_tokens": total_cache_creation_tokens,

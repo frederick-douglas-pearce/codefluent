@@ -12,6 +12,7 @@ import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand }
 import { buildConversationAnalytics } from './analytics'
 import { computeAgentMetrics, computeWeeklyAgentMetrics, AgentMetrics, WeeklyAgentMetrics } from './agentMetrics'
 import { getConfig, getDisplayConfig } from './config'
+import { scanConfigurationMaturity } from './configScanner'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codefluent.dashboard'
@@ -189,6 +190,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getConfig':
           data = this.handleGetConfig()
           break
+        case 'getConfigMaturity':
+          data = this.handleGetConfigMaturity()
+          break
         default:
           return
       }
@@ -334,6 +338,11 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
   private handleGetConfig() {
     return getDisplayConfig()
+  }
+
+  private handleGetConfigMaturity() {
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    return scanConfigurationMaturity(workspacePath)
   }
 
   private async handleOptimizePrompt(payload?: { prompt?: string }): Promise<OptimizeResponse> {
