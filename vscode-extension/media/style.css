@@ -108,6 +108,12 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   width: 100% !important;
   height: 300px !important;
 }
+#conv-task-type-chart {
+  width: 300px !important;
+  height: 300px !important;
+  margin: 0 auto;
+  display: block;
+}
 
 /* Usage Controls */
 .usage-controls {
