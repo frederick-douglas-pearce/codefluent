@@ -207,6 +207,8 @@ h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
   border-radius: var(--radius-md);
   padding: 16px;
   box-shadow: var(--shadow-sm);
+  min-width: 0;
+  overflow: hidden;
 }
 .pace-card-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
 .pace-card-value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
