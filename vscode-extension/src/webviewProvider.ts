@@ -443,9 +443,10 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       }
     }
     text = text.trim()
-    if (text.startsWith('```')) {
-      text = text.split('\n', 2)[1]
-      text = text.replace(/```\s*$/, '').trim()
+    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    const fenceMatch = text.match(/^```(?:\w*)\n([\s\S]*?)\n```\s*$/)
+    if (fenceMatch) {
+      text = fenceMatch[1].trim()
     }
 
     const parsed = JSON.parse(text)
