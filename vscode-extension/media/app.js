@@ -1926,6 +1926,7 @@ function renderConversationsCharts(data) {
       options: {
         responsive: true,
         maintainAspectRatio: true,
+        aspectRatio: 1,
         plugins: {
           legend: { display: false },
           tooltip: {
