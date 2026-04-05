@@ -618,6 +618,22 @@ document.addEventListener('click', (e) => {
     return
   }
 
+  // Generate hook config button
+  if (target.classList.contains('generate-hook-btn')) {
+    const idx = parseInt(target.dataset.gapIndex, 10)
+    generateHookConfig(idx, target)
+    return
+  }
+
+  // Copy hook config button
+  if (target.classList.contains('copy-hook-btn')) {
+    const configText = target.dataset.config
+    navigator.clipboard.writeText(configText)
+    target.textContent = 'Copied!'
+    setTimeout(() => target.textContent = 'Copy JSON', 2000)
+    return
+  }
+
   // Show more gaps button
   if (target.id === 'show-more-gaps-btn') {
     const hiddenGaps = document.querySelectorAll('.gap-item.gap-hidden')
@@ -2622,6 +2638,59 @@ async function loadConfigMaturity() {
   }
 }
 
+async function generateHookConfig(idx, btn) {
+  const gaps = state.enforcementGaps?.gaps || []
+  const gap = gaps[idx]
+  if (!gap) return
+
+  btn.disabled = true
+  btn.textContent = 'Generating...'
+  const resultDiv = document.getElementById(`hook-result-${idx}`)
+
+  try {
+    const resp = await fetch('/api/generate-hook-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        statement: gap.statement,
+        hook_event: gap.suggestedHookEvent || 'PreToolUse',
+        matcher: gap.suggestedMatcher || '',
+        severity: gap.severity || 'medium',
+        project: getSelectedProjectEncoded(),
+      }),
+    })
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}))
+      throw new Error(errData.detail || `Request failed: ${resp.status}`)
+    }
+    const result = await resp.json()
+
+    const configJson = JSON.stringify(result.hookConfig, null, 2)
+    resultDiv.innerHTML = `
+      <div class="hook-config-header">Hook Configuration</div>
+      <div class="hook-config-explanation">${escapeHtml(result.explanation)}</div>
+      <div class="hook-config-json">
+        <pre><code>${escapeHtml(configJson)}</code></pre>
+      </div>
+      <div class="hook-config-instructions">
+        <strong>How to apply:</strong>
+        <p>${escapeHtml(result.applyInstructions)}</p>
+        <ol>
+          <li>Open <code>.claude/settings.json</code> in your project (create it if needed)</li>
+          <li>Merge the hooks section from the JSON above</li>
+          <li>Changes take effect on the next Claude Code session</li>
+        </ol>
+      </div>
+      <button class="btn btn-secondary copy-hook-btn" data-config="${escapeHtml(configJson)}">Copy JSON</button>
+    `
+  } catch (err) {
+    resultDiv.innerHTML = `<p class="error-text">Failed to generate hook config: ${escapeHtml(err.message || String(err))}</p>`
+  } finally {
+    btn.disabled = false
+    btn.textContent = 'Generate Hook Config'
+  }
+}
+
 function renderConfigMaturity() {
   const container = document.getElementById('config-maturity-content')
   const result = computeMaturityScore(state.configMaturity, state.enforcementGaps)
@@ -2709,6 +2778,8 @@ function renderConfigMaturity() {
           <div class="gap-statement">${escapeHtml(gap.statement || '')}</div>
           <div class="gap-source">${escapeHtml(gap.source || '')}${gap.line ? `, line ${gap.line}` : ''} <span class="severity-badge ${severityClass}">${escapeHtml(severity)}</span></div>
           ${gap.suggestedHookEvent ? `<div class="gap-suggestion">Suggested hook: <strong>${escapeHtml(gap.suggestedHookEvent)}</strong></div>` : ''}
+          <button class="btn btn-secondary generate-hook-btn" data-gap-index="${i}">Generate Hook Config</button>
+          <div class="hook-config-result" id="hook-result-${i}"></div>
         </div>`
     })
     if (gapList.length > INITIAL_GAPS) {

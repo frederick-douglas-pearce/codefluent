@@ -1141,6 +1141,115 @@ async def optimize_prompt(request: OptimizeRequest):
     return result
 
 
+# --- Config Advisor ---
+
+_config_advisor_prompt = _load_prompt("config_advisor")
+CONFIG_ADVISOR_PROMPT_TEMPLATE = _config_advisor_prompt["template"]
+CONFIG_ADVISOR_PROMPT_VERSION = _config_advisor_prompt["version"]
+
+
+class ConfigAdvisorRequest(BaseModel):
+    statement: str = Field(..., min_length=1, max_length=2000)
+    hook_event: str = Field(default="PreToolUse", max_length=100)
+    matcher: str = Field(default="", max_length=200)
+    severity: str = Field(default="medium", max_length=20)
+    project: str = Field(default="", max_length=500)
+
+
+def _load_config_advisor_cache() -> dict:
+    cache_path = DATA_DIR / "config_advisor_cache.json"
+    if cache_path.exists():
+        with open(cache_path) as f:
+            return json.load(f)
+    return {}
+
+
+def _save_config_advisor_cache(cache: dict) -> None:
+    cache_path = DATA_DIR / "config_advisor_cache.json"
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(cache_path, "w") as f:
+        json.dump(cache, f, indent=2)
+
+
+@app.post("/api/generate-hook-config")
+async def generate_hook_config(request: ConfigAdvisorRequest):
+    """Generate a hook configuration for an enforcement gap."""
+    _check_rate_limit()
+    statement = request.statement.strip()
+    if not statement:
+        raise HTTPException(status_code=400, detail="Enforcement statement is required")
+
+    hook_event = request.hook_event or "PreToolUse"
+    matcher = request.matcher or ""
+
+    # Check cache
+    cache_key = _config_content_hash(statement + hook_event + matcher)
+    advisor_cache = _load_config_advisor_cache()
+    if advisor_cache.get(cache_key, {}).get("prompt_version") == CONFIG_ADVISOR_PROMPT_VERSION:
+        return advisor_cache[cache_key]
+
+    # Read CLAUDE.md context if project is specified
+    context_lines = "No additional context available."
+    if request.project:
+        try:
+            project_dir = _decode_project_path(request.project)
+            claude_md_path = Path(project_dir) / "CLAUDE.md"
+            if claude_md_path.exists():
+                content = claude_md_path.read_text(encoding="utf-8")
+                # Provide surrounding context (first 2000 chars as general context)
+                context_lines = content[:2000]
+        except (ValueError, Exception):
+            pass
+
+    prompt = _fill_template(CONFIG_ADVISOR_PROMPT_TEMPLATE, {
+        "STATEMENT": statement,
+        "HOOK_EVENT": hook_event,
+        "MATCHER": matcher or "none",
+        "SEVERITY": request.severity or "medium",
+        "CONTEXT": context_lines,
+    })
+
+    try:
+        response = with_retry(
+            lambda: client.messages.create(
+                model=get_config("optimizer.model"),
+                max_tokens=get_config("optimizer.maxTokens"),
+                temperature=0,
+                messages=[{"role": "user", "content": prompt}],
+            ),
+            context="generating hook config",
+        )
+        text = extract_text_from_response(response)
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+
+        parsed = json.loads(text)
+
+        # Validate response shape
+        if not isinstance(parsed.get("hookConfig"), dict):
+            raise ValueError("Invalid response: missing hookConfig object")
+        if not isinstance(parsed.get("explanation"), str) or not parsed["explanation"]:
+            raise ValueError("Invalid response: missing explanation")
+        if not isinstance(parsed.get("applyInstructions"), str) or not parsed["applyInstructions"]:
+            raise ValueError("Invalid response: missing applyInstructions")
+
+        result = {
+            "hookConfig": parsed["hookConfig"],
+            "explanation": parsed["explanation"],
+            "applyInstructions": parsed["applyInstructions"],
+            "prompt_version": CONFIG_ADVISOR_PROMPT_VERSION,
+        }
+
+        advisor_cache[cache_key] = result
+        _save_config_advisor_cache(advisor_cache)
+        return result
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=500, detail=_sanitize_error(f"Failed to parse API response: {e}"))
+    except ValueError as e:
+        raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=_sanitize_error(str(e)))
+
 
 def _derive_pattern_quality(pattern: str) -> str:
     if pattern in HIGH_QUALITY_PATTERNS:
