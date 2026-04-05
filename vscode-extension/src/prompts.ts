@@ -11,6 +11,7 @@ interface Registry {
   config: PromptEntry
   optimizer: PromptEntry
   single_scoring: PromptEntry
+  config_advisor?: PromptEntry
 }
 
 function getPromptsDir(): string {
@@ -54,6 +55,18 @@ export function loadSingleScoringPrompt(): { version: string; template: string }
   const filePath = path.join(getPromptsDir(), registry.single_scoring.file)
   return {
     version: registry.single_scoring.version,
+    template: fs.readFileSync(filePath, 'utf8'),
+  }
+}
+
+export function loadConfigAdvisorPrompt(): { version: string; template: string } {
+  const registry = loadRegistry()
+  if (!registry.config_advisor) {
+    throw new Error('config_advisor prompt not found in registry')
+  }
+  const filePath = path.join(getPromptsDir(), registry.config_advisor.file)
+  return {
+    version: registry.config_advisor.version,
     template: fs.readFileSync(filePath, 'utf8'),
   }
 }

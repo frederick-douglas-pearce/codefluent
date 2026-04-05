@@ -14,6 +14,7 @@ import { computeAgentMetrics, computeWeeklyAgentMetrics, AgentMetrics, WeeklyAge
 import { getConfig, getDisplayConfig } from './config'
 import { scanConfigurationMaturity } from './configScanner'
 import { detectEnforcementGaps } from './enforcementGaps'
+import { loadConfigAdvisorPrompt, fillTemplate } from './prompts'
 
 export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'codefluent.dashboard'
@@ -197,6 +198,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         case 'getEnforcementGaps':
           data = this.handleGetEnforcementGaps()
           break
+        case 'generateHookConfig':
+          data = await this.handleGenerateHookConfig(payload)
+          break
         default:
           return
       }
@@ -365,6 +369,109 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
 
     const maturity = scanConfigurationMaturity(workspacePath)
     return detectEnforcementGaps(content, maturity.hooks)
+  }
+
+  private async handleGenerateHookConfig(payload?: {
+    statement?: string
+    hookEvent?: string
+    matcher?: string
+    severity?: string
+    lineNumber?: number
+    source?: string
+  }): Promise<{ hookConfig: any; explanation: string; applyInstructions: string; prompt_version: string }> {
+    const statement = payload?.statement?.trim()
+    if (!statement) {
+      throw new Error('Enforcement statement is required')
+    }
+    if (statement.length > 2000) {
+      throw new Error('Statement must be 2,000 characters or less')
+    }
+    const hookEvent = payload?.hookEvent || 'PreToolUse'
+    const matcher = payload?.matcher || ''
+    const severity = payload?.severity || 'medium'
+
+    // Load prompt and check cache
+    const { version: promptVersion, template } = loadConfigAdvisorPrompt()
+    const cacheKey = ScoreCache.contentHash(statement + hookEvent + matcher)
+    const advisorCache = this.cache.readConfigAdvisor()
+    if (advisorCache[cacheKey]?.prompt_version === promptVersion) {
+      return advisorCache[cacheKey]
+    }
+
+    const apiKey = await this.getApiKey()
+    if (!apiKey) {
+      throw new Error('Anthropic API key is required for hook config generation')
+    }
+
+    // Read CLAUDE.md context around the line number
+    let contextLines = ''
+    const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+    if (workspacePath && payload?.lineNumber) {
+      try {
+        const claudeMdPath = path.join(workspacePath, 'CLAUDE.md')
+        const content = fs.readFileSync(claudeMdPath, 'utf8')
+        const lines = content.split('\n')
+        const lineIdx = payload.lineNumber - 1
+        const start = Math.max(0, lineIdx - 3)
+        const end = Math.min(lines.length, lineIdx + 4)
+        contextLines = lines.slice(start, end).join('\n')
+      } catch {
+        // No CLAUDE.md context available
+      }
+    }
+
+    const prompt = fillTemplate(template, {
+      STATEMENT: statement,
+      HOOK_EVENT: hookEvent,
+      MATCHER: matcher || 'none',
+      SEVERITY: severity,
+      CONTEXT: contextLines || 'No additional context available.',
+    })
+
+    const client = new Anthropic({ apiKey })
+    const response = await client.messages.create({
+      model: getConfig<string>('optimizer.model'),
+      max_tokens: getConfig<number>('optimizer.maxTokens'),
+      temperature: 0,
+      messages: [{ role: 'user', content: prompt }],
+    })
+
+    let text = ''
+    for (const block of response.content) {
+      if (block.type === 'text') {
+        text += block.text
+      }
+    }
+    text = text.trim()
+    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    const fenceMatch = text.match(/^```(?:\w*)\n([\s\S]*?)\n```\s*$/)
+    if (fenceMatch) {
+      text = fenceMatch[1].trim()
+    }
+
+    const parsed = JSON.parse(text)
+
+    // Validate response shape
+    if (!parsed.hookConfig || typeof parsed.hookConfig !== 'object') {
+      throw new Error('Invalid response: missing hookConfig object')
+    }
+    if (typeof parsed.explanation !== 'string' || !parsed.explanation) {
+      throw new Error('Invalid response: missing explanation')
+    }
+    if (typeof parsed.applyInstructions !== 'string' || !parsed.applyInstructions) {
+      throw new Error('Invalid response: missing applyInstructions')
+    }
+
+    const result = {
+      hookConfig: parsed.hookConfig,
+      explanation: parsed.explanation,
+      applyInstructions: parsed.applyInstructions,
+      prompt_version: promptVersion,
+    }
+
+    advisorCache[cacheKey] = result
+    this.cache.writeConfigAdvisor(advisorCache)
+    return result
   }
 
   private async handleOptimizePrompt(payload?: { prompt?: string }): Promise<OptimizeResponse> {
