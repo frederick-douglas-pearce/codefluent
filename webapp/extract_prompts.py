@@ -44,6 +44,14 @@ def extract_user_text(message_content) -> str:
     return ""
 
 
+_CLEAR_COMMAND_RE = re.compile(r'<command-name>/clear</command-name>')
+
+
+def is_clear_command(text: str) -> bool:
+    """Check if the extracted user text is a /clear command."""
+    return bool(_CLEAR_COMMAND_RE.search(text))
+
+
 def parse_session_messages(filepath: Path) -> dict | None:
     """Parse a single JSONL session file and extract individual timestamped messages.
 
@@ -96,14 +104,17 @@ def parse_session_messages(filepath: Path) -> dict | None:
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
             is_interrupted = text == "[Request interrupted by user for tool use]"
+            is_clear = is_clear_command(text)
             extracted = {
                 "type": "user",
                 "timestamp": msg.get("timestamp"),
                 "session_id": "",  # filled after loop
                 "file_position": i,
-                "content": None if (not text or is_interrupted) else text[:2000],
+                "content": None if (not text or is_interrupted or is_clear) else text[:2000],
                 "used_plan_mode": bool(msg.get("planContent")),
             }
+            if is_clear:
+                extracted["is_clear_command"] = True
             messages.append(extracted)
 
         elif msg_type == "assistant":
@@ -238,9 +249,11 @@ def parse_session_file(filepath: Path) -> dict | None:
             timestamps.append(timestamp)
 
         if msg_type == "user":
-            user_msg_count += 1
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
+            if is_clear_command(text):
+                continue  # skip /clear commands entirely
+            user_msg_count += 1
             if text and text != "[Request interrupted by user for tool use]":
                 user_prompts.append(text[:2000])
             if msg.get("planContent"):

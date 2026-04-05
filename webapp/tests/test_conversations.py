@@ -805,3 +805,91 @@ class TestContentHashInBuildConversations:
         assert new_convs[1]["id"] != convs[0]["id"]  # same content, different index-based ID
         assert new_convs[1]["content_hash"] == hash0
         assert new_convs[2]["content_hash"] == hash1
+
+
+class TestClearConversationBoundary:
+    """Tests for /clear command as conversation boundary."""
+
+    def _make_msg(self, type, ts, **kwargs):
+        return {"type": type, "timestamp": ts, "session_id": "sess-1", "file_position": 0, **kwargs}
+
+    def test_splits_at_clear(self):
+        msgs = [
+            self._make_msg("user", "2026-01-01T10:00:00Z", content="first", file_position=0),
+            self._make_msg("user", "2026-01-01T10:05:00Z", content="second", file_position=1),
+            self._make_msg("user", "2026-01-01T10:06:00Z", is_clear_command=True, file_position=2),
+            self._make_msg("user", "2026-01-01T10:07:00Z", content="third", file_position=3),
+        ]
+        convs = build_conversations(msgs, "test", "-test", 60)
+        assert len(convs) == 2
+        assert convs[0]["user_prompts"] == ["first", "second"]
+        assert convs[1]["user_prompts"] == ["third"]
+
+    def test_no_empty_conversation_at_start(self):
+        msgs = [
+            self._make_msg("user", "2026-01-01T10:00:00Z", is_clear_command=True, file_position=0),
+            self._make_msg("user", "2026-01-01T10:01:00Z", content="first", file_position=1),
+        ]
+        convs = build_conversations(msgs, "test", "-test", 60)
+        assert len(convs) == 1
+        assert convs[0]["user_prompts"] == ["first"]
+
+    def test_no_empty_conversation_at_end(self):
+        msgs = [
+            self._make_msg("user", "2026-01-01T10:00:00Z", content="first", file_position=0),
+            self._make_msg("user", "2026-01-01T10:05:00Z", is_clear_command=True, file_position=1),
+        ]
+        convs = build_conversations(msgs, "test", "-test", 60)
+        assert len(convs) == 1
+        assert convs[0]["user_prompts"] == ["first"]
+
+    def test_splits_without_inactivity_gap(self):
+        msgs = [
+            self._make_msg("user", "2026-01-01T10:00:00Z", content="p1", file_position=0),
+            self._make_msg("user", "2026-01-01T10:00:30Z", is_clear_command=True, file_position=1),
+            self._make_msg("user", "2026-01-01T10:01:00Z", content="p2", file_position=2),
+        ]
+        convs = build_conversations(msgs, "test", "-test", 60)
+        assert len(convs) == 2
+
+    def test_compact_does_not_split(self):
+        msgs = [
+            self._make_msg("user", "2026-01-01T10:00:00Z", content="p1", file_position=0),
+            self._make_msg("user", "2026-01-01T10:05:00Z", content="compact text", file_position=1),
+            self._make_msg("user", "2026-01-01T10:10:00Z", content="p2", file_position=2),
+        ]
+        convs = build_conversations(msgs, "test", "-test", 60)
+        assert len(convs) == 1
+        assert len(convs[0]["user_prompts"]) == 3
+
+    def test_consecutive_clears(self):
+        msgs = [
+            self._make_msg("user", "2026-01-01T10:00:00Z", content="p1", file_position=0),
+            self._make_msg("user", "2026-01-01T10:05:00Z", is_clear_command=True, file_position=1),
+            self._make_msg("user", "2026-01-01T10:06:00Z", is_clear_command=True, file_position=2),
+            self._make_msg("user", "2026-01-01T10:07:00Z", content="p2", file_position=3),
+        ]
+        convs = build_conversations(msgs, "test", "-test", 60)
+        assert len(convs) == 2
+        assert convs[0]["user_prompts"] == ["p1"]
+        assert convs[1]["user_prompts"] == ["p2"]
+
+    def test_clear_not_counted_in_user_message_count(self):
+        msgs = [
+            self._make_msg("user", "2026-01-01T10:00:00Z", content="p1", file_position=0),
+            self._make_msg("user", "2026-01-01T10:05:00Z", is_clear_command=True, file_position=1),
+            self._make_msg("user", "2026-01-01T10:10:00Z", content="p2", file_position=2),
+        ]
+        convs = build_conversations(msgs, "test", "-test", 60)
+        assert convs[0]["user_message_count"] == 1
+        assert convs[1]["user_message_count"] == 1
+
+    def test_clear_not_in_user_prompts(self):
+        msgs = [
+            self._make_msg("user", "2026-01-01T10:00:00Z", content="p1", file_position=0),
+            self._make_msg("user", "2026-01-01T10:05:00Z", is_clear_command=True, file_position=1),
+            self._make_msg("user", "2026-01-01T10:10:00Z", content="p2", file_position=2),
+        ]
+        convs = build_conversations(msgs, "test", "-test", 60)
+        all_prompts = [p for c in convs for p in c["user_prompts"]]
+        assert all_prompts == ["p1", "p2"]

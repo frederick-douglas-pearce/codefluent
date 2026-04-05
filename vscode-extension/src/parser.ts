@@ -45,6 +45,7 @@ export interface TimestampedMessage {
   // User message fields
   content?: string              // extracted text (truncated to 2000 chars)
   used_plan_mode?: boolean      // true if planContent present
+  is_clear_command?: boolean    // true if /clear command
   // Assistant message fields
   usage?: { input_tokens: number; output_tokens: number;
             cache_creation_input_tokens: number; cache_read_input_tokens: number }
@@ -82,6 +83,10 @@ export function extractUserText(content: unknown): string {
     return parts.join(' ')
   }
   return ''
+}
+
+export function isClearCommand(text: string): boolean {
+  return /<command-name>\/clear<\/command-name>/.test(text)
 }
 
 export function parseSessionFile(filepath: string): ParsedSession | null {
@@ -138,9 +143,10 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     if (msg.timestamp) timestamps.push(msg.timestamp)
 
     if (msgType === 'user') {
-      userMsgCount++
       const content = msg.message?.content ?? ''
       const text = extractUserText(content)
+      if (isClearCommand(text)) continue  // skip /clear commands entirely
+      userMsgCount++
       if (text && text !== '[Request interrupted by user for tool use]') {
         userPrompts.push(text.slice(0, 2000))
       }
@@ -279,13 +285,15 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
       const content = msg.message?.content ?? ''
       const text = extractUserText(content)
       const isInterrupted = text === '[Request interrupted by user for tool use]'
+      const isClear = isClearCommand(text)
       const extracted: TimestampedMessage = {
         type: 'user',
         timestamp: msg.timestamp || null,
         session_id: '', // filled after loop
         file_position: i,
-        content: (!text || isInterrupted) ? undefined : text.slice(0, 2000),
+        content: (!text || isInterrupted || isClear) ? undefined : text.slice(0, 2000),
         used_plan_mode: !!msg.planContent,
+        is_clear_command: isClear || undefined,
       }
       if (!version && msg.version) extracted.claude_code_version = msg.version
       if (!gitBranch && msg.gitBranch) extracted.git_branch = msg.gitBranch
