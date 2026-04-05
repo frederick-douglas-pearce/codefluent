@@ -2516,7 +2516,6 @@ async function generateHookConfig(idx, btn) {
         <ol>
           <li>Open <code>.claude/settings.json</code> in your project (create it if needed)</li>
           <li>Merge the hooks section from the JSON above</li>
-          <li>Changes take effect on the next Claude Code session</li>
         </ol>
       </div>
       <button class="btn btn-secondary copy-hook-btn" data-config="${escapeHtml(configJson)}">Copy JSON</button>
