@@ -44,21 +44,13 @@ def extract_user_text(message_content) -> str:
     return ""
 
 
-_COMMAND_NAME_RE = re.compile(r'<command-name>(/[^<]+)</command-name>')
+_SLASH_COMMAND_RE = re.compile(r'<command-name>/')
 _CLEAR_COMMAND_RE = re.compile(r'<command-name>/clear</command-name>')
 
-_SYSTEM_COMMANDS = frozenset({
-    "/clear", "/compact", "/exit", "/login", "/logout", "/status", "/init",
-    "/help", "/config", "/cost", "/doctor", "/memory", "/permissions",
-})
 
-
-def is_system_command(text: str) -> bool:
-    """Check if the text is a system command (not a user skill/custom command)."""
-    match = _COMMAND_NAME_RE.search(text)
-    if not match:
-        return False
-    return match.group(1) in _SYSTEM_COMMANDS
+def is_slash_command(text: str) -> bool:
+    """Check if the extracted user text is any slash command."""
+    return bool(_SLASH_COMMAND_RE.search(text))
 
 
 def is_clear_command(text: str) -> bool:
@@ -118,7 +110,7 @@ def parse_session_messages(filepath: Path) -> dict | None:
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
             is_interrupted = text == "[Request interrupted by user for tool use]"
-            is_command = is_system_command(text)
+            is_command = is_slash_command(text)
             is_clear = is_command and is_clear_command(text)
             extracted = {
                 "type": "user",
@@ -266,8 +258,8 @@ def parse_session_file(filepath: Path) -> dict | None:
         if msg_type == "user":
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
-            if is_system_command(text):
-                continue  # skip system commands (/clear, /compact, /help, etc.)
+            if is_slash_command(text):
+                continue  # skip all slash commands (not natural language prompts)
             user_msg_count += 1
             if text and text != "[Request interrupted by user for tool use]":
                 user_prompts.append(text[:2000])
