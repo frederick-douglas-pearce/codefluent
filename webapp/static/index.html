@@ -46,6 +46,7 @@
       <button class="tab" data-tab="quickwins">Quick Wins</button>
       <button class="tab" data-tab="usage">Usage</button>
       <button class="tab" data-tab="conversations">Conversations</button>
+      <button class="tab" data-tab="config">Config</button>
     </nav>
 
     <main class="content">
@@ -235,6 +236,20 @@
         </div>
         <div id="conversations-loading" style="display:none">
           <div class="loading-indicator">Loading conversations...</div>
+        </div>
+      </div>
+
+      <!-- Config Tab -->
+      <div id="tab-config" class="tab-panel">
+        <div class="section-header">
+          <h2>Configuration Maturity</h2>
+          <p>Assess your Claude Code configuration — CLAUDE.md, hooks, rules, commands, and more.</p>
+        </div>
+        <div id="config-maturity-content">
+          <div class="empty-state-box">
+            <div class="empty-state-icon">&#x2699;</div>
+            <p class="empty-state">Loading configuration data...</p>
+          </div>
         </div>
       </div>
     </main>
