@@ -44,7 +44,21 @@ def extract_user_text(message_content) -> str:
     return ""
 
 
+_COMMAND_NAME_RE = re.compile(r'<command-name>(/[^<]+)</command-name>')
 _CLEAR_COMMAND_RE = re.compile(r'<command-name>/clear</command-name>')
+
+_SYSTEM_COMMANDS = frozenset({
+    "/clear", "/compact", "/exit", "/login", "/logout", "/status", "/init",
+    "/help", "/config", "/cost", "/doctor", "/memory", "/permissions",
+})
+
+
+def is_system_command(text: str) -> bool:
+    """Check if the text is a system command (not a user skill/custom command)."""
+    match = _COMMAND_NAME_RE.search(text)
+    if not match:
+        return False
+    return match.group(1) in _SYSTEM_COMMANDS
 
 
 def is_clear_command(text: str) -> bool:
@@ -104,13 +118,14 @@ def parse_session_messages(filepath: Path) -> dict | None:
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
             is_interrupted = text == "[Request interrupted by user for tool use]"
-            is_clear = is_clear_command(text)
+            is_command = is_system_command(text)
+            is_clear = is_command and is_clear_command(text)
             extracted = {
                 "type": "user",
                 "timestamp": msg.get("timestamp"),
                 "session_id": "",  # filled after loop
                 "file_position": i,
-                "content": None if (not text or is_interrupted or is_clear) else text[:2000],
+                "content": None if (not text or is_interrupted or is_command) else text[:2000],
                 "used_plan_mode": bool(msg.get("planContent")),
             }
             if is_clear:
@@ -251,8 +266,8 @@ def parse_session_file(filepath: Path) -> dict | None:
         if msg_type == "user":
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
-            if is_clear_command(text):
-                continue  # skip /clear commands entirely
+            if is_system_command(text):
+                continue  # skip system commands (/clear, /compact, /help, etc.)
             user_msg_count += 1
             if text and text != "[Request interrupted by user for tool use]":
                 user_prompts.append(text[:2000])

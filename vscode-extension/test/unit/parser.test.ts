@@ -4,7 +4,7 @@ jest.mock('os')
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { extractUserText, parseSessionFile, getAllSessions, isClearCommand } from '../../src/parser'
+import { extractUserText, parseSessionFile, getAllSessions, isClearCommand, isSystemCommand } from '../../src/parser'
 
 const mockFs = fs as jest.Mocked<typeof fs>
 const mockOs = os as jest.Mocked<typeof os>
@@ -869,6 +869,33 @@ describe('getAllSessions', () => {
     expect(() => getAllSessions()).not.toThrow()
     const result = getAllSessions()
     expect(result.sessions).toHaveLength(2)
+  })
+})
+
+describe('isSystemCommand', () => {
+  it('returns true for system commands', () => {
+    for (const cmd of ['/clear', '/compact', '/exit', '/login', '/status', '/init', '/help', '/cost']) {
+      const text = `<command-name>${cmd}</command-name>\n<command-message>${cmd.slice(1)}</command-message>`
+      expect(isSystemCommand(text)).toBe(true)
+    }
+  })
+
+  it('returns false for user skills/custom commands', () => {
+    const text = '<command-name>/commit</command-name>\n<command-message>commit</command-message>'
+    expect(isSystemCommand(text)).toBe(false)
+  })
+
+  it('returns false for custom skill', () => {
+    const text = '<command-name>/review-labels</command-name>\n<command-message>review-labels</command-message>'
+    expect(isSystemCommand(text)).toBe(false)
+  })
+
+  it('returns false for plain text', () => {
+    expect(isSystemCommand('just a regular prompt')).toBe(false)
+  })
+
+  it('returns false for empty string', () => {
+    expect(isSystemCommand('')).toBe(false)
   })
 })
 
