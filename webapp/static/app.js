@@ -2544,7 +2544,7 @@ function computeMaturityScore(maturity, gaps) {
   const hookEvents = hooks.events || []
   const hookMultiEvent = hookEvents.length >= 2
   hookItems.push({ label: '2+ hook events', status: hookMultiEvent ? 'done' : hookEvents.length === 1 ? 'partial' : 'missing', detail: hookMultiEvent ? `${hookEvents.length} events: ${hookEvents.join(', ')}` : hookEvents.length === 1 ? `1 event: ${hookEvents[0]}` : 'Add hooks for multiple events' })
-  const hookMatchers = hooks.hasMatchers || false
+  const hookMatchers = hooks.matchers && hooks.matchers.length > 0
   hookItems.push({ label: 'File matchers', status: hookMatchers ? 'done' : 'missing', detail: hookMatchers ? 'Hooks use file pattern matching' : 'Add file matchers to scope hooks' })
   const hooksEarned = (hooksConfigured ? 10 : 0) + (hookMultiEvent ? 5 : hookEvents.length === 1 ? 2 : 0) + (hookMatchers ? 5 : 0)
   breakdown.push({ category: 'Hooks', earned: hooksEarned, max: 20, items: hookItems })
