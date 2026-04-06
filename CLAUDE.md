@@ -253,10 +253,9 @@ The webapp uses a project dropdown (populated from session data) to scope featur
 - Error handling: wrap API calls in try/catch, show user-friendly errors in webview
 
 ## Branching & PR Workflow
-- **`main`** — Always releasable. Protected by CI (tests must pass) and requires a PR to merge.
+- **`main`** — Always releasable. All changes require a PR with passing CI before merge.
 - **Feature branches** — `feature/<issue-number>-short-description` (e.g., `feature/44-remaining-recommendations`)
 - **Bug fix branches** — `fix/<issue-number>-short-description` (e.g., `fix/46-cache-unbounded`)
-- **PR required to merge to main** — CI runs automatically on the PR. All tests must pass before merge.
 - **Commit to feature/fix branches freely** — push often, squash or merge to main via PR.
 
 ### Commit Messages (Conventional Commits)
