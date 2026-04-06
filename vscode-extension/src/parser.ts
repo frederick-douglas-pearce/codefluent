@@ -85,6 +85,10 @@ export function extractUserText(content: unknown): string {
   return ''
 }
 
+export function isSlashCommand(text: string): boolean {
+  return /<command-name>\//.test(text)
+}
+
 export function isClearCommand(text: string): boolean {
   return /<command-name>\/clear<\/command-name>/.test(text)
 }
@@ -145,7 +149,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     if (msgType === 'user') {
       const content = msg.message?.content ?? ''
       const text = extractUserText(content)
-      if (isClearCommand(text)) continue  // skip /clear commands entirely
+      if (isSlashCommand(text)) continue  // skip all slash commands (not natural language prompts)
       userMsgCount++
       if (text && text !== '[Request interrupted by user for tool use]') {
         userPrompts.push(text.slice(0, 2000))
@@ -285,13 +289,14 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
       const content = msg.message?.content ?? ''
       const text = extractUserText(content)
       const isInterrupted = text === '[Request interrupted by user for tool use]'
-      const isClear = isClearCommand(text)
+      const isCommand = isSlashCommand(text)
+      const isClear = isCommand && isClearCommand(text)
       const extracted: TimestampedMessage = {
         type: 'user',
         timestamp: msg.timestamp || null,
         session_id: '', // filled after loop
         file_position: i,
-        content: (!text || isInterrupted || isClear) ? undefined : text.slice(0, 2000),
+        content: (!text || isInterrupted || isCommand) ? undefined : text.slice(0, 2000),
         used_plan_mode: !!msg.planContent,
         is_clear_command: isClear || undefined,
       }

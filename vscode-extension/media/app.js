@@ -1924,8 +1924,7 @@ function renderConversationsCharts(data) {
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: true,
+        responsive: false,
         plugins: {
           legend: { display: false },
           tooltip: {

@@ -2019,8 +2019,7 @@ function renderConversationsCharts(data) {
         }]
       },
       options: {
-        responsive: true,
-        maintainAspectRatio: false,
+        responsive: false,
         plugins: {
           legend: { display: false },
           tooltip: {

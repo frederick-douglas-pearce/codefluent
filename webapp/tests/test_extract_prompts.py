@@ -11,6 +11,7 @@ from extract_prompts import (
     get_all_sessions,
     _get_project_path_encoded,
     is_clear_command,
+    is_slash_command,
 )
 
 
@@ -851,6 +852,29 @@ class TestGetAllSessions:
 
         result = get_all_sessions(tmp_path)
         assert result["metadata"]["total_sessions"] == 1
+
+
+class TestIsSlashCommand:
+    """Tests for is_slash_command() detection."""
+
+    def test_true_for_system_commands(self):
+        for cmd in ["/clear", "/compact", "/exit", "/login", "/status", "/init", "/help", "/cost"]:
+            text = f'<command-name>{cmd}</command-name>\n<command-message>{cmd[1:]}</command-message>'
+            assert is_slash_command(text) is True, f"{cmd} should be detected"
+
+    def test_true_for_user_skills(self):
+        text = '<command-name>/commit</command-name>\n<command-message>commit</command-message>'
+        assert is_slash_command(text) is True
+
+    def test_true_for_custom_skill(self):
+        text = '<command-name>/review-labels</command-name>\n<command-message>review-labels</command-message>'
+        assert is_slash_command(text) is True
+
+    def test_false_for_plain_text(self):
+        assert is_slash_command("just a regular prompt") is False
+
+    def test_false_for_empty_string(self):
+        assert is_slash_command("") is False
 
 
 class TestIsClearCommand:
