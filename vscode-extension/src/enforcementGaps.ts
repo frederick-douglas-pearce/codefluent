@@ -147,22 +147,73 @@ export function mapToHookSuggestion(
   return { event: 'Stop', severity: 'medium' }
 }
 
+// Stop words to exclude from keyword matching
+const KEYWORD_STOP_WORDS = new Set([
+  'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+  'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+  'should', 'may', 'might', 'shall', 'can', 'to', 'of', 'in', 'for',
+  'on', 'with', 'at', 'by', 'from', 'as', 'into', 'through', 'during',
+  'before', 'after', 'above', 'below', 'between', 'out', 'off', 'over',
+  'under', 'again', 'further', 'then', 'once', 'all', 'each', 'every',
+  'both', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor',
+  'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very',
+  'and', 'but', 'or', 'if', 'while', 'that', 'this', 'these', 'those',
+  'it', 'its', 'they', 'them', 'their', 'we', 'our', 'you', 'your',
+  'must', 'always', 'never', 'required', 'without', 'exception',
+  'use', 'using', 'used',
+])
+
 /**
- * Check if a hook configuration covers a given event + matcher combination.
+ * Simple stemming: strip common suffixes for better matching.
+ */
+function stem(word: string): string {
+  return word
+    .replace(/(?:ing|tion|sion|ment|ness|ence|ance)$/, '')
+    .replace(/(?:ies)$/, 'y')
+    .replace(/(?:es|s)$/, '')
+    || word
+}
+
+/**
+ * Extract meaningful keywords from text for matching.
+ */
+export function extractKeywords(text: string): Set<string> {
+  const words = text.toLowerCase().replace(/[^a-z0-9_-]/g, ' ').split(/\s+/)
+  const keywords = new Set<string>()
+  for (const word of words) {
+    if (word.length >= 3 && !KEYWORD_STOP_WORDS.has(word)) {
+      const stemmed = stem(word)
+      if (stemmed.length >= 3) keywords.add(stemmed)
+    }
+  }
+  return keywords
+}
+
+/**
+ * Check if any hook command/prompt text has keyword overlap with a statement.
  *
- * @param hooks - Hook configuration with events and matchers arrays
- * @param event - The hook event to check (e.g., "PreToolUse")
- * @param matcher - Optional matcher to check (e.g., "Bash")
- * @returns true if the hook config covers this event+matcher
+ * @param statement - The enforcement statement text
+ * @param hookCommands - Array of hook command/prompt text strings
+ * @returns true if any hook command shares meaningful keywords with the statement
  */
 export function isHookCovered(
-  hooks: { events: string[]; matchers: string[] },
-  event: string,
-  matcher?: string,
+  statement: string,
+  hookCommands: string[],
 ): boolean {
-  if (!hooks.events.includes(event)) return false
-  if (!matcher) return true
-  return hooks.matchers.includes(matcher)
+  const stmtKeywords = extractKeywords(statement)
+  if (stmtKeywords.size === 0) return false
+
+  for (const cmd of hookCommands) {
+    const cmdKeywords = extractKeywords(cmd)
+    let overlap = 0
+    for (const kw of stmtKeywords) {
+      if (cmdKeywords.has(kw)) overlap++
+    }
+    // Require at least 2 keyword matches, or 1 if the statement has very few keywords
+    const threshold = stmtKeywords.size <= 3 ? 1 : 2
+    if (overlap >= threshold) return true
+  }
+  return false
 }
 
 /**
@@ -178,16 +229,17 @@ export function isHookCovered(
  */
 export function detectEnforcementGaps(
   claudeMdContent: string,
-  hooks: { configured: boolean; count: number; events: string[]; handlerTypes: string[]; matchers: string[] },
+  hooks: { configured: boolean; count: number; events: string[]; handlerTypes: string[]; matchers: string[]; hookCommands?: string[] },
   source: string = 'project root',
 ): EnforcementGapReport {
   const enforcementStatements = extractEnforcementStatements(claudeMdContent, source)
   const gaps: EnforcementGap[] = []
   let coveredCount = 0
+  const hookCommands = hooks.hookCommands || []
 
   for (const stmt of enforcementStatements) {
     const suggestion = mapToHookSuggestion(stmt.statement)
-    const covered = isHookCovered(hooks, suggestion.event, suggestion.matcher)
+    const covered = isHookCovered(stmt.statement, hookCommands)
 
     if (covered) {
       coveredCount++

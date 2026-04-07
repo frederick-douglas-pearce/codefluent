@@ -108,6 +108,7 @@ describe('scanConfigurationMaturity', () => {
         events: [],
         handlerTypes: [],
         matchers: [],
+        hookCommands: [],
       })
     })
 

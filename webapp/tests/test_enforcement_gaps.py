@@ -14,6 +14,7 @@ if str(WEBAPP_DIR) not in sys.path:
 from enforcement_gaps import (
     detect_enforcement_gaps,
     extract_enforcement_statements,
+    extract_keywords,
     is_hook_covered,
     map_to_hook_suggestion,
 )
@@ -222,34 +223,53 @@ class TestMapToHookSuggestion:
 # ---- is_hook_covered ----
 
 
+class TestExtractKeywords:
+    def test_extracts_meaningful_words_and_stems(self):
+        kw = extract_keywords("All scripts must have the nonce attribute")
+        assert "script" in kw    # stemmed from "scripts"
+        assert "nonce" in kw
+        assert "attribute" in kw
+        assert "must" not in kw  # stop word
+        assert "all" not in kw   # stop word
+
+    def test_returns_empty_for_stop_words_only(self):
+        kw = extract_keywords("must always be used")
+        assert len(kw) == 0
+
+
 class TestIsHookCovered:
-    def test_event_and_matcher_match(self):
-        hooks = {"events": ["PreToolUse"], "matchers": ["Bash"]}
-        assert is_hook_covered(hooks, "PreToolUse", "Bash") is True
+    def test_keyword_overlap_matches(self):
+        assert is_hook_covered(
+            "All scripts must have the nonce attribute",
+            ['grep -L nonce= "$file" | echo "missing nonce attribute"'],
+        ) is True
 
-    def test_event_matches_but_matcher_does_not(self):
-        hooks = {"events": ["PreToolUse"], "matchers": ["Edit"]}
-        assert is_hook_covered(hooks, "PreToolUse", "Bash") is False
+    def test_no_keyword_overlap(self):
+        assert is_hook_covered(
+            "Always explain trade-offs between approaches",
+            ['find . -name "*.test.*" | grep -q . || exit 1'],
+        ) is False
 
-    def test_no_hooks_configured(self):
-        hooks = {"events": [], "matchers": []}
-        assert is_hook_covered(hooks, "PreToolUse", "Bash") is False
+    def test_empty_hook_commands(self):
+        assert is_hook_covered("Must run tests before commit", []) is False
 
-    def test_event_matches_no_matcher_specified(self):
-        hooks = {"events": ["Stop"], "matchers": []}
-        assert is_hook_covered(hooks, "Stop", None) is True
+    def test_test_statement_matches_test_hook(self):
+        assert is_hook_covered(
+            "All new features must have tests",
+            ['find . -name "*.test.*" -o -name "test_*" | grep -q .'],
+        ) is True
 
-    def test_event_does_not_match(self):
-        hooks = {"events": ["PostToolUse"], "matchers": ["Bash"]}
-        assert is_hook_covered(hooks, "PreToolUse", "Bash") is False
+    def test_unrelated_hook_does_not_match(self):
+        assert is_hook_covered(
+            "All shell commands must use execFileSync with argument arrays",
+            ['find . -name "*.test.*" | grep -q .'],
+        ) is False
 
-    def test_multiple_events_and_matchers(self):
-        hooks = {"events": ["PreToolUse", "PostToolUse"], "matchers": ["Bash", "Edit"]}
-        assert is_hook_covered(hooks, "PostToolUse", "Edit") is True
-
-    def test_event_matches_matcher_undefined(self):
-        hooks = {"events": ["PreToolUse"], "matchers": ["Bash"]}
-        assert is_hook_covered(hooks, "PreToolUse", None) is True
+    def test_matches_across_multiple_commands(self):
+        assert is_hook_covered(
+            "All scripts must have the nonce attribute",
+            ['echo "test check"', 'grep -L nonce= "$file" | echo "nonce missing"'],
+        ) is True
 
 
 # ---- detect_enforcement_gaps ----
@@ -261,6 +281,7 @@ NO_HOOKS = {
     "events": [],
     "handlerTypes": [],
     "matchers": [],
+    "hookCommands": [],
 }
 
 
@@ -272,7 +293,7 @@ class TestDetectEnforcementGaps:
         assert len(report["gaps"]) == 2
         assert report["coveredCount"] == 0
 
-    def test_covered_when_matching_hook_exists(self):
+    def test_covered_when_hook_command_has_keyword_overlap(self):
         content = "Always run tests before commit"
         hooks = {
             "configured": True,
@@ -280,6 +301,7 @@ class TestDetectEnforcementGaps:
             "events": ["PreToolUse"],
             "handlerTypes": ["command"],
             "matchers": ["Bash"],
+            "hookCommands": ["git commit && npm test || exit 1"],
         }
         report = detect_enforcement_gaps(content, hooks)
         assert len(report["enforcementStatements"]) == 1
@@ -294,9 +316,11 @@ class TestDetectEnforcementGaps:
             "events": ["PreToolUse"],
             "handlerTypes": ["command"],
             "matchers": ["Bash"],
+            "hookCommands": ['find . -name "*.test.*" | grep -q . || echo "tests missing"'],
         }
         report = detect_enforcement_gaps(content, hooks)
         assert len(report["enforcementStatements"]) == 3
+        # "tests" keyword overlaps -> covered; "prettier" and "review" don't -> gaps
         assert report["coveredCount"] == 1
         assert len(report["gaps"]) == 2
 
