@@ -1,0 +1,36 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(echo \"$TOOL_INPUT\" | jq -r '.path // .file_path // empty'); if [[ \"$file\" == *.html ]] || [[ \"$file\" == *.htm ]]; then if grep -q '<script' \"$file\" 2>/dev/null; then if grep -L 'nonce=' \"$file\" | grep -q .; then echo \"Error: HTML file $file contains <script> tags without nonce attribute. All scripts must have nonce attribute for CSP compliance.\"; exit 1; fi; fi; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$TOOL_INPUT\" | jq -r '.command' | grep -qE '\\b(git\\s+(commit|merge)|npm\\s+run\\s+build|make\\s+release)\\b' && (find . -name '*.test.*' -o -name '*_test.*' -o -name 'test_*' -o -name '__tests__' -type d | grep -q . || (echo 'No test files found. All new features must have tests before committing/merging.' && exit 1)) || exit 0"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "find . -path ./node_modules -prune -o -path ./.git -prune -o \\( -name '*.test.*' -o -name '*_test.*' -o -name 'test_*' -o -name 'conftest.py' \\) -type f -print | grep -q . || (echo 'Warning: No test files detected. All new features should have tests.' >&2 && exit 2)"
+          }
+        ]
+      }
+    ]
+  }
+}
