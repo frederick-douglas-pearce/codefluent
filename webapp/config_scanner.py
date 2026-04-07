@@ -80,7 +80,7 @@ def _read_file_safe(file_path: Path) -> str | None:
 
 def _scan_hooks(project_root: Path | None, home_dir: Path) -> dict:
     """Scan for hook configurations in settings.json files."""
-    result = {"configured": False, "count": 0, "events": [], "handlerTypes": [], "matchers": []}
+    result = {"configured": False, "count": 0, "events": [], "handlerTypes": [], "matchers": [], "hookCommands": []}
 
     settings_paths = [home_dir / ".claude" / "settings.json"]
     if project_root:
@@ -89,6 +89,7 @@ def _scan_hooks(project_root: Path | None, home_dir: Path) -> dict:
     all_events: set[str] = set()
     all_handler_types: set[str] = set()
     all_matchers: set[str] = set()
+    all_hook_commands: list[str] = []
     total_count = 0
 
     for settings_path in settings_paths:
@@ -120,12 +121,16 @@ def _scan_hooks(project_root: Path | None, home_dir: Path) -> dict:
                     hook_type = hook.get("type")
                     if hook_type:
                         all_handler_types.add(hook_type)
+                    cmd_text = hook.get("command") or hook.get("prompt") or ""
+                    if cmd_text:
+                        all_hook_commands.append(cmd_text)
 
     result["configured"] = total_count > 0
     result["count"] = total_count
     result["events"] = sorted(all_events)
     result["handlerTypes"] = sorted(all_handler_types)
     result["matchers"] = sorted(all_matchers)
+    result["hookCommands"] = all_hook_commands
     return result
 
 

@@ -88,6 +88,7 @@ class TestScanHooks:
             "events": [],
             "handlerTypes": [],
             "matchers": [],
+            "hookCommands": [],
         }
 
     def test_detects_hooks_from_project_settings(self, tmp_path):

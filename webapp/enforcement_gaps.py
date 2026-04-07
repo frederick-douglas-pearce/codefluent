@@ -109,22 +109,70 @@ def map_to_hook_suggestion(statement: str) -> dict:
     return {"event": "Stop", "matcher": None, "severity": "medium"}
 
 
-def is_hook_covered(hooks: dict, event: str, matcher: str | None) -> bool:
-    """Check if a hook configuration covers a given event + matcher.
+_KEYWORD_STOP_WORDS = frozenset({
+    "a", "an", "the", "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did", "will", "would", "could",
+    "should", "may", "might", "shall", "can", "to", "of", "in", "for",
+    "on", "with", "at", "by", "from", "as", "into", "through", "during",
+    "before", "after", "above", "below", "between", "out", "off", "over",
+    "under", "again", "further", "then", "once", "all", "each", "every",
+    "both", "few", "more", "most", "other", "some", "such", "no", "nor",
+    "not", "only", "own", "same", "so", "than", "too", "very",
+    "and", "but", "or", "if", "while", "that", "this", "these", "those",
+    "it", "its", "they", "them", "their", "we", "our", "you", "your",
+    "must", "always", "never", "required", "without", "exception",
+    "use", "using", "used",
+})
+
+
+def _stem(word: str) -> str:
+    """Simple stemming: strip common suffixes for better matching."""
+    for suffix in ("ing", "tion", "sion", "ment", "ness", "ence", "ance"):
+        if word.endswith(suffix):
+            return word[: -len(suffix)] or word
+    if word.endswith("ies"):
+        return word[:-3] + "y"
+    if word.endswith("es"):
+        return word[:-2] or word
+    if word.endswith("s") and not word.endswith("ss"):
+        return word[:-1] or word
+    return word
+
+
+def extract_keywords(text: str) -> set[str]:
+    """Extract meaningful keywords from text for matching."""
+    words = re.sub(r"[^a-z0-9_-]", " ", text.lower()).split()
+    result = set()
+    for w in words:
+        if len(w) >= 3 and w not in _KEYWORD_STOP_WORDS:
+            stemmed = _stem(w)
+            if len(stemmed) >= 3:
+                result.add(stemmed)
+    return result
+
+
+def is_hook_covered(statement: str, hook_commands: list[str]) -> bool:
+    """Check if any hook command/prompt text has keyword overlap with a statement.
 
     Args:
-        hooks: Hook configuration dict with "events" and "matchers" lists.
-        event: The hook event to check (e.g., "PreToolUse").
-        matcher: Optional matcher to check (e.g., "Bash").
+        statement: The enforcement statement text.
+        hook_commands: List of hook command/prompt text strings.
 
     Returns:
-        True if the hook config covers this event+matcher.
+        True if any hook command shares meaningful keywords with the statement.
     """
-    if event not in hooks.get("events", []):
+    stmt_keywords = extract_keywords(statement)
+    if not stmt_keywords:
         return False
-    if not matcher:
-        return True
-    return matcher in hooks.get("matchers", [])
+
+    threshold = 1 if len(stmt_keywords) <= 3 else 2
+
+    for cmd in hook_commands:
+        cmd_keywords = extract_keywords(cmd)
+        overlap = len(stmt_keywords & cmd_keywords)
+        if overlap >= threshold:
+            return True
+    return False
 
 
 def detect_enforcement_gaps(
@@ -149,9 +197,11 @@ def detect_enforcement_gaps(
     gaps: list[dict] = []
     covered_count = 0
 
+    hook_commands = hooks.get("hookCommands", [])
+
     for stmt in enforcement_statements:
         suggestion = map_to_hook_suggestion(stmt["statement"])
-        covered = is_hook_covered(hooks, suggestion["event"], suggestion["matcher"])
+        covered = is_hook_covered(stmt["statement"], hook_commands)
 
         if covered:
             covered_count += 1

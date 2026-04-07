@@ -2,6 +2,7 @@ import {
   extractEnforcementStatements,
   mapToHookSuggestion,
   isHookCovered,
+  extractKeywords,
   detectEnforcementGaps,
   EnforcementStatement,
   EnforcementGap,
@@ -247,42 +248,70 @@ describe('mapToHookSuggestion', () => {
   })
 })
 
+// ---- extractKeywords ----
+
+describe('extractKeywords', () => {
+  it('extracts meaningful words, removes stop words, and stems', () => {
+    const kw = extractKeywords('All scripts must have the nonce attribute')
+    expect(kw.has('script')).toBe(true)   // stemmed from "scripts"
+    expect(kw.has('nonce')).toBe(true)
+    expect(kw.has('attribute')).toBe(true)
+    expect(kw.has('must')).toBe(false)    // stop word
+    expect(kw.has('all')).toBe(false)     // stop word
+    expect(kw.has('the')).toBe(false)     // stop word
+  })
+
+  it('lowercases and filters short words', () => {
+    const kw = extractKeywords('Use CI/CD for PR')
+    expect(kw.has('ci')).toBe(false)   // too short
+    expect(kw.has('cd')).toBe(false)   // too short
+    expect(kw.has('pr')).toBe(false)   // too short
+  })
+
+  it('returns empty set for stop-words-only text', () => {
+    const kw = extractKeywords('must always be used')
+    expect(kw.size).toBe(0)
+  })
+})
+
 // ---- isHookCovered ----
 
 describe('isHookCovered', () => {
-  it('returns true when event and matcher both match', () => {
-    const hooks = { events: ['PreToolUse'], matchers: ['Bash'] }
-    expect(isHookCovered(hooks, 'PreToolUse', 'Bash')).toBe(true)
+  it('returns true when hook command shares keywords with statement', () => {
+    const statement = 'All scripts must have the nonce attribute'
+    const hookCommands = ['grep -L nonce= "$file" | grep -q . && echo "missing nonce attribute"']
+    expect(isHookCovered(statement, hookCommands)).toBe(true)
   })
 
-  it('returns false when event matches but matcher does not', () => {
-    const hooks = { events: ['PreToolUse'], matchers: ['Edit'] }
-    expect(isHookCovered(hooks, 'PreToolUse', 'Bash')).toBe(false)
+  it('returns false when hook command has no keyword overlap', () => {
+    const statement = 'Always explain trade-offs between approaches'
+    const hookCommands = ['find . -name "*.test.*" | grep -q . || exit 1']
+    expect(isHookCovered(statement, hookCommands)).toBe(false)
   })
 
-  it('returns false when no hooks configured (empty arrays)', () => {
-    const hooks = { events: [], matchers: [] }
-    expect(isHookCovered(hooks, 'PreToolUse', 'Bash')).toBe(false)
+  it('returns false when no hook commands exist', () => {
+    expect(isHookCovered('Must run tests before commit', [])).toBe(false)
   })
 
-  it('returns true when event matches and no matcher specified', () => {
-    const hooks = { events: ['Stop'], matchers: [] }
-    expect(isHookCovered(hooks, 'Stop')).toBe(true)
+  it('matches test-related statement to test-checking hook', () => {
+    const statement = 'All new features must have tests'
+    const hookCommands = ['find . -name "*.test.*" -o -name "test_*" | grep -q . || echo "No test files"']
+    expect(isHookCovered(statement, hookCommands)).toBe(true)
   })
 
-  it('returns false when event does not match', () => {
-    const hooks = { events: ['PostToolUse'], matchers: ['Bash'] }
-    expect(isHookCovered(hooks, 'PreToolUse', 'Bash')).toBe(false)
+  it('does not match unrelated hooks', () => {
+    const statement = 'All shell commands must use execFileSync with argument arrays'
+    const hookCommands = ['find . -name "*.test.*" | grep -q .']
+    expect(isHookCovered(statement, hookCommands)).toBe(false)
   })
 
-  it('returns true with multiple events and matchers', () => {
-    const hooks = { events: ['PreToolUse', 'PostToolUse'], matchers: ['Bash', 'Edit'] }
-    expect(isHookCovered(hooks, 'PostToolUse', 'Edit')).toBe(true)
-  })
-
-  it('returns false when matcher is undefined and event matches', () => {
-    const hooks = { events: ['PreToolUse'], matchers: ['Bash'] }
-    expect(isHookCovered(hooks, 'PreToolUse', undefined)).toBe(true)
+  it('matches across multiple hook commands', () => {
+    const statement = 'All scripts must have the nonce attribute'
+    const hookCommands = [
+      'echo "test check"',
+      'grep -L nonce= "$file" | echo "nonce missing"',
+    ]
+    expect(isHookCovered(statement, hookCommands)).toBe(true)
   })
 })
 
@@ -295,6 +324,7 @@ describe('detectEnforcementGaps', () => {
     events: [] as string[],
     handlerTypes: [] as string[],
     matchers: [] as string[],
+    hookCommands: [] as string[],
   }
 
   it('reports all statements as gaps when no hooks configured', () => {
@@ -305,7 +335,7 @@ describe('detectEnforcementGaps', () => {
     expect(report.coveredCount).toBe(0)
   })
 
-  it('marks statement as covered when matching hook exists', () => {
+  it('marks statement as covered when hook command has keyword overlap', () => {
     const content = 'Always run tests before commit'
     const hooks = {
       configured: true,
@@ -313,6 +343,7 @@ describe('detectEnforcementGaps', () => {
       events: ['PreToolUse'],
       handlerTypes: ['command'],
       matchers: ['Bash'],
+      hookCommands: ['git commit && npm test || exit 1'],
     }
     const report = detectEnforcementGaps(content, hooks)
     expect(report.enforcementStatements).toHaveLength(1)
@@ -328,12 +359,13 @@ describe('detectEnforcementGaps', () => {
       events: ['PreToolUse'],
       handlerTypes: ['command'],
       matchers: ['Bash'],
+      hookCommands: ['find . -name "*.test.*" | grep -q . || echo "tests missing"'],
     }
     const report = detectEnforcementGaps(content, hooks)
     expect(report.enforcementStatements).toHaveLength(3)
-    // "tests" -> PreToolUse/Bash -> covered
-    // "prettier" -> PostToolUse/Edit|Write -> not covered
-    // "review" -> Stop -> not covered
+    // "tests" keyword overlaps with hook command -> covered
+    // "prettier" no overlap -> not covered
+    // "review" no overlap -> not covered
     expect(report.coveredCount).toBe(1)
     expect(report.gaps).toHaveLength(2)
   })
