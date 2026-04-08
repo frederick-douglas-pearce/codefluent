@@ -360,6 +360,77 @@ class TestScanMcp:
         result = scan_configuration_maturity(str(project), str(home))
         assert result["mcp"]["configured"] is False
 
+    def test_detects_project_level_servers_in_claude_json(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        project.mkdir()
+        (home / ".claude.json").write_text(json.dumps({
+            "projects": {
+                str(project): {
+                    "mcpServers": {
+                        "playwright": {"type": "stdio", "command": "npx", "args": ["@playwright/mcp@latest"]},
+                    },
+                },
+            },
+        }))
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["mcp"]["configured"] is True
+        assert result["mcp"]["serverCount"] == 1
+
+    def test_merges_project_level_claude_json_with_other_sources(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".mcp.json").write_text(json.dumps({
+            "mcpServers": {"github": {"command": "gh-mcp"}},
+        }))
+        (home / ".claude.json").write_text(json.dumps({
+            "mcpServers": {"global": {"command": "global-server"}},
+            "projects": {
+                str(project): {
+                    "mcpServers": {
+                        "playwright": {"command": "pw"},
+                        "github": {"command": "gh-mcp"},  # duplicate with .mcp.json
+                    },
+                },
+            },
+        }))
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["mcp"]["configured"] is True
+        assert result["mcp"]["serverCount"] == 3  # github, global, playwright
+
+    def test_ignores_project_entry_without_mcp_servers(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        project.mkdir()
+        (home / ".claude.json").write_text(json.dumps({
+            "projects": {
+                str(project): {"allowedTools": []},
+            },
+        }))
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["mcp"]["configured"] is False
+        assert result["mcp"]["serverCount"] == 0
+
+    def test_ignores_project_entries_for_different_paths(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        project.mkdir()
+        (home / ".claude.json").write_text(json.dumps({
+            "projects": {
+                "/some/other/project": {
+                    "mcpServers": {"playwright": {"command": "pw"}},
+                },
+            },
+        }))
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["mcp"]["configured"] is False
+        assert result["mcp"]["serverCount"] == 0
+
 
 # ---- scan_configuration_maturity: claudeMd ----
 
