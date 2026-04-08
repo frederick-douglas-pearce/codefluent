@@ -221,11 +221,21 @@ function scanMcp(projectRoot: string | undefined, homeDir: string): Configuratio
     }
   }
 
-  // User-level ~/.claude.json
+  // User-level ~/.claude.json (top-level mcpServers)
   const userMcp = readJsonSafe(path.join(homeDir, '.claude.json'))
   if (userMcp?.mcpServers) {
     for (const name of Object.keys(userMcp.mcpServers)) {
       serverNames.add(name)
+    }
+  }
+
+  // Project-level mcpServers in ~/.claude.json (projects.<path>.mcpServers)
+  if (projectRoot && userMcp?.projects) {
+    const projectEntry = userMcp.projects[projectRoot]
+    if (projectEntry?.mcpServers && typeof projectEntry.mcpServers === 'object') {
+      for (const name of Object.keys(projectEntry.mcpServers)) {
+        serverNames.add(name)
+      }
     }
   }
 

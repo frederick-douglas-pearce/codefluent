@@ -355,6 +355,69 @@ describe('scanConfigurationMaturity', () => {
       const result = scanConfigurationMaturity(projectRoot, homeDir)
       expect(result.mcp.configured).toBe(false)
     })
+
+    it('detects project-level mcpServers in ~/.claude.json projects entry', () => {
+      fs.writeFileSync(path.join(homeDir, '.claude.json'), JSON.stringify({
+        projects: {
+          [projectRoot]: {
+            mcpServers: {
+              playwright: { type: 'stdio', command: 'npx', args: ['@playwright/mcp@latest'] },
+            },
+          },
+        },
+      }))
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.mcp.configured).toBe(true)
+      expect(result.mcp.serverCount).toBe(1)
+    })
+
+    it('merges project-level ~/.claude.json servers with other sources', () => {
+      fs.writeFileSync(path.join(projectRoot, '.mcp.json'), JSON.stringify({
+        mcpServers: { github: { command: 'gh-mcp' } },
+      }))
+      fs.writeFileSync(path.join(homeDir, '.claude.json'), JSON.stringify({
+        mcpServers: { global: { command: 'global-server' } },
+        projects: {
+          [projectRoot]: {
+            mcpServers: {
+              playwright: { command: 'pw' },
+              github: { command: 'gh-mcp' }, // duplicate with .mcp.json
+            },
+          },
+        },
+      }))
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.mcp.configured).toBe(true)
+      expect(result.mcp.serverCount).toBe(3) // github, global, playwright
+    })
+
+    it('ignores project entry without mcpServers key', () => {
+      fs.writeFileSync(path.join(homeDir, '.claude.json'), JSON.stringify({
+        projects: {
+          [projectRoot]: { allowedTools: [] },
+        },
+      }))
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.mcp.configured).toBe(false)
+      expect(result.mcp.serverCount).toBe(0)
+    })
+
+    it('ignores project entries for different project paths', () => {
+      fs.writeFileSync(path.join(homeDir, '.claude.json'), JSON.stringify({
+        projects: {
+          '/some/other/project': {
+            mcpServers: { playwright: { command: 'pw' } },
+          },
+        },
+      }))
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.mcp.configured).toBe(false)
+      expect(result.mcp.serverCount).toBe(0)
+    })
   })
 
   // ---- CLAUDE.md ----

@@ -209,11 +209,18 @@ def _scan_mcp(project_root: Path | None, home_dir: Path) -> dict:
             for name in project_mcp["mcpServers"]:
                 server_names.add(name)
 
-    # User-level ~/.claude.json
+    # User-level ~/.claude.json (top-level mcpServers)
     user_mcp = _read_json_safe(home_dir / ".claude.json")
     if user_mcp and isinstance(user_mcp.get("mcpServers"), dict):
         for name in user_mcp["mcpServers"]:
             server_names.add(name)
+
+    # Project-level mcpServers in ~/.claude.json (projects.<path>.mcpServers)
+    if project_root and user_mcp and isinstance(user_mcp.get("projects"), dict):
+        project_entry = user_mcp["projects"].get(str(project_root))
+        if project_entry and isinstance(project_entry.get("mcpServers"), dict):
+            for name in project_entry["mcpServers"]:
+                server_names.add(name)
 
     result["serverCount"] = len(server_names)
     result["configured"] = len(server_names) > 0
