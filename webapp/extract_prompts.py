@@ -82,6 +82,23 @@ def is_custom_command(text: str) -> bool:
     return name not in SYSTEM_COMMANDS
 
 
+_SYSTEM_INJECTED_TAGS = re.compile(
+    r'<(?:task-notification|system-reminder|local-command-caveat'
+    r'|local-command-stdout|local-command-stderr|user-prompt-submit-hook)[\s>]'
+)
+
+_SESSION_CONTINUATION_PREFIX = "This session is being continued from a previous conversation"
+
+
+def is_system_injected_message(text: str) -> bool:
+    """Detect system-injected messages that arrive as type 'user' but are not human input."""
+    if _SYSTEM_INJECTED_TAGS.search(text):
+        return True
+    if text.startswith(_SESSION_CONTINUATION_PREFIX):
+        return True
+    return False
+
+
 def parse_session_messages(filepath: Path) -> dict | None:
     """Parse a single JSONL session file and extract individual timestamped messages.
 
@@ -135,6 +152,7 @@ def parse_session_messages(filepath: Path) -> dict | None:
             text = extract_user_text(content)
             is_interrupted = text == "[Request interrupted by user for tool use]"
             is_command = is_slash_command(text)
+            is_system = not is_command and is_system_injected_message(text)
             is_clear = is_command and is_clear_command(text)
             cmd_name = extract_command_name(text) if is_command else None
             is_custom = cmd_name is not None and cmd_name not in SYSTEM_COMMANDS
@@ -143,7 +161,7 @@ def parse_session_messages(filepath: Path) -> dict | None:
                 "timestamp": msg.get("timestamp"),
                 "session_id": "",  # filled after loop
                 "file_position": i,
-                "content": None if (not text or is_interrupted or is_command) else text[:2000],
+                "content": None if (not text or is_interrupted or is_command or is_system) else text[:2000],
                 "used_plan_mode": bool(msg.get("planContent")),
             }
             if is_clear:
@@ -292,6 +310,8 @@ def parse_session_file(filepath: Path) -> dict | None:
                 if cmd_name and cmd_name not in SYSTEM_COMMANDS:
                     commands_used.add(cmd_name)
                 continue  # skip all slash commands (not natural language prompts)
+            if is_system_injected_message(text):
+                continue  # skip system-injected messages
             user_msg_count += 1
             if text and text != "[Request interrupted by user for tool use]":
                 user_prompts.append(text[:2000])

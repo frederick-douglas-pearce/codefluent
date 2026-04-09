@@ -14,6 +14,7 @@ from extract_prompts import (
     is_slash_command,
     extract_command_name,
     is_custom_command,
+    is_system_injected_message,
     SYSTEM_COMMANDS,
 )
 
@@ -998,3 +999,88 @@ class TestParseSessionFileCommandsUsed:
         result = parse_session_file(session)
         assert result is not None
         assert result["commands_used"] == ["/commit", "/rebuild"]
+
+
+class TestIsSystemInjectedMessage:
+    """Tests for is_system_injected_message() detection."""
+
+    def test_detects_task_notification(self):
+        assert is_system_injected_message("<task-notification>\n<task-id>abc</task-id>\n</task-notification>") is True
+
+    def test_detects_system_reminder(self):
+        assert is_system_injected_message("<system-reminder>\nThe following tools are available\n</system-reminder>") is True
+
+    def test_detects_local_command_caveat(self):
+        assert is_system_injected_message("<local-command-caveat>Caveat: messages below...</local-command-caveat>") is True
+
+    def test_detects_local_command_stdout(self):
+        assert is_system_injected_message("<local-command-stdout>See ya!</local-command-stdout>") is True
+
+    def test_detects_local_command_stderr(self):
+        assert is_system_injected_message("<local-command-stderr>Error: not found</local-command-stderr>") is True
+
+    def test_detects_user_prompt_submit_hook(self):
+        assert is_system_injected_message("<user-prompt-submit-hook>hook output</user-prompt-submit-hook>") is True
+
+    def test_detects_session_continuation(self):
+        assert is_system_injected_message("This session is being continued from a previous conversation that ran out of context.") is True
+
+    def test_false_for_regular_prompt(self):
+        assert is_system_injected_message("Implement a login page with OAuth") is False
+
+    def test_false_for_empty_string(self):
+        assert is_system_injected_message("") is False
+
+    def test_false_for_prompt_mentioning_system_concepts(self):
+        assert is_system_injected_message("Add a task notification feature to the app") is False
+
+
+class TestParseSessionFileSystemMessageFiltering:
+    """Tests for system-injected message filtering in parse_session_file."""
+
+    def test_excludes_task_notification(self, tmp_path):
+        session = tmp_path / "project" / "s1.jsonl"
+        session.parent.mkdir(parents=True)
+        session.write_text("\n".join([
+            json.dumps({"type": "user", "sessionId": "s1", "cwd": "/project",
+                        "message": {"content": "a real prompt"}, "timestamp": "2026-01-01T00:00:00Z"}),
+            json.dumps({"type": "user", "message": {"content": "<task-notification>\n<task-id>abc</task-id>\n<status>completed</status>\n</task-notification>"},
+                        "timestamp": "2026-01-01T00:01:00Z"}),
+            json.dumps({"type": "user", "message": {"content": "another real prompt"},
+                        "timestamp": "2026-01-01T00:02:00Z"}),
+        ]))
+        result = parse_session_file(session)
+        assert result is not None
+        assert result["user_prompts"] == ["a real prompt", "another real prompt"]
+        assert result["user_message_count"] == 2
+
+    def test_excludes_session_continuation(self, tmp_path):
+        session = tmp_path / "project" / "s1.jsonl"
+        session.parent.mkdir(parents=True)
+        session.write_text("\n".join([
+            json.dumps({"type": "user", "sessionId": "s1", "cwd": "/project",
+                        "message": {"content": "This session is being continued from a previous conversation that ran out of context. Summary below..."},
+                        "timestamp": "2026-01-01T00:00:00Z"}),
+            json.dumps({"type": "user", "message": {"content": "a real prompt"},
+                        "timestamp": "2026-01-01T00:01:00Z"}),
+        ]))
+        result = parse_session_file(session)
+        assert result is not None
+        assert result["user_prompts"] == ["a real prompt"]
+        assert result["user_message_count"] == 1
+
+    def test_excludes_local_command_messages(self, tmp_path):
+        session = tmp_path / "project" / "s1.jsonl"
+        session.parent.mkdir(parents=True)
+        session.write_text("\n".join([
+            json.dumps({"type": "user", "sessionId": "s1", "cwd": "/project",
+                        "message": {"content": "a real prompt"}, "timestamp": "2026-01-01T00:00:00Z"}),
+            json.dumps({"type": "user", "message": {"content": "<local-command-caveat>Caveat: messages below...</local-command-caveat>"},
+                        "timestamp": "2026-01-01T00:01:00Z"}),
+            json.dumps({"type": "user", "message": {"content": "<local-command-stdout>build output</local-command-stdout>"},
+                        "timestamp": "2026-01-01T00:01:01Z"}),
+        ]))
+        result = parse_session_file(session)
+        assert result is not None
+        assert result["user_prompts"] == ["a real prompt"]
+        assert result["user_message_count"] == 1
