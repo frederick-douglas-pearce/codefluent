@@ -20,6 +20,7 @@ export interface ParsedConversation {
   assistant_message_count: number
   tool_use_count: number
   tools_used: string[]
+  commands_used: string[]
   thinking_count: number
   used_plan_mode: boolean
   model: string | null
@@ -110,6 +111,7 @@ export function buildConversations(
     let assistantMsgCount = 0
     let toolUseCount = 0
     const toolsUsed = new Set<string>()
+    const commandsUsed = new Set<string>()
     let thinkingCount = 0
     let usedPlanMode = false
     let model: string | null = null
@@ -132,6 +134,7 @@ export function buildConversations(
         if (msg.content) userPrompts.push(msg.content)
         if (msg.content && msg.timestamp) promptTimestamps.push(msg.timestamp)
         if (msg.used_plan_mode) usedPlanMode = true
+        if (msg.command_name) commandsUsed.add(msg.command_name)
       } else if (msg.type === 'assistant') {
         assistantMsgCount++
         if (msg.model && !model) model = msg.model
@@ -189,6 +192,7 @@ export function buildConversations(
       assistant_message_count: assistantMsgCount,
       tool_use_count: toolUseCount,
       tools_used: Array.from(toolsUsed).sort(),
+      commands_used: Array.from(commandsUsed).sort(),
       thinking_count: thinkingCount,
       used_plan_mode: usedPlanMode,
       model,

@@ -12,6 +12,9 @@ from extract_prompts import (
     _get_project_path_encoded,
     is_clear_command,
     is_slash_command,
+    extract_command_name,
+    is_custom_command,
+    SYSTEM_COMMANDS,
 )
 
 
@@ -897,3 +900,101 @@ class TestIsClearCommand:
     def test_true_when_embedded(self):
         text = "prefix <command-name>/clear</command-name> suffix"
         assert is_clear_command(text) is True
+
+
+class TestExtractCommandName:
+    """Tests for extract_command_name() extraction."""
+
+    def test_extracts_custom_command(self):
+        assert extract_command_name("<command-name>/rebuild</command-name>") == "/rebuild"
+
+    def test_extracts_skill_name(self):
+        assert extract_command_name("<command-name>/review-labels</command-name>") == "/review-labels"
+
+    def test_extracts_system_command(self):
+        assert extract_command_name("<command-name>/clear</command-name>") == "/clear"
+
+    def test_returns_none_for_plain_text(self):
+        assert extract_command_name("just a regular prompt") is None
+
+    def test_returns_none_for_empty_string(self):
+        assert extract_command_name("") is None
+
+    def test_extracts_from_surrounding_text(self):
+        text = "<command-message>rebuild</command-message>\n<command-name>/rebuild</command-name>"
+        assert extract_command_name(text) == "/rebuild"
+
+
+class TestIsCustomCommand:
+    """Tests for is_custom_command() detection."""
+
+    def test_true_for_custom_commands(self):
+        for cmd in ["/rebuild", "/review-labels", "/commit", "/deploy"]:
+            text = f"<command-name>{cmd}</command-name>"
+            assert is_custom_command(text) is True, f"{cmd} should be custom"
+
+    def test_false_for_system_commands(self):
+        for cmd in SYSTEM_COMMANDS:
+            text = f"<command-name>{cmd}</command-name>"
+            assert is_custom_command(text) is False, f"{cmd} should be system"
+
+    def test_false_for_plain_text(self):
+        assert is_custom_command("just a regular prompt") is False
+
+    def test_false_for_empty_string(self):
+        assert is_custom_command("") is False
+
+
+class TestParseSessionFileCommandsUsed:
+    """Tests for commands_used in parse_session_file."""
+
+    def test_tracks_custom_commands(self, tmp_path):
+        session = tmp_path / "project" / "s1.jsonl"
+        session.parent.mkdir(parents=True)
+        session.write_text("\n".join([
+            json.dumps({"type": "user", "sessionId": "s1", "cwd": "/project",
+                        "message": {"content": "<command-message>rebuild</command-message>\n<command-name>/rebuild</command-name>"},
+                        "timestamp": "2026-01-01T00:00:00Z"}),
+            json.dumps({"type": "user", "isMeta": True,
+                        "message": {"content": [{"type": "text", "text": "Compile the extension"}]},
+                        "timestamp": "2026-01-01T00:00:00Z"}),
+            json.dumps({"type": "user", "message": {"content": "a real prompt"},
+                        "timestamp": "2026-01-01T00:01:00Z"}),
+        ]))
+        result = parse_session_file(session)
+        assert result is not None
+        assert result["commands_used"] == ["/rebuild"]
+
+    def test_empty_for_system_commands_only(self, tmp_path):
+        session = tmp_path / "project" / "s1.jsonl"
+        session.parent.mkdir(parents=True)
+        session.write_text("\n".join([
+            json.dumps({"type": "user", "sessionId": "s1", "cwd": "/project",
+                        "message": {"content": "<command-name>/clear</command-name>"},
+                        "timestamp": "2026-01-01T00:00:00Z"}),
+            json.dumps({"type": "user", "message": {"content": "a real prompt"},
+                        "timestamp": "2026-01-01T00:01:00Z"}),
+        ]))
+        result = parse_session_file(session)
+        assert result is not None
+        assert result["commands_used"] == []
+
+    def test_deduplicates_and_sorts(self, tmp_path):
+        session = tmp_path / "project" / "s1.jsonl"
+        session.parent.mkdir(parents=True)
+        session.write_text("\n".join([
+            json.dumps({"type": "user", "sessionId": "s1", "cwd": "/project",
+                        "message": {"content": "<command-name>/rebuild</command-name>"},
+                        "timestamp": "2026-01-01T00:00:00Z"}),
+            json.dumps({"type": "user",
+                        "message": {"content": "<command-name>/commit</command-name>"},
+                        "timestamp": "2026-01-01T00:01:00Z"}),
+            json.dumps({"type": "user",
+                        "message": {"content": "<command-name>/rebuild</command-name>"},
+                        "timestamp": "2026-01-01T00:02:00Z"}),
+            json.dumps({"type": "user", "message": {"content": "a real prompt"},
+                        "timestamp": "2026-01-01T00:03:00Z"}),
+        ]))
+        result = parse_session_file(session)
+        assert result is not None
+        assert result["commands_used"] == ["/commit", "/rebuild"]

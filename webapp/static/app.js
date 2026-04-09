@@ -2416,6 +2416,12 @@ function renderConversationDetailContent(conv) {
         <h4>Tools Used (${conv.tool_use_count || 0} invocations)</h4>
         <div class="detail-tools">${toolsHtml}</div>
       </div>
+      ${(conv.commands_used || []).length > 0 ? `<div class="detail-section">
+        <h4>Commands Used</h4>
+        <div class="detail-tools">${(conv.commands_used || []).map(c =>
+          `<span class="tool-tag">${escapeHtml(c)}</span>`
+        ).join('')}</div>
+      </div>` : ''}
       <div class="detail-section">
         <h4>User Prompts (${(conv.user_prompts || []).length})</h4>
         <div class="detail-prompts">${promptsHtml}</div>

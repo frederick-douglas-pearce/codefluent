@@ -58,6 +58,30 @@ def is_clear_command(text: str) -> bool:
     return bool(_CLEAR_COMMAND_RE.search(text))
 
 
+_COMMAND_NAME_RE = re.compile(r'<command-name>(/[^<]+)</command-name>')
+
+SYSTEM_COMMANDS = frozenset([
+    '/clear', '/compact', '/exit', '/login', '/logout',
+    '/status', '/init', '/help', '/cost', '/doctor',
+    '/config', '/memory', '/permissions', '/review',
+    '/terminal-setup', '/listen', '/mcp', '/vim',
+])
+
+
+def extract_command_name(text: str) -> str | None:
+    """Extract the command name from a <command-name> tag."""
+    match = _COMMAND_NAME_RE.search(text)
+    return match.group(1) if match else None
+
+
+def is_custom_command(text: str) -> bool:
+    """Check if the text contains a custom command (not a system command)."""
+    name = extract_command_name(text)
+    if not name:
+        return False
+    return name not in SYSTEM_COMMANDS
+
+
 def parse_session_messages(filepath: Path) -> dict | None:
     """Parse a single JSONL session file and extract individual timestamped messages.
 
@@ -112,6 +136,8 @@ def parse_session_messages(filepath: Path) -> dict | None:
             is_interrupted = text == "[Request interrupted by user for tool use]"
             is_command = is_slash_command(text)
             is_clear = is_command and is_clear_command(text)
+            cmd_name = extract_command_name(text) if is_command else None
+            is_custom = cmd_name is not None and cmd_name not in SYSTEM_COMMANDS
             extracted = {
                 "type": "user",
                 "timestamp": msg.get("timestamp"),
@@ -122,6 +148,8 @@ def parse_session_messages(filepath: Path) -> dict | None:
             }
             if is_clear:
                 extracted["is_clear_command"] = True
+            if is_custom:
+                extracted["command_name"] = cmd_name
             messages.append(extracted)
 
         elif msg_type == "assistant":
@@ -221,6 +249,7 @@ def parse_session_file(filepath: Path) -> dict | None:
     timestamps = []
     tool_use_count = 0
     tools_used = set()
+    commands_used = set()
     thinking_count = 0
     user_msg_count = 0
     assistant_msg_count = 0
@@ -259,6 +288,9 @@ def parse_session_file(filepath: Path) -> dict | None:
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
             if is_slash_command(text):
+                cmd_name = extract_command_name(text)
+                if cmd_name and cmd_name not in SYSTEM_COMMANDS:
+                    commands_used.add(cmd_name)
                 continue  # skip all slash commands (not natural language prompts)
             user_msg_count += 1
             if text and text != "[Request interrupted by user for tool use]":
@@ -328,6 +360,7 @@ def parse_session_file(filepath: Path) -> dict | None:
         "assistant_message_count": assistant_msg_count,
         "tool_use_count": tool_use_count,
         "tools_used": sorted(tools_used),
+        "commands_used": sorted(commands_used),
         "thinking_count": thinking_count,
         "used_plan_mode": used_plan_mode,
         "model": model,

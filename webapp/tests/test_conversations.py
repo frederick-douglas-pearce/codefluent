@@ -893,3 +893,37 @@ class TestClearConversationBoundary:
         convs = build_conversations(msgs, "test", "-test", 60)
         all_prompts = [p for c in convs for p in c["user_prompts"]]
         assert all_prompts == ["p1", "p2"]
+
+
+class TestBuildConversationsCommandsUsed:
+    def test_aggregates_command_names(self):
+        messages = [
+            _make_user_message("2026-01-01T10:00:00Z", "hello", pos=0),
+            {"type": "user", "timestamp": "2026-01-01T10:01:00Z", "session_id": "s1",
+             "file_position": 1, "command_name": "/rebuild"},
+            _make_user_message("2026-01-01T10:02:00Z", "another", pos=2),
+        ]
+        convs = build_conversations(messages, "test", "-test", 60)
+        assert len(convs) == 1
+        assert convs[0]["commands_used"] == ["/rebuild"]
+
+    def test_deduplicates_and_sorts(self):
+        messages = [
+            _make_user_message("2026-01-01T10:00:00Z", "hello", pos=0),
+            {"type": "user", "timestamp": "2026-01-01T10:01:00Z", "session_id": "s1",
+             "file_position": 1, "command_name": "/rebuild"},
+            {"type": "user", "timestamp": "2026-01-01T10:02:00Z", "session_id": "s1",
+             "file_position": 2, "command_name": "/commit"},
+            {"type": "user", "timestamp": "2026-01-01T10:03:00Z", "session_id": "s1",
+             "file_position": 3, "command_name": "/rebuild"},
+        ]
+        convs = build_conversations(messages, "test", "-test", 60)
+        assert convs[0]["commands_used"] == ["/commit", "/rebuild"]
+
+    def test_empty_when_no_custom_commands(self):
+        messages = [
+            _make_user_message("2026-01-01T10:00:00Z", "hello", pos=0),
+            _make_user_message("2026-01-01T10:01:00Z", "world", pos=1),
+        ]
+        convs = build_conversations(messages, "test", "-test", 60)
+        assert convs[0]["commands_used"] == []

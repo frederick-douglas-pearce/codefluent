@@ -4,7 +4,7 @@ jest.mock('os')
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import { extractUserText, parseSessionFile, getAllSessions, isClearCommand, isSlashCommand } from '../../src/parser'
+import { extractUserText, parseSessionFile, getAllSessions, isClearCommand, isSlashCommand, extractCommandName, isCustomCommand, SYSTEM_COMMANDS } from '../../src/parser'
 
 const mockFs = fs as jest.Mocked<typeof fs>
 const mockOs = os as jest.Mocked<typeof os>
@@ -921,5 +921,96 @@ describe('isClearCommand', () => {
   it('returns true when /clear tag is embedded in larger content', () => {
     const text = 'some prefix <command-name>/clear</command-name> some suffix'
     expect(isClearCommand(text)).toBe(true)
+  })
+})
+
+describe('extractCommandName', () => {
+  it('extracts command name from XML tag', () => {
+    expect(extractCommandName('<command-name>/rebuild</command-name>')).toBe('/rebuild')
+  })
+
+  it('extracts skill name', () => {
+    expect(extractCommandName('<command-name>/review-labels</command-name>')).toBe('/review-labels')
+  })
+
+  it('extracts system command name', () => {
+    expect(extractCommandName('<command-name>/clear</command-name>')).toBe('/clear')
+  })
+
+  it('returns null for plain text', () => {
+    expect(extractCommandName('just a regular prompt')).toBeNull()
+  })
+
+  it('returns null for empty string', () => {
+    expect(extractCommandName('')).toBeNull()
+  })
+
+  it('extracts from surrounding text', () => {
+    const text = '<command-message>rebuild</command-message>\n<command-name>/rebuild</command-name>'
+    expect(extractCommandName(text)).toBe('/rebuild')
+  })
+})
+
+describe('isCustomCommand', () => {
+  it('returns true for custom commands', () => {
+    for (const cmd of ['/rebuild', '/review-labels', '/commit', '/deploy']) {
+      const text = `<command-name>${cmd}</command-name>`
+      expect(isCustomCommand(text)).toBe(true)
+    }
+  })
+
+  it('returns false for system commands', () => {
+    for (const cmd of SYSTEM_COMMANDS) {
+      const text = `<command-name>${cmd}</command-name>`
+      expect(isCustomCommand(text)).toBe(false)
+    }
+  })
+
+  it('returns false for plain text', () => {
+    expect(isCustomCommand('just a regular prompt')).toBe(false)
+  })
+
+  it('returns false for empty string', () => {
+    expect(isCustomCommand('')).toBe(false)
+  })
+})
+
+describe('parseSessionFile commands_used', () => {
+  const sessionDir = '/mock/.claude/projects/-project-name'
+
+  it('tracks custom commands in commands_used', () => {
+    mockFs.readFileSync.mockReturnValue([
+      JSON.stringify({ type: 'user', sessionId: 's1', cwd: '/project', message: { content: '<command-message>rebuild</command-message>\n<command-name>/rebuild</command-name>' }, timestamp: '2026-01-01T00:00:00Z' }),
+      JSON.stringify({ type: 'user', isMeta: true, message: { content: [{ type: 'text', text: 'Compile the extension' }] }, timestamp: '2026-01-01T00:00:00Z' }),
+      JSON.stringify({ type: 'user', message: { content: 'a real prompt' }, timestamp: '2026-01-01T00:01:00Z' }),
+    ].join('\n'))
+
+    const result = parseSessionFile(path.join(sessionDir, 's1.jsonl'))
+    expect(result).not.toBeNull()
+    expect(result!.commands_used).toEqual(['/rebuild'])
+  })
+
+  it('returns empty commands_used for system commands only', () => {
+    mockFs.readFileSync.mockReturnValue([
+      JSON.stringify({ type: 'user', sessionId: 's1', cwd: '/project', message: { content: '<command-name>/clear</command-name>' }, timestamp: '2026-01-01T00:00:00Z' }),
+      JSON.stringify({ type: 'user', message: { content: 'a real prompt' }, timestamp: '2026-01-01T00:01:00Z' }),
+    ].join('\n'))
+
+    const result = parseSessionFile(path.join(sessionDir, 's1.jsonl'))
+    expect(result).not.toBeNull()
+    expect(result!.commands_used).toEqual([])
+  })
+
+  it('deduplicates and sorts multiple custom commands', () => {
+    mockFs.readFileSync.mockReturnValue([
+      JSON.stringify({ type: 'user', sessionId: 's1', cwd: '/project', message: { content: '<command-name>/rebuild</command-name>' }, timestamp: '2026-01-01T00:00:00Z' }),
+      JSON.stringify({ type: 'user', message: { content: '<command-name>/commit</command-name>' }, timestamp: '2026-01-01T00:01:00Z' }),
+      JSON.stringify({ type: 'user', message: { content: '<command-name>/rebuild</command-name>' }, timestamp: '2026-01-01T00:02:00Z' }),
+      JSON.stringify({ type: 'user', message: { content: 'a real prompt' }, timestamp: '2026-01-01T00:03:00Z' }),
+    ].join('\n'))
+
+    const result = parseSessionFile(path.join(sessionDir, 's1.jsonl'))
+    expect(result).not.toBeNull()
+    expect(result!.commands_used).toEqual(['/commit', '/rebuild'])
   })
 })

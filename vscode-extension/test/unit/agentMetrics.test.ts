@@ -17,6 +17,7 @@ function makeConversation(overrides: Partial<ParsedConversation> = {}): ParsedCo
     assistant_message_count: 3,
     tool_use_count: 5,
     tools_used: ['Read', 'Edit', 'Bash'],
+    commands_used: [],
     thinking_count: 1,
     used_plan_mode: false,
     model: 'claude-sonnet-4-20250514',
