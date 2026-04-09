@@ -18,7 +18,7 @@ CodeFluent parses your local Claude Code session files, scores your prompts agai
 
 1. Install the `.vsix` package:
    ```
-   code --install-extension codefluent-1.0.1.vsix
+   code --install-extension codefluent-*.vsix
    ```
 2. Open the CodeFluent sidebar by clicking the activity bar icon
 3. When prompted, enter your Anthropic API key (stored securely in VS Code SecretStorage)
@@ -63,11 +63,21 @@ GitHub-repo-scoped task suggestions — CodeFluent detects your current workspac
 
 ![Quick Wins Suggestions](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-quickwins.png)
 
-### Conversations
+### Conversations Tab
 
-Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use. CodeFluent assembles **conversations** by pooling all messages per project, sorting by timestamp, and splitting into conversations whenever a gap between user prompts exceeds a configurable inactivity threshold (default: 60 minutes). Each conversation represents one focused interaction — the same unit of analysis used by Anthropic's AI Fluency Index, designed to align with the research and make our scores comparable to their benchmarks.
+Sortable table of all conversations with date, project, prompts, duration, tokens, cost, cache%, tools, and score. Click any row to expand a detail view showing metadata, tools used, custom commands/skills invoked, and full user prompts. Five interactive charts visualize conversation patterns: conversations/week, length distribution, duration distribution, average prompts/week trend, and inter-prompt gap distribution. Agent metrics cards with weekly sparklines track tool diversity, plan mode adoption, cache hit rate, and thinking utilization. A task type doughnut chart classifies conversations across 8 categories.
+
+Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use. CodeFluent assembles **conversations** by pooling all messages per project, sorting by timestamp, and splitting into conversations whenever a gap between user prompts exceeds a configurable inactivity threshold (default: 60 minutes). `/clear` commands force a conversation boundary. Each conversation represents one focused interaction — the same unit of analysis used by Anthropic's AI Fluency Index.
 
 The inactivity threshold is configurable via the `codefluent.conversation.inactivityGapMinutes` VS Code setting.
+
+### Configuration Maturity
+
+**The first tool to assess your Claude Code project configuration maturity — no known equivalent exists.** Scans your `.claude/` directory and scores your setup (0–100) across 8 weighted categories: CLAUDE.md (20 pts), Hooks (20 pts), Rules (15 pts), Commands (10 pts), MCP (10 pts), Skills (10 pts), Permissions (5 pts), and Enforcement Coverage (10 pts). A tier badge (Beginner / Intermediate / Advanced / Expert) summarizes your maturity level.
+
+Enforcement gap detection identifies rules in your CLAUDE.md that lack programmatic enforcement via hooks. The Configuration Advisor generates ready-to-use hook configurations from enforcement gaps using Claude, with one-click copy to clipboard.
+
+Covers the same configuration competencies tested in the [Claude Certified Architect (CCA)](https://www.anthropic.com/news/claude-certified-architect) exam. This is the foundation for the CCA readiness radar and interaction quality metrics planned for future releases.
 
 ### Usage Dashboard
 
@@ -121,15 +131,13 @@ All data stays on your machine. CodeFluent reads local session files and makes d
 
 ## Roadmap
 
-**Coming soon:**
-- **Conversations tab** — visualize conversation structure, length distributions, and engagement patterns with interactive charts
-- **Agent metrics** — tool diversity, plan mode adoption, cache efficiency, and thinking utilization computed from your session data
-- **Task classification** — automatic categorization of conversations by task type (feature, bug fix, refactor, debug, etc.)
-- **Configuration maturity** — assess your `.claude/` directory setup (hooks, rules, commands, skills) against best practices
-
-**Planned:**
-- **CCA readiness assessment** — radar chart mapping your usage to Claude Certified Architect competency domains
+**Coming in v1.2:**
+- **LLM-powered task classification** — upgrade heuristic classification with few-shot LLM classification and golden set validation
 - **Interaction quality metrics** — error recovery patterns, verification behavior, learning trajectory
+
+**Planned (v1.3+):**
+- **CCA readiness radar** — 5-axis radar chart mapping your usage to Claude Certified Architect competency domains
+- **Scoring quality infrastructure** — confidence calibration, user feedback signals, cross-model agreement testing
 - **Outcome metrics** — commit quality analysis, MCP integration assessment
 
 See the [Release Roadmap](https://github.com/frederick-douglas-pearce/codefluent/blob/main/docs/RELEASE_ROADMAP.md) for details, or browse [open milestones](https://github.com/frederick-douglas-pearce/codefluent/milestones) on GitHub.

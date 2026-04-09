@@ -51,8 +51,13 @@ Usage data and session prompts are fetched on demand — no manual export steps 
 See the [main README](../README.md#features) for feature descriptions. Screenshots below show the webapp interface:
 
 <table>
-<tr><th>Fluency Score</th><th>Recommendations</th></tr>
-<tr valign="top"><td><img src="../images/demo-fluency.png" alt="Fluency tab"></td><td><img src="../images/demo-recommendations.png" alt="Recommendations tab"></td></tr>
+<tr><th>Fluency Score</th><th>Conversations</th></tr>
+<tr valign="top"><td><img src="../images/demo-fluency.png" alt="Fluency tab"></td><td><img src="../images/demo-conversations.png" alt="Conversations tab"></td></tr>
+</table>
+
+<table>
+<tr><th>Configuration Maturity</th><th>Recommendations</th></tr>
+<tr valign="top"><td><img src="../images/demo-config.png" alt="Configuration Maturity tab"></td><td><img src="../images/demo-recommendations.png" alt="Recommendations tab"></td></tr>
 </table>
 
 <table>
@@ -85,10 +90,12 @@ The settings bar adapts per tab to show only relevant controls:
 | Tab | Data Path | Project Dropdown |
 |-----|-----------|-----------------|
 | Fluency Score | Shown | Shown |
+| Conversations | Hidden | Shown |
+| Recommendations | Hidden | Hidden |
+| Config | Hidden | Shown |
 | Prompt Optimizer | Hidden | Shown |
 | Quick Wins | Hidden | Shown |
 | Usage | Hidden | Shown |
-| Recommendations | Hidden | Hidden |
 
 ### Copy-to-Clipboard (No Terminal Integration)
 
@@ -132,7 +139,7 @@ CORS is restricted to localhost origins by default. The allowed origin is determ
 
 ## Testing
 
-The webapp has **450 tests** across 9 suites. Run with:
+The webapp has **746 tests** across 12 suites. Run with:
 
 ```bash
 cd webapp
@@ -143,15 +150,18 @@ uv run pytest tests/test_eval.py -m live  # Run live API eval tests (~$0.02)
 
 | Suite | Tests | What it covers |
 |-------|-------|----------------|
-| `test_api.py` | 65 | Health endpoint, conversations, scores, scoring, optimizer, quickwins, usage, conversation analytics |
+| `test_api.py` | 65 | Health endpoint, conversations, scores, scoring, optimizer, quickwins, usage, conversation analytics, config maturity |
 | `test_helpers.py` | 75 | Path decoding, repo detection, validators, `compute_aggregate`, cost estimation, error classification |
 | `test_security.py` | 38 | Rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification |
-| `test_extract_prompts.py` | 58 | JSONL parsing, content extraction, session filtering, metadata extraction |
-| `test_conversations.py` | 60 | Conversation assembly, gap-based splitting, boundary detection |
+| `test_extract_prompts.py` | 74 | JSONL parsing, content extraction, session filtering, command extraction, metadata |
+| `test_conversations.py` | 63 | Conversation assembly, gap-based splitting, boundary detection, commands_used aggregation |
 | `test_config.py` | 11 | Centralized config module (defaults, env vars, config.json overrides) |
 | `test_analyze_gaps.py` | 47 | Inter-prompt gap analysis, histogram generation |
 | `test_prompts.py` | 17 | Prompt loading, template filling, registry consistency |
 | `test_eval.py` | 79 | Eval framework: scorer, checks, report, CLI args, golden set integration (+ 3 live API tests) |
+| `test_task_classification.py` | 30 | Branch prefix mapping, keyword regex, classification priority |
+| `test_anti_patterns.py` | 37 | Structured output anti-pattern detection, false positive avoidance |
+| `test_config_scanner.py` | 54 | .claude/ directory scanning, frontmatter parsing, MCP detection, endpoint tests |
 
 Live API tests (`@pytest.mark.live`) are excluded by default and require `ANTHROPIC_API_KEY`. Run with `-m live` to include them.
 

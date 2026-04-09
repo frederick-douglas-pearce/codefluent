@@ -10,6 +10,10 @@ CodeFluent uses two independent data sources, both reading from the same JSONL s
 |---------|--------|--------------|
 | All-projects token/cost data | [`ccusage`](https://github.com/ryoppippi/ccusage) (npm) | Aggregates daily, monthly, and per-session totals. Webapp stores results in `data/ccusage/`. Extension calls via IPC. |
 | Per-conversation prompts + token analytics | JSONL parser + conversation assembly | Parses `~/.claude/projects/*.jsonl`, assembles conversations via gap-based splitting. Extension: `parser.ts` + `conversation.ts` + `analytics.ts`. Webapp: `extract_prompts.py` + `conversations.py`. |
+| Agent behavior metrics | Computed from parsed conversations | Tool diversity, plan mode adoption, cache hit rate, thinking utilization. Extension: `agentMetrics.ts`. Webapp: `agent_metrics.py`. |
+| Task classification | Heuristic (branch prefix + keyword regex) | Classifies conversations into 8 categories. Extension: `taskClassification.ts`. Webapp: `task_classification.py`. |
+| Configuration maturity | .claude/ directory scanner | Scans hooks, rules, commands, skills, MCP, CLAUDE.md, permissions. Extension: `configScanner.ts`. Webapp: `config_scanner.py`. |
+| Enforcement gaps | CLAUDE.md + hook cross-reference | Detects advisory-vs-programmatic gaps. Extension: `enforcementGaps.ts`. Webapp: `enforcement_gaps.py`. |
 
 Both interfaces parse JSONL directly on demand — there is no pre-generated intermediate file.
 
@@ -54,10 +58,13 @@ Both interfaces parse Claude Code session files from `~/.claude/projects/`. See 
 
 - **Sidechain filtering** — Sessions with `isSidechain: true` are excluded (AI-generated prompts, not human input)
 - **Content format** — `message.content` can be a string or array of content blocks; parsers handle both
+- **System command filtering** — All slash commands (`<command-name>/...`) are filtered from user prompts and message counts. `/clear` forces a conversation boundary.
+- **Custom command tracking** — Custom commands/skills (e.g., `/rebuild`, `/review-labels`) are tracked in `commands_used` on each conversation, separate from system commands (`/clear`, `/compact`, etc.)
 - **Interrupted prompts** — Messages containing only `[Request interrupted by user for tool use]` are skipped
 - **Prompt truncation** — User prompts are capped at 2000 characters for scoring
 - **Token aggregation** — Assistant message `usage` blocks are summed per session for cost estimation
 - **UUID subdirectories** — Parser handles both flat `.jsonl` files and UUID-based subdirectory structures
+- **Anti-pattern detection** — Structured output anti-pattern (e.g., "output as JSON") is detected via 9 regex patterns and flagged on each conversation
 
 **Source:** `webapp/extract_prompts.py`, `vscode-extension/src/parser.ts`, `vscode-extension/src/analytics.ts`
 
@@ -186,3 +193,111 @@ Note: `prompt_count` counts only `type: "user"` messages with actual prompt cont
 Both interfaces support filtering conversation analytics by project. The webapp uses the project dropdown; the extension uses the workspace context.
 
 **Source:** `vscode-extension/src/analytics.ts`, `vscode-extension/src/pricing.ts`, `shared/pricing.json`
+
+---
+
+## 8. Agent Behavior Metrics
+
+Computed metrics derived from conversation metadata — zero API cost, pure aggregation.
+
+### Metric definitions
+
+| Metric | Formula | Range |
+|--------|---------|-------|
+| Tool diversity index | unique_tools / tool_use_count | 0–1 |
+| Plan mode adoption rate | conversations_with_plan / total_conversations | 0–1 |
+| Avg cache hit rate | mean(per-conversation cache_hit_rate) | 0–1 |
+| Thinking utilization rate | thinking_count / assistant_message_count | 0–1 |
+
+### Weekly aggregation
+
+Metrics are computed per ISO week for sparkline trend visualization. Weekly data points enable the frontend to render 4 Chart.js sparkline charts showing metric trends over time.
+
+**Source:** `vscode-extension/src/agentMetrics.ts`, `webapp/agent_metrics.py`
+
+---
+
+## 9. Task Classification (Heuristic)
+
+Conversations are classified into 8 task types using a two-layer heuristic approach.
+
+### Classification priority
+
+1. **Branch prefix mapping** (highest priority) — matches `feature/*`, `fix/*`, `refactor/*`, `test/*`, `docs/*`, `chore/*`, `debug/*`, `explore/*` to their respective categories
+2. **Keyword regex** (fallback) — scans the first 3 user prompts for category-specific keywords
+
+### Categories
+
+`feature`, `bug_fix`, `refactor`, `debug`, `test`, `docs`, `chore`, `exploration`
+
+The `heuristic_task_type` field is set on each `ParsedConversation`. When neither branch prefix nor keywords match, the value is `null` (displayed as "Unclassified" in the UI).
+
+**Source:** `vscode-extension/src/taskClassification.ts`, `webapp/task_classification.py`
+
+---
+
+## 10. Configuration Maturity Scanner
+
+Scans the `.claude/` directory hierarchy for configuration artifacts and computes a maturity score.
+
+### Scan targets
+
+| Category | Points | What it checks |
+|----------|--------|---------------|
+| CLAUDE.md | 20 | Present at project root, `.claude/`, or `~/.claude/`; multiple locations; `@import` usage |
+| Hooks | 20 | `settings.json` hooks configured; multiple event types; file matchers |
+| Rules | 15 | `.claude/rules/*.md` file count; path scoping via `globs` frontmatter |
+| Commands | 10 | `.claude/commands/*.md` file count |
+| MCP | 10 | `.mcp.json`, `~/.claude.json` top-level mcpServers, `~/.claude.json` project-level mcpServers |
+| Skills | 10 | `.claude/skills/` subdirectory count; frontmatter detection |
+| Permissions | 5 | `settings.local.json` permissions key |
+| Enforcement | 10 | Proportional to enforcement gap coverage (see §11) |
+
+### Tier thresholds
+
+| Tier | Score Range |
+|------|------------|
+| Beginner | 0–24 |
+| Intermediate | 25–49 |
+| Advanced | 50–74 |
+| Expert | 75–100 |
+
+**Source:** `vscode-extension/src/configScanner.ts`, `webapp/config_scanner.py`
+
+---
+
+## 11. Enforcement Gap Detection
+
+Cross-references CLAUDE.md enforcement language against hook configuration to identify rules that lack programmatic enforcement.
+
+### Algorithm
+
+1. **Extract enforcement statements** — scan CLAUDE.md for sentences containing enforcement keywords (always, never, must, required, shall, etc.)
+2. **Extract hook commands** — collect `command` and `prompt` text from all configured hooks in `settings.json`
+3. **Keyword overlap matching** — for each enforcement statement, extract meaningful keywords (stop-word removal + basic stemming), then check if any hook command shares 2+ keywords (1 for statements with ≤3 keywords)
+4. **Coverage scoring** — `covered_statements / total_statements` feeds into the maturity score's Enforcement category (10 pts)
+
+### Severity assignment
+
+- **High** — enforcement language with strong imperative (must, always, never, required)
+- **Medium** — softer enforcement (should, prefer, recommend)
+
+**Source:** `vscode-extension/src/enforcementGaps.ts`, `webapp/enforcement_gaps.py`
+
+---
+
+## 12. Configuration Advisor
+
+LLM-generated hook configurations from enforcement gaps.
+
+### Flow
+
+1. User clicks "Generate Hook Config" on an enforcement gap
+2. Backend sends the enforcement statement + suggested hook event to Claude via the `config_advisor/v1.0.md` prompt template
+3. Claude returns: explanation of why the hook helps, JSON hook configuration, and apply instructions
+4. Response is cached by statement + event + prompt version
+5. Frontend renders the result inline with a "Copy JSON" button
+
+Rate-limited alongside scoring/optimizer endpoints (10 req/min).
+
+**Source:** `shared/prompts/config_advisor/v1.0.md`, `vscode-extension/src/cache.ts`, `webapp/main.py`

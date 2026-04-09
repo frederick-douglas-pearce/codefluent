@@ -71,7 +71,7 @@ cd codefluent/vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-1.0.1.vsix
+code --install-extension codefluent-*.vsix
 ```
 
 **Windows (PowerShell):**
@@ -82,7 +82,7 @@ cd codefluent\vscode-extension
 npm install
 npm run compile
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-1.0.1.vsix
+code --install-extension codefluent-*.vsix
 ```
 
 Then reload VS Code. The CodeFluent icon appears in the activity bar.
@@ -145,8 +145,13 @@ CodeFluent resolves this automatically via the system home directory. If your se
 ### Web App
 
 <table>
-<tr><th>Fluency Score</th><th>Recommendations</th></tr>
-<tr valign="top"><td><img src="images/demo-fluency.png" alt="Fluency tab"></td><td><img src="images/demo-recommendations.png" alt="Recommendations tab"></td></tr>
+<tr><th>Fluency Score</th><th>Conversations</th></tr>
+<tr valign="top"><td><img src="images/demo-fluency.png" alt="Fluency tab"></td><td><img src="images/demo-conversations.png" alt="Conversations tab"></td></tr>
+</table>
+
+<table>
+<tr><th>Configuration Maturity</th><th>Recommendations</th></tr>
+<tr valign="top"><td><img src="images/demo-config.png" alt="Configuration Maturity tab"></td><td><img src="images/demo-recommendations.png" alt="Recommendations tab"></td></tr>
 </table>
 
 <table>
@@ -167,8 +172,13 @@ CodeFluent resolves this automatically via the system home directory. If your se
 ### VS Code Extension
 
 <table>
-<tr><th>Fluency Score</th><th>Recommendations</th></tr>
-<tr valign="top"><td><img src="images/vscode-scoring.png" alt="VS Code Fluency Score tab"></td><td><img src="images/vscode-recommendations.png" alt="VS Code Recommendations tab"></td></tr>
+<tr><th>Fluency Score</th><th>Conversations</th></tr>
+<tr valign="top"><td><img src="images/vscode-scoring.png" alt="VS Code Fluency Score tab"></td><td><img src="images/vscode-conversations.png" alt="VS Code Conversations tab"></td></tr>
+</table>
+
+<table>
+<tr><th>Configuration Maturity</th><th>Recommendations</th></tr>
+<tr valign="top"><td><img src="images/vscode-config.png" alt="VS Code Configuration Maturity tab"></td><td><img src="images/vscode-recommendations.png" alt="VS Code Recommendations tab"></td></tr>
 </table>
 
 <table>
@@ -189,23 +199,27 @@ CodeFluent resolves this automatically via the system home directory. If your se
 ## Features
 
 - **Fluency Score** — Scores your conversations against Anthropic's 11 fluency behaviors and 6 coding interaction patterns. Compares your results to published population benchmarks with color-coded bar charts.
+- **Conversations** — Sortable table of all conversations with date, project, prompts, duration, tokens, cost, cache%, tools, and score columns. Expandable detail view shows metadata, tools used, custom commands/skills invoked, and full user prompts. Five interactive charts: conversations/week, length distribution, duration distribution, average prompts/week trend, and inter-prompt gap distribution with configurable threshold. Agent metrics cards with weekly sparklines show tool diversity, plan mode adoption, cache hit rate, and thinking utilization. Task type doughnut chart classifies conversations across 8 categories (feature, bug fix, refactor, debug, test, docs, chore, exploration).
 - **Recommendations** — Personalized, research-backed coaching prioritized by impact, with copy-ready prompts and links to the underlying Anthropic research papers.
+- **Configuration Maturity** — **The first tool to assess your Claude Code project configuration maturity — no known equivalent exists.** Scans your `.claude/` directory and scores your setup (0–100) across 8 weighted categories: CLAUDE.md placement and imports (20 pts), hooks with event types and file matchers (20 pts), rules with path scoping (15 pts), custom commands (10 pts), MCP servers (10 pts), skills with frontmatter (10 pts), permissions (5 pts), and enforcement coverage (10 pts). A tier badge (Beginner / Intermediate / Advanced / Expert) summarizes your maturity level. Enforcement gap detection identifies rules in your CLAUDE.md that lack programmatic enforcement via hooks and assigns severity levels. The Configuration Advisor generates ready-to-use hook configurations from enforcement gaps using Claude, with one-click copy to clipboard. Covers the same configuration competencies tested in the [Claude Certified Architect (CCA)](https://www.anthropic.com/news/claude-certified-architect) exam — use it to validate and improve your project configuration skills. This is the foundation for the CCA readiness radar, interaction quality metrics, and outcome analysis planned for future releases.
 - **Prompt Optimizer** — Paste any prompt and get an optimized version that naturally incorporates missing fluency behaviors. Considers your CLAUDE.md config so it won't add behaviors already covered by project conventions. Shows before/after effective scores, highlights added behaviors, and lets you copy or run the improved prompt directly.
 - **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
 - **Usage Dashboard** — Two complementary views of your Claude Code usage. **All-projects analytics** (via [ccusage](https://github.com/ryoppippi/ccusage)) shows daily usage pace cards, cost projections, and a stacked token breakdown chart across all projects. **Conversation analytics** (from parsed JSONL history) shows per-conversation efficiency metrics — cost/prompt, cache hit rates, output/input ratios — with summary cards, three cost-efficiency scatter charts colored by fluency score, and a sortable details table. A **Refresh** button fetches the latest data on demand.
 - **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against 3 meta-interaction behaviors that can genuinely be established as project conventions: *setting interaction terms*, *identifying missing context*, and *questioning reasoning*. Behaviors defined in your CLAUDE.md (e.g., "push back if wrong") boost your effective score via `conversation OR config` logic, with a "CLAUDE.md" attribution tag in the UI. The remaining 8 behaviors are task-specific and can only be demonstrated through actual prompts.
 - **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
 - **VS Code Theming** — Automatically respects your light/dark theme.
-- **Project Scoping (Web App)** — A project dropdown filters fluency scoring, prompt optimization, quick wins, and conversation analytics to a specific project, so you can analyze each codebase independently.
+- **Project Scoping (Web App)** — A project dropdown filters fluency scoring, prompt optimization, quick wins, conversations, and conversation analytics to a specific project, so you can analyze each codebase independently.
 
 ## How It Works
 
-1. **Parse** — JSONL session files from the session data path (`~/.claude/projects/` by default) are parsed to extract user prompts, assistant responses, and token usage metadata
-2. **Assemble conversations** — All messages per project are pooled, sorted by timestamp, and split into conversations at inactivity gaps between user prompts (configurable via `conversation.inactivityGapMinutes`, default: 60 minutes)
+1. **Parse** — JSONL session files from the session data path (`~/.claude/projects/` by default) are parsed to extract user prompts, assistant responses, and token usage metadata. System commands (`/clear`, `/compact`, etc.) are filtered out; custom commands and skills are tracked separately.
+2. **Assemble conversations** — All messages per project are pooled, sorted by timestamp, and split into conversations at inactivity gaps between user prompts (configurable via `conversation.inactivityGapMinutes`, default: 60 minutes). `/clear` commands force a conversation boundary. Each conversation is classified by task type (feature, bug fix, refactor, etc.) via heuristic analysis of branch names and prompt keywords.
 3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
 4. **Config scoring** — If a `CLAUDE.md` exists, it's scored against 3 config-eligible meta-interaction behaviors. Results are merged via `effective = conversation OR config`
-5. **Cache** — Scores are cached locally (by conversation ID, content hash, and prompt version) in both the VS Code extension and webapp to avoid re-scoring unchanged conversations
-6. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) are computed from parsed JSONL token data
+5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
+6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
+7. **Cache** — Scores are cached locally (by conversation ID, content hash, and prompt version) in both the VS Code extension and webapp to avoid re-scoring unchanged conversations
+8. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) are computed from parsed JSONL token data
 
 Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
@@ -265,7 +279,7 @@ Cost: ~$0.25 for a full 50-entry run, ~$0.15 for CI (33-entry subset). See [`sha
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 1067 tests including security-focused suites | Regressions |
+| Automated testing | 1653 tests including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -307,6 +321,11 @@ codefluent/
 │   │   ├── prompts.ts         # Prompt loader + template filler
 │   │   ├── analytics.ts       # Conversation token analytics (efficiency, cost)
 │   │   ├── pricing.ts         # Token pricing lookup
+│   │   ├── agentMetrics.ts     # Agent behavior metrics computation
+│   │   ├── taskClassification.ts  # Heuristic task type classifier
+│   │   ├── antiPatterns.ts    # Structured output anti-pattern detection
+│   │   ├── configScanner.ts   # .claude/ directory maturity scanner
+│   │   ├── enforcementGaps.ts # Advisory-vs-programmatic gap detection
 │   │   ├── cache.ts           # Persistent score caching
 │   │   ├── dataCache.ts       # Conversation/usage data caching
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
@@ -325,6 +344,11 @@ codefluent/
 │   ├── main.py                # FastAPI backend
 │   ├── conversations.py       # Python conversation assembly equivalent
 │   ├── extract_prompts.py     # Python JSONL prompt extractor
+│   ├── agent_metrics.py       # Agent behavior metrics computation
+│   ├── task_classification.py # Heuristic task type classifier
+│   ├── anti_patterns.py       # Structured output anti-pattern detection
+│   ├── config_scanner.py      # .claude/ directory maturity scanner
+│   ├── enforcement_gaps.py    # Advisory-vs-programmatic gap detection
 │   ├── config.py              # Centralized config (shared/defaults.json + env vars)
 │   ├── static/                # Web frontend (HTML/CSS/JS)
 │   ├── tests/                 # Pytest suite (API, security, helpers, prompts, config)
@@ -337,7 +361,8 @@ codefluent/
 │   │   ├── scoring/v1.0.md        # Session scoring prompt
 │   │   ├── config/v1.0.md         # CLAUDE.md scoring prompt
 │   │   ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
-│   │   └── single_scoring/v1.0.md # Single-prompt verification scorer
+│   │   ├── single_scoring/v1.0.md # Single-prompt verification scorer
+│   │   └── config_advisor/v1.0.md # Hook config generation prompt
 │   └── eval/                  # Scoring regression testing
 │       ├── golden_set.json    # 50 curated test cases
 │       ├── run_eval.py        # CLI runner (schema, agreement, drift, regression checks)
@@ -347,6 +372,7 @@ codefluent/
 │   ├── TECHNICAL_SPEC.md
 │   ├── UI_SPEC.md
 │   ├── SESSION_DATA.md
+│   ├── RELEASE_ROADMAP.md
 │   ├── REFERENCES.md
 │   └── DEMO_SCRIPT.md
 ├── images/                    # Demo screenshots
@@ -378,23 +404,23 @@ See [`webapp/README.md`](webapp/README.md) for configuration, CORS, and Windows 
 
 ### Testing
 
-The project has **1067 automated tests** across both interfaces:
+The project has **1653 automated tests** across both interfaces:
 
 ```bash
 cd vscode-extension
-npm test                   # 618 tests across 16 suites (Jest)
+npm test                   # 907 tests across 22 suites (Jest)
 
 cd webapp
-uv run pytest tests/ -v    # 450 tests across 9 suites (pytest)
+uv run pytest tests/ -v    # 746 tests across 12 suites (pytest)
 ```
 
-Test suites cover scoring, parsing, caching, analytics, pricing, XSS prevention, shell injection, path traversal, rate limiting, CORS, API surface, and scoring prompt regression testing. The eval framework (`shared/eval/`) validates scoring outputs against a [golden set of 50 curated entries](shared/eval/README.md). All tests must pass before merging to main.
+Test suites cover scoring, parsing, caching, analytics, pricing, agent metrics, task classification, anti-pattern detection, configuration scanning, enforcement gaps, XSS prevention, shell injection, path traversal, rate limiting, CORS, API surface, and scoring prompt regression testing. The eval framework (`shared/eval/`) validates scoring outputs against a [golden set of 50 curated entries](shared/eval/README.md). All tests must pass before merging to main.
 
 ### CI/CD
 
 Five GitHub Actions workflows run automatically:
 
-- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 1067 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
+- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 1653 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
 - **Eval** (`eval.yml`) — Runs on PRs that modify `shared/prompts/**`: scores the golden set via the Anthropic API, validates schema + agreement against human-labeled ground truth. See [Eval Framework](#eval-framework) below.
 - **Claude Code Review** (`claude-review.yml`) — AI-powered PR review, responds to `@claude` mentions.
 - **Security Review** (`security-review.yml`) — Grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml).
@@ -415,16 +441,15 @@ Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setu
 
 ## Roadmap
 
-**Coming soon:**
-- **Conversations tab** — visualize conversation structure, length distributions, and engagement patterns with interactive charts
-- **Agent metrics** — tool diversity, plan mode adoption, cache efficiency, and thinking utilization computed from your session data
-- **Task classification** — automatic categorization of conversations by task type (feature, bug fix, refactor, debug, etc.)
-- **Configuration maturity** — assess your `.claude/` directory setup (hooks, rules, commands, skills) against best practices
-
-**Planned:**
-- **CCA readiness assessment** — radar chart mapping your usage to Claude Certified Architect competency domains
+**Coming in v1.2:**
+- **LLM-powered task classification** — upgrade heuristic classification with few-shot LLM classification and golden set validation
 - **Interaction quality metrics** — error recovery patterns, verification behavior, learning trajectory
-- **Outcome metrics** — commit quality analysis, MCP integration assessment
+- **Task-type normalization** — per-task-type expected ranges for agent metrics
+
+**Planned (v1.3+):**
+- **CCA readiness radar** — 5-axis radar chart mapping your usage to Claude Certified Architect competency domains
+- **Scoring quality infrastructure** — confidence calibration, user feedback signals, cross-model agreement testing
+- **Outcome metrics** — commit quality analysis, MCP integration assessment, CI/CD scoring
 
 See the [Release Roadmap](docs/RELEASE_ROADMAP.md) for details, or browse [open milestones](https://github.com/frederick-douglas-pearce/codefluent/milestones) on GitHub.
 

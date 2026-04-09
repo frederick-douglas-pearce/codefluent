@@ -202,15 +202,15 @@ Features from different research docs that describe the same underlying capabili
 
 ## Release Mapping
 
-### v1.1 — "Conversations & Foundations"
+### v1.1 — "Conversations & Foundations" ✅ SHIPPED
 
-| Epic | Scope | Size |
-|------|-------|------|
-| Epic 1: Conversations Tab + Agent Metrics | Full | M |
-| Epic 2: Task Classification | Phase A (heuristic only) | S |
-| Epic 3: Configuration Maturity | Full | M |
+| Epic | Scope | Size | Status |
+|------|-------|------|--------|
+| Epic 1: Conversations Tab + Agent Metrics | Full | M | Complete |
+| Epic 2: Task Classification | Phase A (heuristic only) | S | Complete |
+| Epic 3: Configuration Maturity | Full | M | Complete |
 
-**Key properties:** Zero or near-zero API cost. All three epics ship independently. No scoring prompt changes = no eval regression risk.
+**Shipped:** 23 PRs merged. Zero or near-zero API cost (except Configuration Advisor). All three epics shipped independently. No scoring prompt changes = no eval regression risk. Tests grew from 1068 to 1653 (907 TS + 746 Python).
 
 ### v1.2 — "Intelligence"
 
@@ -281,9 +281,9 @@ Epic 2a (Heuristic Classification) ──→ Epic 2b (LLM) ──→ Epic 4 (Int
 
 | Issue | Epic | Milestone |
 |-------|------|-----------|
-| #173 | Epic 1: Conversations Tab + Agent Metrics | v1.1 |
-| #174 | Epic 2: Task Classification | v1.1 / v1.2 |
-| #175 | Epic 3: Configuration Maturity | v1.1 |
+| #173 | Epic 1: Conversations Tab + Agent Metrics | v1.1 ✅ |
+| #174 | Epic 2: Task Classification | v1.1 (Phase A ✅) / v1.2 |
+| #175 | Epic 3: Configuration Maturity | v1.1 ✅ |
 | #176 | Epic 4: Interaction Quality Metrics | v1.2 |
 | #177 | Epic 5: CCA Scoring Dimensions | v1.3 |
 | #178 | Epic 6: Scoring Quality Infrastructure | v1.3 |
@@ -291,28 +291,33 @@ Epic 2a (Heuristic Classification) ──→ Epic 2b (LLM) ──→ Epic 4 (Int
 
 ### All issues by epic
 
-| Issue | Title | Epic | Milestone |
-|-------|-------|------|-----------|
-| #133 | Conversations tab | Epic 1 | v1.1 |
-| #166 | Agent metrics computation module | Epic 1 | v1.1 |
-| #167 | Agent metrics display cards and sparklines | Epic 1 | v1.1 |
-| #168 | Conversation detail view with expandable rows | Epic 1 | v1.1 |
-| #169 | Conversations tab charts | Epic 1 | v1.1 |
-| #150 | Task classification | Epic 2 | v1.1 (Phase A), v1.2 (Phase B) |
-| #170 | Task type distribution display | Epic 2 | v1.1 |
-| #158 | .claude/ directory scanner | Epic 3 | v1.1 |
-| #159 | Advisory-vs-programmatic gap | Epic 3 | v1.1 |
-| #161 | Configuration Advisor | Epic 3 (simplified) / Epic 7 (full) | v1.1 / v2.0 |
-| #171 | Structured output anti-pattern detection | Epic 3 | v1.1 |
-| #172 | Configuration maturity display and scoring UI | Epic 3 | v1.1 |
-| #128 | Review scoring prompt definitions | Epic 4 | v1.2 |
-| #101 | Behavior-token breakdown | Epic 4 | v1.2 |
-| #160 | Parser enhancement (progress messages) | Epic 5 | v1.3 |
-| #112 | Multi-provider eval framework | Epic 6 | v1.3 |
-| #113 | Human review loop | Epic 6 | v1.3 |
-| #114 | Cross-model agreement | Epic 6 | v1.3 |
-| #115 | Confidence calibration | Epic 6 | v1.3 |
-| #116 | User feedback signal | Epic 6 | v1.3 |
+| Issue | Title | Epic | Milestone | Status |
+|-------|-------|------|-----------|--------|
+| #133 | Conversations tab | Epic 1 | v1.1 | ✅ |
+| #166 | Agent metrics computation module | Epic 1 | v1.1 | ✅ |
+| #167 | Agent metrics display cards and sparklines | Epic 1 | v1.1 | ✅ |
+| #168 | Conversation detail view with expandable rows | Epic 1 | v1.1 | ✅ |
+| #169 | Conversations tab charts | Epic 1 | v1.1 | ✅ |
+| #150 | Task classification | Epic 2 | v1.1 (Phase A ✅), v1.2 (Phase B) | Partial |
+| #170 | Task type distribution display | Epic 2 | v1.1 | ✅ |
+| #158 | .claude/ directory scanner | Epic 3 | v1.1 | ✅ |
+| #159 | Advisory-vs-programmatic gap | Epic 3 | v1.1 | ✅ |
+| #161 | Configuration Advisor | Epic 3 (simplified) / Epic 7 (full) | v1.1 / v2.0 | Phase 1 ✅ |
+| #171 | Structured output anti-pattern detection | Epic 3 | v1.1 | ✅ |
+| #172 | Configuration maturity display and scoring UI | Epic 3 | v1.1 | ✅ |
+| #206 | Track custom command and skill usage | Epic 1 | v1.1 | ✅ |
+| #210 | MCP scanner project-level mcpServers | Epic 3 | v1.1 | ✅ |
+| #217 | Handle complex skills with context:fork | Backlog | — | Open |
+| #218 | Command adoption rate metric | Backlog | — | Open |
+| #219 | Incorporate command/skill usage into scoring | Backlog | — | Open |
+| #128 | Review scoring prompt definitions | Epic 4 | v1.2 | Open |
+| #101 | Behavior-token breakdown | Epic 4 | v1.2 | Open |
+| #160 | Parser enhancement (progress messages) | Epic 5 | v1.3 | Open |
+| #112 | Multi-provider eval framework | Epic 6 | v1.3 | Open |
+| #113 | Human review loop | Epic 6 | v1.3 | Open |
+| #114 | Cross-model agreement | Epic 6 | v1.3 | Open |
+| #115 | Confidence calibration | Epic 6 | v1.3 | Open |
+| #116 | User feedback signal | Epic 6 | v1.3 | Open |
 
 ---
 

@@ -1,5 +1,7 @@
 # CodeFluent — Demo Script (3 Minutes)
 
+> **Historical artifact.** This demo script was written for the PDX Hacks 2026 hackathon presentation (Feb 28, 2026). It covers the original 5-tab interface. CodeFluent now has 7 tabs including Conversations and Configuration Maturity. Kept for reference.
+
 ---
 
 ## Setup Before Demo
