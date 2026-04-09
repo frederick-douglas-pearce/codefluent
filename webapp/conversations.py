@@ -79,6 +79,7 @@ def build_conversations(
         assistant_msg_count = 0
         tool_use_count = 0
         tools_used: set[str] = set()
+        commands_used: set[str] = set()
         thinking_count = 0
         used_plan_mode = False
         model = None
@@ -107,6 +108,8 @@ def build_conversations(
                         prompt_timestamps.append(msg["timestamp"])
                 if msg.get("used_plan_mode"):
                     used_plan_mode = True
+                if msg.get("command_name"):
+                    commands_used.add(msg["command_name"])
             elif msg["type"] == "assistant":
                 assistant_msg_count += 1
                 if msg.get("model") and not model:
@@ -162,6 +165,7 @@ def build_conversations(
             "assistant_message_count": assistant_msg_count,
             "tool_use_count": tool_use_count,
             "tools_used": sorted(tools_used),
+            "commands_used": sorted(commands_used),
             "thinking_count": thinking_count,
             "used_plan_mode": used_plan_mode,
             "model": model,

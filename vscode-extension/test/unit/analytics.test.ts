@@ -14,6 +14,7 @@ function makeSession(overrides: Partial<ParsedSession> = {}): ParsedSession {
     assistant_message_count: 2,
     tool_use_count: 3,
     tools_used: ['Read', 'Edit'],
+    commands_used: [],
     thinking_count: 0,
     used_plan_mode: false,
     model: 'claude-sonnet-4-20250514',

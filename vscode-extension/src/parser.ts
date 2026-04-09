@@ -13,6 +13,7 @@ export interface ParsedSession {
   assistant_message_count: number
   tool_use_count: number
   tools_used: string[]
+  commands_used: string[]
   thinking_count: number
   used_plan_mode: boolean
   model: string | null
@@ -46,6 +47,7 @@ export interface TimestampedMessage {
   content?: string              // extracted text (truncated to 2000 chars)
   used_plan_mode?: boolean      // true if planContent present
   is_clear_command?: boolean    // true if /clear command
+  command_name?: string         // e.g. '/rebuild' (custom commands/skills only)
   // Assistant message fields
   usage?: { input_tokens: number; output_tokens: number;
             cache_creation_input_tokens: number; cache_read_input_tokens: number }
@@ -93,6 +95,25 @@ export function isClearCommand(text: string): boolean {
   return /<command-name>\/clear<\/command-name>/.test(text)
 }
 
+/** Known system commands — meta-operations, not interactions with Claude. */
+export const SYSTEM_COMMANDS = new Set([
+  '/clear', '/compact', '/exit', '/login', '/logout',
+  '/status', '/init', '/help', '/cost', '/doctor',
+  '/config', '/memory', '/permissions', '/review',
+  '/terminal-setup', '/listen', '/mcp', '/vim',
+])
+
+export function extractCommandName(text: string): string | null {
+  const match = text.match(/<command-name>(\/[^<]+)<\/command-name>/)
+  return match ? match[1] : null
+}
+
+export function isCustomCommand(text: string): boolean {
+  const name = extractCommandName(text)
+  if (!name) return false
+  return !SYSTEM_COMMANDS.has(name)
+}
+
 export function parseSessionFile(filepath: string): ParsedSession | null {
   let raw: string
   try {
@@ -120,6 +141,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
   const timestamps: string[] = []
   let toolUseCount = 0
   const toolsUsed = new Set<string>()
+  const commandsUsed = new Set<string>()
   let thinkingCount = 0
   let userMsgCount = 0
   let assistantMsgCount = 0
@@ -149,7 +171,13 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     if (msgType === 'user') {
       const content = msg.message?.content ?? ''
       const text = extractUserText(content)
-      if (isSlashCommand(text)) continue  // skip all slash commands (not natural language prompts)
+      if (isSlashCommand(text)) {
+        const cmdName = extractCommandName(text)
+        if (cmdName && !SYSTEM_COMMANDS.has(cmdName)) {
+          commandsUsed.add(cmdName)
+        }
+        continue  // skip all slash commands (not natural language prompts)
+      }
       userMsgCount++
       if (text && text !== '[Request interrupted by user for tool use]') {
         userPrompts.push(text.slice(0, 2000))
@@ -229,6 +257,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     assistant_message_count: assistantMsgCount,
     tool_use_count: toolUseCount,
     tools_used: Array.from(toolsUsed).sort(),
+    commands_used: Array.from(commandsUsed).sort(),
     thinking_count: thinkingCount,
     used_plan_mode: usedPlanMode,
     model,
@@ -291,6 +320,8 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
       const isInterrupted = text === '[Request interrupted by user for tool use]'
       const isCommand = isSlashCommand(text)
       const isClear = isCommand && isClearCommand(text)
+      const cmdName = isCommand ? extractCommandName(text) : null
+      const isCustom = cmdName ? !SYSTEM_COMMANDS.has(cmdName) : false
       const extracted: TimestampedMessage = {
         type: 'user',
         timestamp: msg.timestamp || null,
@@ -299,6 +330,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
         content: (!text || isInterrupted || isCommand) ? undefined : text.slice(0, 2000),
         used_plan_mode: !!msg.planContent,
         is_clear_command: isClear || undefined,
+        command_name: isCustom ? cmdName! : undefined,
       }
       if (!version && msg.version) extracted.claude_code_version = msg.version
       if (!gitBranch && msg.gitBranch) extracted.git_branch = msg.gitBranch

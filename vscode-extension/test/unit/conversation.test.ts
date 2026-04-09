@@ -1217,3 +1217,40 @@ describe('/clear as conversation boundary', () => {
     expect(allPrompts).toEqual(['prompt 1', 'prompt 2'])
   })
 })
+
+describe('buildConversations commands_used', () => {
+  function makeMsg(type: string, ts: string, overrides: Partial<TimestampedMessage> = {}): TimestampedMessage {
+    return { type, timestamp: ts, session_id: 's1', file_position: 0, ...overrides }
+  }
+
+  it('aggregates command_name into commands_used', () => {
+    const messages = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'hello', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:01:00Z', { command_name: '/rebuild', file_position: 1 }),
+      makeMsg('user', '2026-01-01T10:02:00Z', { content: 'another prompt', file_position: 2 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs).toHaveLength(1)
+    expect(convs[0].commands_used).toEqual(['/rebuild'])
+  })
+
+  it('deduplicates and sorts commands_used', () => {
+    const messages = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'hello', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:01:00Z', { command_name: '/rebuild', file_position: 1 }),
+      makeMsg('user', '2026-01-01T10:02:00Z', { command_name: '/commit', file_position: 2 }),
+      makeMsg('user', '2026-01-01T10:03:00Z', { command_name: '/rebuild', file_position: 3 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs[0].commands_used).toEqual(['/commit', '/rebuild'])
+  })
+
+  it('returns empty commands_used when no custom commands', () => {
+    const messages = [
+      makeMsg('user', '2026-01-01T10:00:00Z', { content: 'hello', file_position: 0 }),
+      makeMsg('user', '2026-01-01T10:01:00Z', { content: 'world', file_position: 1 }),
+    ]
+    const convs = buildConversations(messages, 'test', '-test', 60)
+    expect(convs[0].commands_used).toEqual([])
+  })
+})
