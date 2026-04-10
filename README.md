@@ -110,7 +110,22 @@ uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 Then open `http://localhost:8000` in your browser. Usage data is fetched on demand via the **Refresh** button in the Usage tab — no manual `ccusage` commands needed. See [`webapp/README.md`](webapp/README.md) for detailed setup instructions.
 
-### Configure (API Key)
+### Configure
+
+Both interfaces support the same key settings with sensible defaults:
+
+| Setting | Default | What it controls |
+|---------|---------|-----------------|
+| Scoring model | `claude-sonnet-4-20250514` | Model used for fluency scoring |
+| Max prompts per conversation | `20` | How many prompts are sent for scoring |
+| Optimizer threshold | `90` | Score above which prompts are "already effective" |
+| Conversation gap | `60 min` | Inactivity gap that defines a conversation boundary |
+| Session data path | `~/.claude/projects/` | Where to find Claude Code session files |
+
+- **VS Code extension:** Search "CodeFluent" in Settings (`Ctrl+,`). See [`vscode-extension/README.md`](vscode-extension/README.md#extension-settings) for details.
+- **Web app:** Environment variables or `webapp/config.json`. See [`webapp/README.md`](webapp/README.md#settings) for details.
+
+### API Key
 
 The extension looks for your API key in this order:
 
