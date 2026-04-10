@@ -134,6 +134,8 @@ Search "CodeFluent" in VS Code Settings (`Ctrl+,`) to configure:
 | `codefluent.optimizer.alreadyGoodThreshold` | `90` | Score (0–100) at or above which prompts are considered already effective |
 | `codefluent.conversation.inactivityGapMinutes` | `60` | Minutes of inactivity that defines a conversation boundary |
 
+> **Warning:** Changing `inactivityGapMinutes` redefines how conversations are assembled, which affects all downstream metrics — fluency scores, analytics, agent metrics, and task classification. Cached scores will become stale and should be re-scored with "Force Rescore" enabled.
+
 ### API Key
 
 CodeFluent uses the following resolution order:

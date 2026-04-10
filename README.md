@@ -119,7 +119,7 @@ Both interfaces support the same key settings with sensible defaults:
 | Scoring model | `claude-sonnet-4-20250514` | Model used for fluency scoring |
 | Max prompts per conversation | `20` | How many prompts are sent for scoring |
 | Optimizer threshold | `90` | Score above which prompts are "already effective" |
-| Conversation gap | `60 min` | Inactivity gap that defines a conversation boundary |
+| Conversation gap | `60 min` | Inactivity gap that defines a conversation boundary (⚠️ changes all metrics) |
 | Session data path | `~/.claude/projects/` | Where to find Claude Code session files |
 
 - **VS Code extension:** Search "CodeFluent" in Settings (`Ctrl+,`). See [`vscode-extension/README.md`](vscode-extension/README.md#extension-settings) for details.

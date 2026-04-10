@@ -139,6 +139,8 @@ The webapp reads settings from three sources (highest priority first):
 | `optimizer.alreadyGoodThreshold` | `CODEFLUENT_OPTIMIZER_ALREADYGOODTHRESHOLD` | `90` | Score (0–100) at or above which prompts are considered already effective |
 | `conversation.inactivityGapMinutes` | `CODEFLUENT_CONVERSATION_INACTIVITYGAPMINUTES` | `60` | Minutes of inactivity that defines a conversation boundary |
 
+> **Warning:** Changing `inactivityGapMinutes` redefines how conversations are assembled, which affects all downstream metrics — fluency scores, analytics, agent metrics, and task classification. Cached scores will become stale and should be re-scored with "Force Rescore" enabled.
+
 Example `webapp/config.json`:
 
 ```json
