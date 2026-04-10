@@ -5,6 +5,39 @@ Extension-specific changes. For the full project changelog (including webapp and
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-04-10
+
+### Added
+
+- **Conversations tab** — sortable list view with per-conversation metrics, expandable detail rows showing individual prompts, duration distribution and average length trend charts (#133, #168, #169)
+- **Agent metrics display** — cards with sparklines showing tool usage, thinking events, and agent behavior patterns per conversation and weekly (#166, #167)
+- **Configuration maturity** — `.claude/` directory scanner assesses hooks, commands, rules, skills, and MCP server setup; doughnut chart and category breakdown in new Config tab (#158, #172)
+- **Configuration advisor** — generates hook recommendations based on maturity gaps, with one-click copy for `settings.json` (#161)
+- **Task type distribution** — heuristic classifier detects task types from branch prefixes and prompt keywords; displayed as doughnut chart (#150, #170)
+- **Anti-pattern detection** — flags structured output anti-patterns (e.g., requesting JSON without tool use) in user prompts (#171)
+- **Advisory-vs-programmatic gap detection** — identifies fluency behaviors stated in CLAUDE.md but not enforced via hooks (#159)
+- **Inter-prompt gap histogram** — visualizes time gaps between prompts with configurable conversation boundary threshold line (#186)
+- **`/clear` as conversation boundary** — treats `/clear` commands as conversation splits in addition to inactivity gaps (#194)
+- **Custom command and skill tracking** — detects usage of custom slash commands and skills as positive conversation signals (#206)
+- **Tab reorder** — tabs rearranged for natural user workflow: Fluency Score → Conversations → Usage → Config → Prompt Optimizer → Quick Wins → Recommendations (#198)
+
+### Fixed
+
+- Score cache ID mismatch — now uses content hash for stable cache lookup across conversation boundary changes (#182)
+- ISO 8601 week algorithm used local time instead of UTC for chart date keys (#188)
+- System commands and slash commands filtered from conversation metrics and prompt counts (#195)
+- System-injected messages filtered from user prompts before scoring (#222)
+- Config maturity score not detecting hook matchers (#207)
+- MCP scanner now checks `~/.claude.json` project-level `mcpServers` (#210)
+- Enforcement coverage uses keyword overlap instead of event-only match (#211)
+- Doughnut chart aspect ratio and agent metrics card overflow in VS Code sidebar (#202)
+- Release pipeline chains build job into release-please workflow (#156)
+- Resolved npm audit vulnerabilities in dev dependencies (#162)
+
+### Changed
+
+- Test coverage: 907 tests across 22 suites
+
 ## [1.0.1] - 2026-03-25
 
 ### Fixed
