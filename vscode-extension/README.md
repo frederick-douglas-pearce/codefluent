@@ -71,6 +71,12 @@ Claude Code stores session data as JSONL files, but these files don't correspond
 
 The inactivity threshold is configurable via the `codefluent.conversation.inactivityGapMinutes` VS Code setting.
 
+![Conversations Tab](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-conversations.png)
+
+![Conversations Charts](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-conversations-charts.png)
+
+![Conversations Detail View](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-conversations-detail.png)
+
 ### Configuration Maturity
 
 **The first tool to assess your Claude Code project configuration maturity — no known equivalent exists.** Scans your `.claude/` directory and scores your setup (0–100) across 8 weighted categories: CLAUDE.md (20 pts), Hooks (20 pts), Rules (15 pts), Commands (10 pts), MCP (10 pts), Skills (10 pts), Permissions (5 pts), and Enforcement Coverage (10 pts). A tier badge (Beginner / Intermediate / Advanced / Expert) summarizes your maturity level.
@@ -78,6 +84,10 @@ The inactivity threshold is configurable via the `codefluent.conversation.inacti
 Enforcement gap detection identifies rules in your CLAUDE.md that lack programmatic enforcement via hooks. The Configuration Advisor generates ready-to-use hook configurations from enforcement gaps using Claude, with one-click copy to clipboard.
 
 Covers the same configuration competencies tested in the [Claude Certified Architect (CCA)](https://www.anthropic.com/news/claude-certified-architect) exam. This is the foundation for the CCA readiness radar and interaction quality metrics planned for future releases.
+
+![Configuration Maturity](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-config.png)
+
+![Configuration Gaps & Advisor](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-config-gaps.png)
 
 ### Usage Dashboard
 
