@@ -96,14 +96,29 @@ Raw session files don't correspond to meaningful work units — a single file ca
 
 1. All messages from a project's session files are pooled together
 2. Messages are sorted by timestamp
-3. The sorted stream is split at **inactivity gaps** (default: 60 minutes of silence between messages)
-4. Each resulting group is a conversation — the unit used for fluency scoring and analytics
+3. The sorted stream is split at **inactivity gaps** (default: 60 minutes of silence between messages) or at explicit `/clear` commands (which always force a new conversation boundary)
+4. System commands (`/clear`, `/compact`, `/exit`, etc.) are filtered from prompts and message counts
+5. Custom commands and skills (`/rebuild`, `/review-labels`, etc.) are tracked in `commands_used` but their raw `<command-name>` entries are not included as user prompts. The expanded `isMeta` entry (the actual prompt text sent to Claude) passes through as a regular prompt.
+6. Each resulting group is a conversation — the unit used for fluency scoring and analytics
 
 The inactivity threshold is configurable:
 - **VS Code extension:** `codefluent.conversation.inactivityGapMinutes` setting
 - **Webapp:** `conversation.inactivityGapMinutes` in `webapp/config.json` or `shared/defaults.json`
 
 **Source:** `vscode-extension/src/conversation.ts`, `webapp/conversations.py`
+
+## ParsedConversation Fields (v1.1)
+
+Each assembled conversation includes these computed fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `heuristic_task_type` | string \| null | Task classification: `feature`, `bug_fix`, `refactor`, `debug`, `test`, `docs`, `chore`, `exploration`, or `null` |
+| `has_structured_output_antipattern` | boolean | Whether any prompt contains a structured output anti-pattern (e.g., "output as JSON") |
+| `structured_output_antipattern_count` | number | Count of prompts with the anti-pattern |
+| `commands_used` | string[] | Custom commands/skills invoked (e.g., `["/rebuild", "/review-labels"]`). System commands excluded. |
+| `prompt_timestamps` | string[] | ISO timestamps of user prompts (used for inter-prompt gap analysis) |
+| `content_hash` | string | Stable fingerprint for score cache lookup, independent of conversation index position |
 
 ## JSONL Session Format
 

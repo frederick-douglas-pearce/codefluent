@@ -38,9 +38,9 @@ Then open `http://localhost:8000`. See [`webapp/README.md`](webapp/README.md) fo
 
 ## Running Tests
 
-The project has **1068 automated tests** across both interfaces. All must pass before merging.
+The project has **1653 automated tests** across both interfaces. All must pass before merging.
 
-### VS Code Extension (618 tests, 16 suites)
+### VS Code Extension (907 tests, 22 suites)
 
 ```bash
 cd vscode-extension
@@ -65,10 +65,14 @@ npx jest test/unit/scoring      # Run a specific test file
 | `usage.test.ts` | ccusage CLI bridge |
 | `prompts.test.ts` | Prompt loader + template filler |
 | `recommendations.test.ts` | Recommendation generation, behavior categorization |
+| `agentMetrics.test.ts` | Agent metrics computation, sparkline data, tool diversity |
+| `taskClassification.test.ts` | Heuristic task classification, branch prefix, keywords |
+| `antiPatterns.test.ts` | Structured output anti-pattern detection |
+| `configScanner.test.ts` | .claude/ directory scanning, maturity scoring |
 | `extension.test.ts` | Activation, status bar, commands |
-| `webviewProvider.test.ts` | Message handling, HTML generation, injection tests |
+| `webviewProvider.test.ts` | Message handling, HTML generation, injection tests, config advisor |
 
-### Web App (450 tests, 9 suites)
+### Web App (746 tests, 12 suites)
 
 ```bash
 cd webapp
@@ -87,6 +91,9 @@ uv run pytest tests/test_api.py # Run a specific test file
 | `test_analyze_gaps.py` | Inter-prompt gap analysis, histogram generation |
 | `test_prompts.py` | Prompt loading, template filling, registry consistency |
 | `test_eval.py` | Eval framework: scorer, checks, report, CLI, golden set integration |
+| `test_task_classification.py` | Branch prefix mapping, keyword regex, classification priority |
+| `test_anti_patterns.py` | Structured output anti-pattern detection, false positives |
+| `test_config_scanner.py` | .claude/ directory scanning, frontmatter parsing, MCP detection |
 
 ## Branching Strategy
 
@@ -185,8 +192,8 @@ CodeFluent ships **two production interfaces**: the VS Code extension and the we
 
 Before submitting a pull request, verify:
 
-- [ ] `npm test` passes (618+ extension tests green)
-- [ ] `uv run pytest` passes (450+ webapp tests green)
+- [ ] `npm test` passes (907+ extension tests green)
+- [ ] `uv run pytest` passes (746+ webapp tests green)
 - [ ] No regressions in existing functionality
 - [ ] New features include test coverage
 - [ ] Both interfaces updated if the change affects shared functionality

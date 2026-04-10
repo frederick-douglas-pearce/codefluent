@@ -39,8 +39,8 @@ Both interfaces share the same tab structure. The webapp adds a header with sett
 │  SETTINGS BAR (visibility varies by tab)            │
 │  [Data Path input]  [Project dropdown ▾]            │
 ├──────┬────────┬──────┬──────┬──────┬────────────────┤
-│Fluency│Recomm.│Optim.│Quick │Usage │                │
-│ Score │       │      │ Wins │      │                │
+│Fluency│Convs. │Recomm│Config│Optim.│Quick │Usage │  │
+│ Score │       │      │      │      │ Wins │      │  │
 ├──────┴────────┴──────┴──────┴──────┘                │
 │                                                     │
 │           ACTIVE TAB CONTENT                        │
@@ -55,7 +55,9 @@ Both interfaces share the same tab structure. The webapp adds a header with sett
 | Tab | Data Path | Project Dropdown |
 |-----|-----------|-----------------|
 | Fluency Score | Shown | Shown |
+| Conversations | Hidden | Shown |
 | Recommendations | Hidden | Hidden |
+| Config | Hidden | Shown |
 | Prompt Optimizer | Hidden | Shown |
 | Quick Wins | Hidden | Shown |
 | Usage | Hidden | Shown |
@@ -100,7 +102,79 @@ Benchmark values are loaded from `shared/benchmarks.json`.
 
 ---
 
-## Tab 2: Recommendations
+## Tab 2: Conversations
+
+Sortable table with expandable detail view, agent metrics cards, and 5 interactive charts.
+
+```
+┌──────────────────────────────────────────────────┐
+│  SUMMARY CARDS (4 across)                        │
+│  Total Convs | Avg Prompts | Avg Duration |      │
+│  Avg Score                                       │
+├──────────────────────────────────────────────────┤
+│  AGENT METRICS CARDS (4 across, auto-fit grid)   │
+│  ┌─────────────┐ ┌─────────────┐                 │
+│  │ Tool Div.   │ │ Plan Mode   │                 │
+│  │  0.62       │ │  28%        │                 │
+│  │ ▃▅▇▆▄▅▇   │ │ ▂▃▅▆▇▅▃   │                 │
+│  └─────────────┘ └─────────────┘                 │
+│  ┌─────────────┐ ┌─────────────┐                 │
+│  │ Cache Hit   │ │ Thinking    │                 │
+│  │  94%        │ │  45%        │                 │
+│  │ ▅▆▇▇▆▇▇   │ │ ▃▄▅▆▇▇▆   │                 │
+│  └─────────────┘ └─────────────┘                 │
+├──────────────────────────────────────────────────┤
+│  CONVERSATIONS TABLE (sortable, paginated)       │
+│  Date|Proj|Prompts|Dur|Tokens|Cost|Cache%|Tools|  │
+│  Type|Score                                      │
+│  [Click row to expand detail view]               │
+│  [Show more]                                     │
+├──────────────────────────────────────────────────┤
+│  DETAIL VIEW (inline, below expanded row)        │
+│  Metadata: model, branch, version, plan mode,   │
+│    thinking blocks, task type, started, ended    │
+│  Tools Used: [Read] [Edit] [Bash] [Grep] ...    │
+│  Commands Used: [/rebuild] (if any)              │
+│  User Prompts: numbered list (scrollable)        │
+├──────────────────────────────────────────────────┤
+│  CHARTS (5 stacked)                              │
+│  1. Conversations/Week (bar)                     │
+│  2. Conversation Length Distribution (histogram)  │
+│  3. Duration Distribution (histogram, 6 bins)    │
+│  4. Avg Prompts/Week Trend (line)                │
+│  5. Inter-Prompt Gap Distribution (histogram)    │
+│     + dashed red threshold line                  │
+├──────────────────────────────────────────────────┤
+│  TASK TYPE DISTRIBUTION (doughnut, 1:1 aspect)   │
+│  8 categories + gray for unclassified            │
+│  Custom HTML legend with counts/percentages      │
+└──────────────────────────────────────────────────┘
+```
+
+### Agent metrics
+- **Tool diversity index** — unique_tools / tool_use_count (0–1)
+- **Plan mode adoption** — conversations_with_plan / total (0–1)
+- **Avg cache hit rate** — mean per-conversation cache_hit_rate (0–1)
+- **Thinking utilization** — thinking_count / assistant_message_count (0–1)
+
+Each card shows a value and a Chart.js sparkline of weekly data points.
+
+### Task type categories
+| Type | Color |
+|------|-------|
+| feature | `#6366F1` (indigo) |
+| bug_fix | `#EF4444` (red) |
+| refactor | `#F59E0B` (amber) |
+| debug | `#EC4899` (pink) |
+| test | `#10B981` (emerald) |
+| docs | `#3B82F6` (blue) |
+| chore | `#8B5CF6` (violet) |
+| exploration | `#14B8A6` (teal) |
+| unclassified | `#9CA3AF` (gray) |
+
+---
+
+## Tab 3: Recommendations
 
 Frontend-driven coaching based on scoring results. No backend endpoint — generated entirely from the aggregate scores and benchmark comparisons.
 
@@ -124,7 +198,74 @@ Recommendations trigger when `behavior_prevalence < BENCHMARKS[behavior]`. Low-q
 
 ---
 
-## Tab 3: Prompt Optimizer
+## Tab 4: Configuration Maturity
+
+Maturity score ring with tier badge, 8-category checklist, enforcement gap detection, and Configuration Advisor.
+
+```
+┌──────────────────────────────────────────────────┐
+│  MATURITY SCORE RING + TIER BADGE                │
+│              ┌─────────┐                         │
+│              │   67    │  [Advanced]              │
+│              │  /100   │                         │
+│              └─────────┘                         │
+├──────────────────────────────────────────────────┤
+│  MATURITY CHECKLIST (8 cards, vertical list)     │
+│  ┌──────────────────────────────────────────┐    │
+│  │ ✅ CLAUDE.md (20/20 pts)                 │    │
+│  │   ✓ Present at project root              │    │
+│  │   ✓ Multiple locations                   │    │
+│  │   ✓ Uses @import directives              │    │
+│  ├──────────────────────────────────────────┤    │
+│  │ ⚠️ Hooks (10/20 pts)                    │    │
+│  │   ✓ Hooks configured                     │    │
+│  │   ✓ Multiple events                      │    │
+│  │   ✗ File matchers                        │    │
+│  └──────────────────────────────────────────┘    │
+│  ... (Rules, Commands, MCP, Skills, Permissions, │
+│       Enforcement Coverage)                      │
+├──────────────────────────────────────────────────┤
+│  ENFORCEMENT GAPS                                │
+│  Stat cards: X statements | Y gaps | Z% covered  │
+│  ┌──────────────────────────────────────────┐    │
+│  │ [HIGH] "Always run tests before commit"  │    │
+│  │ Suggested: PreToolUse hook               │    │
+│  │ [Generate Hook Config ▶]                 │    │
+│  ├──────────────────────────────────────────┤    │
+│  │ [MED] "Never use string interpolation"   │    │
+│  │ Suggested: PostToolUse hook              │    │
+│  │ [Generate Hook Config ▶]                 │    │
+│  └──────────────────────────────────────────┘    │
+├──────────────────────────────────────────────────┤
+│  CONFIGURATION ADVISOR (inline, per gap)         │
+│  Explanation + JSON code block + instructions    │
+│  [Copy JSON 📋]                                 │
+└──────────────────────────────────────────────────┘
+```
+
+### Maturity tiers
+| Tier | Score Range | Badge Color |
+|------|------------|-------------|
+| Beginner | 0–24 | Red |
+| Intermediate | 25–49 | Amber |
+| Advanced | 50–74 | Blue |
+| Expert | 75–100 | Green |
+
+### Category weights
+| Category | Max Points | Criteria |
+|----------|-----------|----------|
+| CLAUDE.md | 20 | Present (10), multiple locations (5), @import (5) |
+| Hooks | 20 | Configured (10), multiple events (5), file matchers (5) |
+| Rules | 15 | Has rules (10), path scoping (5) |
+| Commands | 10 | Has commands (10) |
+| MCP | 10 | Configured (5), multiple servers (5) |
+| Skills | 10 | Has skills (5), frontmatter (5) |
+| Permissions | 5 | Configured (5) |
+| Enforcement | 10 | Proportional to covered/total statements |
+
+---
+
+## Tab 5: Prompt Optimizer
 
 Paste a prompt, get an optimized version back. Config-aware — factors in CLAUDE.md behaviors to avoid redundancy.
 
@@ -147,7 +288,7 @@ Paste a prompt, get an optimized version back. Config-aware — factors in CLAUD
 
 ---
 
-## Tab 4: Quick Wins
+## Tab 6: Quick Wins
 
 Project-scoped GitHub task suggestions with copy-ready prompts.
 
@@ -178,7 +319,7 @@ Project-scoped GitHub task suggestions with copy-ready prompts.
 
 ---
 
-## Tab 5: Usage Dashboard
+## Tab 7: Usage Dashboard
 
 Two data sources displayed in sequence: ccusage all-projects data, then per-conversation analytics from JSONL parsing.
 
@@ -230,9 +371,12 @@ Implemented as `scoreColor(score)` — linear interpolation between three color 
 
 | Component | Description | Used in |
 |-----------|-------------|---------|
-| Score ring | SVG circle with animated `stroke-dashoffset` | Fluency Score, Optimizer |
+| Score ring | SVG circle with animated `stroke-dashoffset` | Fluency Score, Optimizer, Config |
 | Behavior bars | Horizontal bar + benchmark marker + color coding | Fluency Score |
-| Stat cards | 4-column grid of label + large number + detail | Usage, Conversation Analytics |
+| Stat cards | 4-column grid of label + large number + detail | Usage, Conversations, Config |
+| Sparkline cards | Value + small Chart.js line chart (weekly data) | Conversations (agent metrics) |
+| Maturity checklist | Weighted category cards with check/cross items | Config |
+| Doughnut chart | Chart.js doughnut with HTML legend | Conversations (task types) |
 | Task cards | Title, meta, prompt block, copy/run buttons | Quick Wins |
 | Spinner | CSS-animated border spinner | All tabs during loading |
 | Tab navigation | Horizontal tabs with active indicator | Page layout |

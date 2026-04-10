@@ -1,8 +1,8 @@
 # CodeFluent Web App
 
-**AI fluency analytics for Claude Code users** — standalone web interface as an alternative to the VS Code extension.
+**Comprehensive analytics for Claude Code users** — standalone web interface as an alternative to the VS Code extension.
 
-CodeFluent parses your local Claude Code session files, scores your prompts against 11 research-backed fluency behaviors, and shows you exactly how to improve. Built with FastAPI (Python) and vanilla HTML/CSS/JS.
+CodeFluent parses your local Claude Code session files, scores your prompting behaviors against 11 research-backed fluency behaviors, analyzes conversation patterns and cost efficiency, assesses your project configuration maturity, and provides personalized coaching to make you a more effective AI collaborator. Built with FastAPI (Python) and vanilla HTML/CSS/JS.
 
 See the [main README](../README.md) for the full project overview. This document covers webapp-specific details — setup, design choices, testing, and security — that differ from the VS Code extension.
 
@@ -51,8 +51,13 @@ Usage data and session prompts are fetched on demand — no manual export steps 
 See the [main README](../README.md#features) for feature descriptions. Screenshots below show the webapp interface:
 
 <table>
-<tr><th>Fluency Score</th><th>Recommendations</th></tr>
-<tr valign="top"><td><img src="../images/demo-fluency.png" alt="Fluency tab"></td><td><img src="../images/demo-recommendations.png" alt="Recommendations tab"></td></tr>
+<tr><th>Fluency Score</th><th>Conversations</th></tr>
+<tr valign="top"><td><img src="../images/demo-fluency.png" alt="Fluency tab"></td><td><img src="../images/demo-conversations.png" alt="Conversations tab"></td></tr>
+</table>
+
+<table>
+<tr><th>Configuration Maturity</th><th>Recommendations</th></tr>
+<tr valign="top"><td><img src="../images/demo-config.png" alt="Configuration Maturity tab"></td><td><img src="../images/demo-recommendations.png" alt="Recommendations tab"></td></tr>
 </table>
 
 <table>
@@ -85,10 +90,12 @@ The settings bar adapts per tab to show only relevant controls:
 | Tab | Data Path | Project Dropdown |
 |-----|-----------|-----------------|
 | Fluency Score | Shown | Shown |
+| Conversations | Hidden | Shown |
+| Recommendations | Hidden | Hidden |
+| Config | Hidden | Shown |
 | Prompt Optimizer | Hidden | Shown |
 | Quick Wins | Hidden | Shown |
 | Usage | Hidden | Shown |
-| Recommendations | Hidden | Hidden |
 
 ### Copy-to-Clipboard (No Terminal Integration)
 
@@ -104,13 +111,16 @@ The webapp exposes `GET /health` returning server status, version, and dependenc
 
 ## How It Works
 
-1. **Parse & assemble** — JSONL session files are parsed and all messages per project are assembled into conversations by splitting at inactivity gaps between user prompts (`conversation.inactivityGapMinutes`, default: 60 minutes)
-2. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for fluency scoring
-3. **Config scoring** — Your project's `CLAUDE.md` is scored against 3 config-eligible meta-interaction behaviors and merged via `effective = conversation OR config`
-4. **Cache** — Results are cached locally by conversation ID, content hash, and prompt version to avoid re-scoring
-5. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics are computed from parsed JSONL token data
+1. **Parse** — JSONL session files from `~/.claude/projects/` are parsed to extract user prompts, assistant responses, and token usage metadata. System commands (`/clear`, `/compact`, etc.) are filtered out; custom commands and skills are tracked separately.
+2. **Assemble conversations** — All messages per project are pooled, sorted by timestamp, and split into conversations at inactivity gaps between user prompts (configurable via `conversation.inactivityGapMinutes`, default: 60 minutes). `/clear` commands force a conversation boundary. Each conversation is classified by task type (feature, bug fix, refactor, etc.) via heuristic analysis of branch names and prompt keywords.
+3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
+4. **Config scoring** — If a `CLAUDE.md` exists, it's scored against 3 config-eligible meta-interaction behaviors. Results are merged via `effective = conversation OR config`
+5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
+6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
+7. **Cache** — Scores are cached locally (by conversation ID, content hash, and prompt version) to avoid re-scoring unchanged conversations
+8. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) are computed from parsed JSONL token data
 
-All data stays local. No telemetry, no external servers — just your local session files and direct Anthropic API calls for scoring.
+Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
 ## Configuration
 
@@ -132,7 +142,7 @@ CORS is restricted to localhost origins by default. The allowed origin is determ
 
 ## Testing
 
-The webapp has **450 tests** across 9 suites. Run with:
+The webapp has **746 tests** across 12 suites. Run with:
 
 ```bash
 cd webapp
@@ -143,15 +153,18 @@ uv run pytest tests/test_eval.py -m live  # Run live API eval tests (~$0.02)
 
 | Suite | Tests | What it covers |
 |-------|-------|----------------|
-| `test_api.py` | 65 | Health endpoint, conversations, scores, scoring, optimizer, quickwins, usage, conversation analytics |
+| `test_api.py` | 65 | Health endpoint, conversations, scores, scoring, optimizer, quickwins, usage, conversation analytics, config maturity |
 | `test_helpers.py` | 75 | Path decoding, repo detection, validators, `compute_aggregate`, cost estimation, error classification |
 | `test_security.py` | 38 | Rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification |
-| `test_extract_prompts.py` | 58 | JSONL parsing, content extraction, session filtering, metadata extraction |
-| `test_conversations.py` | 60 | Conversation assembly, gap-based splitting, boundary detection |
+| `test_extract_prompts.py` | 74 | JSONL parsing, content extraction, session filtering, command extraction, metadata |
+| `test_conversations.py` | 63 | Conversation assembly, gap-based splitting, boundary detection, commands_used aggregation |
 | `test_config.py` | 11 | Centralized config module (defaults, env vars, config.json overrides) |
 | `test_analyze_gaps.py` | 47 | Inter-prompt gap analysis, histogram generation |
 | `test_prompts.py` | 17 | Prompt loading, template filling, registry consistency |
 | `test_eval.py` | 79 | Eval framework: scorer, checks, report, CLI args, golden set integration (+ 3 live API tests) |
+| `test_task_classification.py` | 30 | Branch prefix mapping, keyword regex, classification priority |
+| `test_anti_patterns.py` | 37 | Structured output anti-pattern detection, false positive avoidance |
+| `test_config_scanner.py` | 54 | .claude/ directory scanning, frontmatter parsing, MCP detection, endpoint tests |
 
 Live API tests (`@pytest.mark.live`) are excluded by default and require `ANTHROPIC_API_KEY`. Run with `-m live` to include them.
 
