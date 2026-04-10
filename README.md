@@ -178,8 +178,18 @@ CodeFluent resolves this automatically via the system home directory. If your se
 </table>
 
 <table>
-<tr><th>Configuration Maturity</th><th>Recommendations</th></tr>
-<tr valign="top"><td><img src="images/vscode-config.png" alt="VS Code Configuration Maturity tab"></td><td><img src="images/vscode-recommendations.png" alt="VS Code Recommendations tab"></td></tr>
+<tr><th>Conversations Charts</th><th>Conversations Detail</th></tr>
+<tr valign="top"><td><img src="images/vscode-conversations-charts.png" alt="VS Code Conversations charts"></td><td><img src="images/vscode-conversations-detail.png" alt="VS Code Conversations detail view"></td></tr>
+</table>
+
+<table>
+<tr><th>Configuration Maturity</th><th>Configuration Gaps & Advisor</th></tr>
+<tr valign="top"><td><img src="images/vscode-config.png" alt="VS Code Configuration Maturity tab"></td><td><img src="images/vscode-config-gaps.png" alt="VS Code Configuration gaps and advisor"></td></tr>
+</table>
+
+<table>
+<tr><th>Recommendations</th></tr>
+<tr><td><img src="images/vscode-recommendations.png" alt="VS Code Recommendations tab"></td></tr>
 </table>
 
 <table>
