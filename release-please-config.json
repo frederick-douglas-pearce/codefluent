@@ -9,6 +9,22 @@
           "type": "json",
           "path": "vscode-extension/package.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "generic",
+          "path": "README.md"
+        },
+        {
+          "type": "generic",
+          "path": "vscode-extension/README.md"
+        },
+        {
+          "type": "generic",
+          "path": "CLAUDE.md"
+        },
+        {
+          "type": "generic",
+          "path": ".claude/commands/rebuild.md"
         }
       ]
     }
