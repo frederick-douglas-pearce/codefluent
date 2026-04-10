@@ -39,30 +39,6 @@ A weekly trend sparkline tracks your score trajectory over time (improving, stab
 
 ![Coding Interaction Patterns and Session Breakdown](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-scoring-2.png)
 
-### Personalized Recommendations
-
-Tailored coaching based on your weakest fluency behaviors, with high/medium impact categories, concrete prompt examples, and research citations.
-
-![Recommendations](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-recommendations.png)
-
-### CLAUDE.md Config Scoring
-
-Get credit for 3 meta-interaction behaviors that can be established as project conventions: *setting interaction terms*, *identifying missing context*, and *questioning reasoning*. If your `CLAUDE.md` defines these (e.g., "push back if wrong"), they boost your effective score via `conversation OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
-
-### Prompt Optimizer
-
-Paste any prompt and get an optimized version back. The optimizer considers your workspace CLAUDE.md config (scoring it on demand if not cached) so it won't add behaviors already covered by project conventions. Shows a side-by-side comparison with before/after effective scores so you can copy or run the improved prompt directly.
-
-![Prompt Optimizer](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-optimizer.png)
-
-### Quick Wins
-
-GitHub-repo-scoped task suggestions — CodeFluent detects your current workspace repo, fetches open issues, and suggests high-impact tasks you can launch directly in Claude Code with one click.
-
-![Quick Wins Landing](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-quickwins-landing.png)
-
-![Quick Wins Suggestions](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-quickwins.png)
-
 ### Conversations Tab
 
 Sortable table of all conversations with date, project, prompts, duration, tokens, cost, cache%, tools, and score. Click any row to expand a detail view showing metadata, tools used, custom commands/skills invoked, and full user prompts. Five interactive charts visualize conversation patterns: conversations/week, length distribution, duration distribution, average prompts/week trend, and inter-prompt gap distribution. Agent metrics cards with weekly sparklines track tool diversity, plan mode adoption, cache hit rate, and thinking utilization. A task type doughnut chart classifies conversations across 8 categories.
@@ -77,6 +53,12 @@ The inactivity threshold is configurable via the `codefluent.conversation.inacti
 
 ![Conversations Detail View](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-conversations-detail.png)
 
+### Personalized Recommendations
+
+Tailored coaching based on your weakest fluency behaviors, with high/medium impact categories, concrete prompt examples, and research citations.
+
+![Recommendations](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-recommendations.png)
+
 ### Configuration Maturity
 
 **The first tool to assess your Claude Code project configuration maturity — no known equivalent exists.** Scans your `.claude/` directory and scores your setup (0–100) across 8 weighted categories: CLAUDE.md (20 pts), Hooks (20 pts), Rules (15 pts), Commands (10 pts), MCP (10 pts), Skills (10 pts), Permissions (5 pts), and Enforcement Coverage (10 pts). A tier badge (Beginner / Intermediate / Advanced / Expert) summarizes your maturity level.
@@ -88,6 +70,24 @@ Covers the same configuration competencies tested in the [Claude Certified Archi
 ![Configuration Maturity](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-config.png)
 
 ![Configuration Gaps & Advisor](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-config-gaps.png)
+
+### Prompt Optimizer
+
+Paste any prompt and get an optimized version back. The optimizer considers your workspace CLAUDE.md config (scoring it on demand if not cached) so it won't add behaviors already covered by project conventions. Shows a side-by-side comparison with before/after effective scores so you can copy or run the improved prompt directly.
+
+![Prompt Optimizer](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-optimizer.png)
+
+### CLAUDE.md Config Scoring
+
+Get credit for 3 meta-interaction behaviors that can be established as project conventions: *setting interaction terms*, *identifying missing context*, and *questioning reasoning*. If your `CLAUDE.md` defines these (e.g., "push back if wrong"), they boost your effective score via `conversation OR config` logic, with a "CLAUDE.md" attribution tag in the UI.
+
+### Quick Wins
+
+GitHub-repo-scoped task suggestions — CodeFluent detects your current workspace repo, fetches open issues, and suggests high-impact tasks you can launch directly in Claude Code with one click.
+
+![Quick Wins Landing](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-quickwins-landing.png)
+
+![Quick Wins Suggestions](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-quickwins.png)
 
 ### Usage Dashboard
 
