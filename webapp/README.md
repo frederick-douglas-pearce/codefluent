@@ -111,13 +111,16 @@ The webapp exposes `GET /health` returning server status, version, and dependenc
 
 ## How It Works
 
-1. **Parse & assemble** — JSONL session files are parsed and all messages per project are assembled into conversations by splitting at inactivity gaps between user prompts (`conversation.inactivityGapMinutes`, default: 60 minutes)
-2. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for fluency scoring
-3. **Config scoring** — Your project's `CLAUDE.md` is scored against 3 config-eligible meta-interaction behaviors and merged via `effective = conversation OR config`
-4. **Cache** — Results are cached locally by conversation ID, content hash, and prompt version to avoid re-scoring
-5. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics are computed from parsed JSONL token data
+1. **Parse** — JSONL session files from `~/.claude/projects/` are parsed to extract user prompts, assistant responses, and token usage metadata. System commands (`/clear`, `/compact`, etc.) are filtered out; custom commands and skills are tracked separately.
+2. **Assemble conversations** — All messages per project are pooled, sorted by timestamp, and split into conversations at inactivity gaps between user prompts (configurable via `conversation.inactivityGapMinutes`, default: 60 minutes). `/clear` commands force a conversation boundary. Each conversation is classified by task type (feature, bug fix, refactor, etc.) via heuristic analysis of branch names and prompt keywords.
+3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
+4. **Config scoring** — If a `CLAUDE.md` exists, it's scored against 3 config-eligible meta-interaction behaviors. Results are merged via `effective = conversation OR config`
+5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
+6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
+7. **Cache** — Scores are cached locally (by conversation ID, content hash, and prompt version) to avoid re-scoring unchanged conversations
+8. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) are computed from parsed JSONL token data
 
-All data stays local. No telemetry, no external servers — just your local session files and direct Anthropic API calls for scoring.
+Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
 ## Configuration
 
