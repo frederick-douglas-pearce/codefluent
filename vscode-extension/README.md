@@ -41,11 +41,13 @@ A weekly trend sparkline tracks your score trajectory over time (improving, stab
 
 ### Conversations Tab
 
-Sortable table of all conversations with date, project, prompts, duration, tokens, cost, cache%, tools, and score. Click any row to expand a detail view showing metadata, tools used, custom commands/skills invoked, and full user prompts. Five interactive charts visualize conversation patterns: conversations/week, length distribution, duration distribution, average prompts/week trend, and inter-prompt gap distribution. Agent metrics cards with weekly sparklines track tool diversity, plan mode adoption, cache hit rate, and thinking utilization. A task type doughnut chart classifies conversations across 8 categories.
+Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use. CodeFluent assembles **conversations** by pooling all messages per project, sorting by timestamp, and splitting into conversations whenever a gap between user prompts exceeds a configurable inactivity threshold (default: 60 minutes, configurable via `codefluent.conversation.inactivityGapMinutes`). `/clear` commands force a conversation boundary. Each conversation represents one focused interaction — the same unit of analysis used by Anthropic's AI Fluency Index.
 
-Claude Code stores session data as JSONL files, but these files don't correspond to meaningful work units — a single file can span 8+ days of intermittent use. CodeFluent assembles **conversations** by pooling all messages per project, sorting by timestamp, and splitting into conversations whenever a gap between user prompts exceeds a configurable inactivity threshold (default: 60 minutes). `/clear` commands force a conversation boundary. Each conversation represents one focused interaction — the same unit of analysis used by Anthropic's AI Fluency Index.
+Overview cards track metrics such as total conversations and average prompts per conversation. Agent metric cards with weekly sparklines provide insight into tool diversity, plan mode adoption, cache hit rate, and thinking utilization. A task type doughnut chart classifies conversations across 8 categories.
 
-The inactivity threshold is configurable via the `codefluent.conversation.inactivityGapMinutes` VS Code setting.
+Five interactive charts visualize conversation patterns: conversations/week, length distribution, duration distribution, average prompts/week trend, and inter-prompt gap distribution.
+
+A sortable table lists all conversations with date, project, prompts, duration, tokens, cost, cache%, tools, and score. Click any row to expand a detail view showing metadata, tools used, custom commands/skills invoked, and full user prompts.
 
 ![Conversations Tab](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-conversations.png)
 
