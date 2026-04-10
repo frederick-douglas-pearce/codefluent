@@ -114,6 +114,18 @@ export function isCustomCommand(text: string): boolean {
   return !SYSTEM_COMMANDS.has(name)
 }
 
+/** Detect system-injected messages that arrive as type: "user" but are not human input. */
+export function isSystemInjectedMessage(text: string): boolean {
+  if (/<task-notification[\s>]/.test(text)) return true
+  if (/<system-reminder[\s>]/.test(text)) return true
+  if (/<local-command-caveat[\s>]/.test(text)) return true
+  if (/<local-command-stdout[\s>]/.test(text)) return true
+  if (/<local-command-stderr[\s>]/.test(text)) return true
+  if (/<user-prompt-submit-hook[\s>]/.test(text)) return true
+  if (text.startsWith('This session is being continued from a previous conversation')) return true
+  return false
+}
+
 export function parseSessionFile(filepath: string): ParsedSession | null {
   let raw: string
   try {
@@ -178,6 +190,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
         }
         continue  // skip all slash commands (not natural language prompts)
       }
+      if (isSystemInjectedMessage(text)) continue  // skip system-injected messages
       userMsgCount++
       if (text && text !== '[Request interrupted by user for tool use]') {
         userPrompts.push(text.slice(0, 2000))
@@ -319,6 +332,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
       const text = extractUserText(content)
       const isInterrupted = text === '[Request interrupted by user for tool use]'
       const isCommand = isSlashCommand(text)
+      const isSystem = !isCommand && isSystemInjectedMessage(text)
       const isClear = isCommand && isClearCommand(text)
       const cmdName = isCommand ? extractCommandName(text) : null
       const isCustom = cmdName ? !SYSTEM_COMMANDS.has(cmdName) : false
@@ -327,7 +341,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
         timestamp: msg.timestamp || null,
         session_id: '', // filled after loop
         file_position: i,
-        content: (!text || isInterrupted || isCommand) ? undefined : text.slice(0, 2000),
+        content: (!text || isInterrupted || isCommand || isSystem) ? undefined : text.slice(0, 2000),
         used_plan_mode: !!msg.planContent,
         is_clear_command: isClear || undefined,
         command_name: isCustom ? cmdName! : undefined,
