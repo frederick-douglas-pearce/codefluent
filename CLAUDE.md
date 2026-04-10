@@ -160,7 +160,7 @@ npm test                   # Jest (unit + integration, 907 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
-code --install-extension codefluent-1.0.1.vsix
+code --install-extension codefluent-1.0.1.vsix    # x-release-please-version
 
 # Debug: press F5 in VS Code with vscode-extension/ open
 
