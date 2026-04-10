@@ -4,7 +4,7 @@
 
 Millions of developers use AI coding assistants daily, but nobody knows if they're using them *well*. Anthropic's research shows most users exhibit only 3 of 11 key fluency behaviors, and that interaction patterns directly predict whether developers build skills or lose them.
 
-CodeFluent reads your local Claude Code session data, scores your prompting behaviors against [Anthropic's AI Fluency Research](https://www.anthropic.com/research/AI-fluency-index), analyzes conversation patterns and cost efficiency, assesses your project configuration maturity, and provides personalized coaching to become a more effective AI collaborator. Available as a **VS Code extension** and a **standalone web app**.
+CodeFluent reads your local Claude Code session data, scores your prompting behaviors against [Anthropic's AI Fluency Research](https://www.anthropic.com/research/AI-fluency-index), analyzes conversation patterns and cost efficiency, assesses your project configuration maturity, and provides personalized coaching to make you a more effective AI collaborator. Available as a **VS Code extension** and a **standalone web app**.
 
 Originally built at PDX Hacks 2026. Now publicly available and actively maintained.
 
