@@ -1,8 +1,8 @@
 # CodeFluent
 
-**AI fluency analytics for Claude Code users** — track your prompting skills, monitor token usage, and get personalized recommendations to write better prompts.
+**Comprehensive analytics for Claude Code users** — measure your AI collaboration skills, assess your project configuration, and get coached to improve.
 
-CodeFluent parses your local Claude Code session files, scores your prompts against 11 research-backed fluency behaviors, and shows you exactly how to improve.
+CodeFluent parses your local Claude Code session files, scores your prompting behaviors against 11 research-backed fluency behaviors, analyzes conversation patterns and cost efficiency, assesses your project configuration maturity, and provides personalized coaching to become a more effective AI collaborator.
 
 ## Getting Started
 

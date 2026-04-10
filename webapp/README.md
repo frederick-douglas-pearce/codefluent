@@ -1,8 +1,8 @@
 # CodeFluent Web App
 
-**AI fluency analytics for Claude Code users** — standalone web interface as an alternative to the VS Code extension.
+**Comprehensive analytics for Claude Code users** — standalone web interface as an alternative to the VS Code extension.
 
-CodeFluent parses your local Claude Code session files, scores your prompts against 11 research-backed fluency behaviors, and shows you exactly how to improve. Built with FastAPI (Python) and vanilla HTML/CSS/JS.
+CodeFluent parses your local Claude Code session files, scores your prompting behaviors against 11 research-backed fluency behaviors, analyzes conversation patterns and cost efficiency, assesses your project configuration maturity, and provides personalized coaching to become a more effective AI collaborator. Built with FastAPI (Python) and vanilla HTML/CSS/JS.
 
 See the [main README](../README.md) for the full project overview. This document covers webapp-specific details — setup, design choices, testing, and security — that differ from the VS Code extension.
 
