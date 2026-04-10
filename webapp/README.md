@@ -124,6 +124,32 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 
 ## Configuration
 
+### Settings
+
+The webapp reads settings from three sources (highest priority first):
+
+1. **Environment variables** — `CODEFLUENT_<KEY>` (dots become underscores, uppercase)
+2. **`webapp/config.json`** — Optional local file (not tracked in git)
+3. **`shared/defaults.json`** — Shared defaults
+
+| Setting | Env Variable | Default | Description |
+|---------|-------------|---------|-------------|
+| `scoring.model` | `CODEFLUENT_SCORING_MODEL` | `claude-sonnet-4-20250514` | Model ID for fluency scoring API calls |
+| `scoring.maxPromptsPerConversation` | `CODEFLUENT_SCORING_MAXPROMPTSPERCONVERSATION` | `20` | Maximum prompts per conversation sent for scoring |
+| `optimizer.alreadyGoodThreshold` | `CODEFLUENT_OPTIMIZER_ALREADYGOODTHRESHOLD` | `90` | Score (0–100) at or above which prompts are considered already effective |
+| `conversation.inactivityGapMinutes` | `CODEFLUENT_CONVERSATION_INACTIVITYGAPMINUTES` | `60` | Minutes of inactivity that defines a conversation boundary |
+
+> **Warning:** Changing `inactivityGapMinutes` redefines how conversations are assembled, which affects all downstream metrics — fluency scores, analytics, agent metrics, and task classification. Cached scores will become stale and should be re-scored with "Force Rescore" enabled.
+
+Example `webapp/config.json`:
+
+```json
+{
+  "scoring.model": "claude-sonnet-4-20250514",
+  "conversation.inactivityGapMinutes": 45
+}
+```
+
 ### Port
 
 The server runs on port 8000 by default. Change it with the `PORT` environment variable:

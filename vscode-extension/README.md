@@ -124,7 +124,21 @@ See [`docs/SESSION_DATA.md`](../docs/SESSION_DATA.md) for details on data availa
 
 ## Extension Settings
 
-CodeFluent uses the following API key resolution order:
+Search "CodeFluent" in VS Code Settings (`Ctrl+,`) to configure:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `codefluent.sessionDataPath` | `~/.claude/projects/` | Custom path to Claude Code session data directory |
+| `codefluent.scoring.model` | `claude-sonnet-4-20250514` | Model ID for fluency scoring API calls |
+| `codefluent.scoring.maxPromptsPerConversation` | `20` | Maximum prompts per conversation sent for scoring |
+| `codefluent.optimizer.alreadyGoodThreshold` | `90` | Score (0–100) at or above which prompts are considered already effective |
+| `codefluent.conversation.inactivityGapMinutes` | `60` | Minutes of inactivity that defines a conversation boundary |
+
+> **Warning:** Changing `inactivityGapMinutes` redefines how conversations are assembled, which affects all downstream metrics — fluency scores, analytics, agent metrics, and task classification. Cached scores will become stale and should be re-scored with "Force Rescore" enabled.
+
+### API Key
+
+CodeFluent uses the following resolution order:
 
 1. `ANTHROPIC_API_KEY` environment variable
 2. `.env` file in your workspace root
