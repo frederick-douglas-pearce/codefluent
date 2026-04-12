@@ -294,6 +294,40 @@ class TestPostScore:
         # Should NOT have called the API since score was cached
         mock_anthropic.messages.create.assert_not_called()
 
+    def test_invalidates_cache_when_content_hash_changes(self, client, tmp_path, monkeypatch, mock_anthropic):
+        """Stale cache should be invalidated when conversation grows (content_hash changes)."""
+        data_dir = tmp_path / "data"
+        data_dir.mkdir(exist_ok=True)
+        monkeypatch.setattr(main, "DATA_DIR", data_dir)
+
+        cached_score = {
+            "session_id": "sess-1",
+            "fluency_behaviors": {b: True for b in main.BEHAVIORS},
+            "overall_score": 80,
+            "coding_pattern": "conceptual_inquiry",
+            "prompt_version": main.SCORING_PROMPT_VERSION,
+            "content_hash": "proj:2026-01-01T00:00:00Z:2:hello",
+        }
+        (data_dir / "scores.json").write_text(json.dumps({"sess-1": cached_score}))
+
+        conversations = [
+            {
+                "id": "sess-1",
+                "project": "test",
+                "user_prompts": ["hello", "world", "new prompt"],
+                "started_at": "2026-01-01T00:00:00Z",
+                "content_hash": "proj:2026-01-01T00:00:00Z:3:hello",
+            },
+        ]
+        monkeypatch.setattr(main, "_resolve_data_dir", lambda data_path=None: tmp_path / "sess_dir")
+        monkeypatch.setattr(main, "get_all_conversations", lambda *a, **kw: {"conversations": conversations, "metadata": {}})
+        (tmp_path / "sess_dir").mkdir()
+
+        resp = client.post("/api/score", json={"session_ids": ["sess-1"]})
+        assert resp.status_code == 200
+        # Should have called the API since content_hash changed
+        mock_anthropic.messages.create.assert_called()
+
     def test_score_history_scoped_to_project(self, client, tmp_path, monkeypatch, mock_anthropic):
         """POST /api/score should scope score_history to the requested project."""
         data_dir = tmp_path / "data"
