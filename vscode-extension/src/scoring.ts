@@ -327,7 +327,7 @@ export async function scoreConversations(
       cacheEntry = cached[hashIndex[contentHash]]
     }
 
-    const hashMatch = !contentHash || !cacheEntry?.content_hash || cacheEntry.content_hash === contentHash
+    const hashMatch = !contentHash || (cacheEntry?.content_hash === contentHash)
     if (cacheEntry && !forceRescore && cacheEntry.prompt_version === SCORING_PROMPT_VERSION && hashMatch) {
       results[cid] = cacheEntry
       // Re-key under new ID if found via hash fallback

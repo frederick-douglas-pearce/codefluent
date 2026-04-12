@@ -292,7 +292,7 @@ describe('scoreSessions', () => {
     expect(results['sess-1'].overall_score).toBe(75)
   })
 
-  it('uses cache when cache entry has no content_hash (legacy)', async () => {
+  it('rescores when cache entry has no content_hash but conversation does (legacy)', async () => {
     const cachedScore = makeScoreResult({ session_id: 'sess-1', overall_score: 75 })
     delete (cachedScore as any).content_hash
     const client = makeMockClient(makeApiResponse({ overall_score: 60 }))
@@ -303,8 +303,9 @@ describe('scoreSessions', () => {
 
     const { results, stats } = await scoreSessions(['sess-1'], sessions, cached, client)
 
-    expect(stats.cached).toBe(1)
-    expect(stats.scored).toBe(0)
+    expect(stats.scored).toBe(1)
+    expect(stats.cached).toBe(0)
+    expect(results['sess-1'].overall_score).toBe(60)
   })
 
   it('uses cache when conversation has no content_hash', async () => {
