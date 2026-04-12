@@ -257,6 +257,71 @@ describe('scoreSessions', () => {
     expect(cached['sess-1'].content_hash).toBe(contentHash)
   })
 
+  // --- content_hash staleness detection ---
+
+  it('invalidates cache when content_hash changes (conversation grew)', async () => {
+    const oldHash = '-home-test-project:2026-01-01T00:00:00Z:2:Implement a login page'
+    const newHash = '-home-test-project:2026-01-01T00:00:00Z:5:Implement a login page'
+    const cachedScore = makeScoreResult({ session_id: 'sess-1', content_hash: oldHash, overall_score: 75 })
+    const client = makeMockClient(makeApiResponse({ overall_score: 60 }))
+    const sessions = {
+      'sess-1': makeSession({ content_hash: newHash } as any),
+    }
+    const cached: Record<string, any> = { 'sess-1': cachedScore }
+
+    const { results, stats } = await scoreSessions(['sess-1'], sessions, cached, client)
+
+    expect(stats.scored).toBe(1)
+    expect(stats.cached).toBe(0)
+    expect(results['sess-1'].overall_score).toBe(60)
+  })
+
+  it('uses cache when content_hash matches', async () => {
+    const contentHash = '-home-test-project:2026-01-01T00:00:00Z:2:Implement a login page'
+    const cachedScore = makeScoreResult({ session_id: 'sess-1', content_hash: contentHash, overall_score: 75 })
+    const client = makeMockClient(makeApiResponse({ overall_score: 60 }))
+    const sessions = {
+      'sess-1': makeSession({ content_hash: contentHash } as any),
+    }
+    const cached: Record<string, any> = { 'sess-1': cachedScore }
+
+    const { results, stats } = await scoreSessions(['sess-1'], sessions, cached, client)
+
+    expect(stats.cached).toBe(1)
+    expect(stats.scored).toBe(0)
+    expect(results['sess-1'].overall_score).toBe(75)
+  })
+
+  it('rescores when cache entry has no content_hash but conversation does (legacy)', async () => {
+    const cachedScore = makeScoreResult({ session_id: 'sess-1', overall_score: 75 })
+    delete (cachedScore as any).content_hash
+    const client = makeMockClient(makeApiResponse({ overall_score: 60 }))
+    const sessions = {
+      'sess-1': makeSession({ content_hash: '-home-test-project:2026-01-01T00:00:00Z:2:Implement a login page' } as any),
+    }
+    const cached: Record<string, any> = { 'sess-1': cachedScore }
+
+    const { results, stats } = await scoreSessions(['sess-1'], sessions, cached, client)
+
+    expect(stats.scored).toBe(1)
+    expect(stats.cached).toBe(0)
+    expect(results['sess-1'].overall_score).toBe(60)
+  })
+
+  it('uses cache when conversation has no content_hash', async () => {
+    const cachedScore = makeScoreResult({ session_id: 'sess-1', content_hash: 'some-hash', overall_score: 75 })
+    const client = makeMockClient(makeApiResponse({ overall_score: 60 }))
+    const sessions = {
+      'sess-1': makeSession(),
+    }
+    const cached: Record<string, any> = { 'sess-1': cachedScore }
+
+    const { results, stats } = await scoreSessions(['sess-1'], sessions, cached, client)
+
+    expect(stats.cached).toBe(1)
+    expect(stats.scored).toBe(0)
+  })
+
   // --- Skipping invalid sessions ---
 
   it('skips sessions not present in allSessions', async () => {

@@ -785,7 +785,8 @@ async def score_conversations_endpoint(request: ScoreRequest):
         if not cache_entry and content_hash and content_hash in hash_index:
             cache_entry = cached[hash_index[content_hash]]
 
-        if cache_entry and not force and cache_entry.get("prompt_version") == SCORING_PROMPT_VERSION:
+        hash_match = not content_hash or (cache_entry is not None and cache_entry.get("content_hash") == content_hash)
+        if cache_entry and not force and cache_entry.get("prompt_version") == SCORING_PROMPT_VERSION and hash_match:
             results[sid] = cache_entry
             # Re-key under new ID if found via hash fallback
             if sid not in cached:
