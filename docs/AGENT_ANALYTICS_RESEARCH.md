@@ -253,6 +253,69 @@ Option 1 is cleanest for different audiences. Option 3 is most ambitious but ris
 
 ---
 
+## Subagent Session Data Analysis (April 2026)
+
+### How Subagent Data Appears in JSONL
+
+Subagent activity is **inlined into the parent session file** — no separate JSONL files are created. When Claude spawns a subagent, the sequence in the parent session is:
+
+1. Assistant message with `tool_use` block where `name: "Agent"` and `input` contains `subagent_type`, `description`, and `prompt`
+2. The subagent runs in its own isolated context (not visible in the parent JSONL)
+3. A `tool_result` block returns only the subagent's final summary to the parent session
+
+The `isSidechain` flag exists in the schema but is not set to `true` for any observed session files. All 14 JSONL files in the codefluent project are primary sessions.
+
+### Observable vs Hidden Data
+
+| Data Point | Visible in Parent JSONL | Hidden (Subagent Internal) |
+|---|---|---|
+| Which agent was invoked | Yes (`subagent_type` field) | — |
+| Delegation prompt | Yes (`prompt` in Agent tool input) | — |
+| Agent description | Yes (`description` field) | — |
+| Final result/summary | Yes (`tool_result` content) | — |
+| Internal tool calls | No | Yes (Read, Grep, Bash, etc.) |
+| Internal reasoning steps | No | Yes |
+| Retries and errors | No | Yes |
+| Token usage breakdown | No (aggregated into parent) | Yes |
+
+### Observed Subagent Usage Patterns (CodeFluent Project)
+
+Analysis of recent sessions shows Claude actively delegates to built-in subagents:
+
+| Session Date | Agent Calls | Dominant Pattern |
+|---|---|---|
+| Apr 12 (current) | 4 | Explore × 3, Plan × 1 — research + planning |
+| Apr 9 | 11 | Explore-heavy with Plan — investigation session |
+| Apr 7 | 21 | Plan + general-purpose — heavy implementation |
+| Apr 3 | 13 | Explore + Plan — research/planning session |
+
+No custom subagents were invoked (none defined yet). All invocations were built-in agents: **Explore** (read-only, Haiku), **Plan** (read-only), and **general-purpose** (all tools).
+
+### Implications for AgentFluent Prototype
+
+**What's testable with subagent data (CodeFluent-side features):**
+- Invocation frequency and patterns — which agents are used, how often, for what tasks
+- Delegation effectiveness — is the agent description triggering appropriate delegation?
+- Output quality — does the returned summary lead to course-corrections by the user?
+- Configuration quality — tool restrictions, model selection, description clarity
+- Cost attribution — aggregate token usage per agent type
+
+**What requires Agent SDK data (AgentFluent-specific features):**
+- Prompt-to-behavior correlation — connecting system prompt phrasing to internal tool errors, retries, and stuck patterns
+- Agent effectiveness scoring — task completion rate, tool error rate, recovery patterns
+- Prompt regression detection — comparing behavior across prompt versions
+- Internal reasoning analysis — did the agent follow its instructions or drift?
+
+### Bootstrap Strategy
+
+Custom Claude Code subagents (e.g., a PM agent) provide a useful starting point for testing the **configuration quality and invocation tracking** features planned for CodeFluent v1.3 (#238-#240). However, the deeper **prompt-to-behavior diagnostics** that differentiate AgentFluent require full session traces, which only Agent SDK-based agents produce. The natural progression:
+
+1. **Now:** Deploy custom subagents (PM agent, etc.) for real work in Claude Code
+2. **CodeFluent v1.3:** Use subagent data to validate agent config scanning and invocation tracking features
+3. **When the gap hurts:** If lack of internal visibility becomes a blocker for optimizing subagent prompts, rebuild key agents using the Agent SDK to get full traces — that's the trigger for an AgentFluent prototype
+
+---
+
 ## Sources
 
 ### Anthropic Documentation
