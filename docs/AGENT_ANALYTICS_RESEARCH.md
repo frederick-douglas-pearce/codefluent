@@ -325,16 +325,22 @@ The `isSidechain` flag exists in the schema but is not set to `true` for any obs
 
 ### Observable vs Hidden Data
 
+**Updated 2026-04-14** based on analysis of actual custom PM agent invocations. The metadata block on `tool_result` provides significantly more data than initially expected.
+
 | Data Point | Visible in Parent JSONL | Hidden (Subagent Internal) |
 |---|---|---|
 | Which agent was invoked | Yes (`subagent_type` field) | — |
 | Delegation prompt | Yes (`prompt` in Agent tool input) | — |
 | Agent description | Yes (`description` field) | — |
 | Final result/summary | Yes (`tool_result` content) | — |
+| Total tokens per invocation | **Yes** (metadata `total_tokens`) | Per-tool-call breakdown |
+| Tool use count per invocation | **Yes** (metadata `tool_uses`) | Which specific tools were called |
+| Duration per invocation | **Yes** (metadata `duration_ms`) | Per-step timing |
+| Agent session ID | **Yes** (metadata `agentId`) | — |
+| Agent self-reported issues | **Yes** (extractable from output text) | Internal error details |
 | Internal tool calls | No | Yes (Read, Grep, Bash, etc.) |
 | Internal reasoning steps | No | Yes |
-| Retries and errors | No | Yes |
-| Token usage breakdown | No (aggregated into parent) | Yes |
+| Retries and errors (internal) | No | Yes |
 
 ### Observed Subagent Usage Patterns (CodeFluent Project)
 
@@ -342,35 +348,75 @@ Analysis of recent sessions shows Claude actively delegates to built-in subagent
 
 | Session Date | Agent Calls | Dominant Pattern |
 |---|---|---|
-| Apr 12 (current) | 4 | Explore × 3, Plan × 1 — research + planning |
+| Apr 14 (PM agent) | 2 custom (pm) + 4 built-in | First custom agent usage — PM agent for v1.2 planning |
+| Apr 12 | 4 | Explore × 3, Plan × 1 — research + planning |
 | Apr 9 | 11 | Explore-heavy with Plan — investigation session |
 | Apr 7 | 21 | Plan + general-purpose — heavy implementation |
 | Apr 3 | 13 | Explore + Plan — research/planning session |
 
-No custom subagents were invoked (none defined yet). All invocations were built-in agents: **Explore** (read-only, Haiku), **Plan** (read-only), and **general-purpose** (all tools).
+### Custom Agent Data: PM Agent Analysis (April 14, 2026)
+
+First invocation of a custom subagent (PM agent) provided concrete data on what's extractable:
+
+**Invocation 1 — v1.2 prioritization review:**
+- `total_tokens`: 31,621
+- `tool_uses`: 14 (Read, Glob, Grep + GitHub MCP tools)
+- `duration_ms`: 122,963 (~2 min)
+- Output: 7,005 chars — structured analysis with milestone assessment, gap identification, priority recommendations
+
+**Invocation 2 — artifact creation (issues, PRDs, decision log):**
+- `total_tokens`: 44,414
+- `tool_uses`: 22
+- `duration_ms`: 294,552 (~5 min)
+- Output: 32,355 chars — full PRD, decision log, 7 issue bodies, epic updates
+- **Hook failure detected:** Agent's output text begins with "The hook is consistently blocking writes..." — self-reported tool access issue is visible in the return data
+
+**Key observations:**
+1. **Task profiles are distinguishable.** Research (14 tools, 2 min) vs execution (22 tools, 5 min) — different task types produce measurably different resource profiles.
+2. **Efficiency metrics are computable.** Tokens per tool use: 2,259 (research) vs 2,019 (execution). Duration per tool use: 8.8s vs 13.4s. These could indicate agent prompt quality — a well-prompted agent should use fewer tokens per tool call.
+3. **Self-reported failures are extractable.** The agent's inability to write spec files (hook misconfiguration) was documented in its own output text. Pattern matching on output could detect "blocked", "unable to", "don't have access" signals without needing internal traces.
+4. **The `agentId` enables continuity tracking.** Different IDs for each invocation — could track whether agents are continued (SendMessage) vs fresh-spawned, indicating delegation strategy patterns.
+
+### Implications for CodeFluent Agent Tracking (#239)
+
+The metadata block discovery significantly expands what's achievable in CodeFluent's agent invocation tracking. Issue #239 should capture:
+- `total_tokens` — enables cost-per-agent-invocation metrics
+- `tool_uses` — complexity signal, efficiency denominator
+- `duration_ms` — performance tracking
+- `agentId` — continuity tracking (fresh vs continued agents)
+
+These fields enable per-agent analytics cards without any Agent SDK migration:
+- **Cost per agent type** — "Your PM agent costs $0.12 per invocation on average"
+- **Efficiency comparison** — "Explore agents use 60% fewer tokens than general-purpose for similar tasks"
+- **Duration trends** — "PM agent invocations are getting faster as your backlog stabilizes"
 
 ### Implications for AgentFluent Prototype
 
-**What's testable with subagent data (CodeFluent-side features):**
+**What's testable with subagent data (more than initially expected):**
 - Invocation frequency and patterns — which agents are used, how often, for what tasks
 - Delegation effectiveness — is the agent description triggering appropriate delegation?
 - Output quality — does the returned summary lead to course-corrections by the user?
 - Configuration quality — tool restrictions, model selection, description clarity
-- Cost attribution — aggregate token usage per agent type
+- **Cost attribution per agent invocation** — `total_tokens` from metadata
+- **Efficiency metrics** — tokens per tool use, duration per tool use
+- **Failure detection** — self-reported issues extractable from output text
+- **Agent continuity patterns** — fresh spawn vs SendMessage continuation
 
-**What requires Agent SDK data (AgentFluent-specific features):**
-- Prompt-to-behavior correlation — connecting system prompt phrasing to internal tool errors, retries, and stuck patterns
-- Agent effectiveness scoring — task completion rate, tool error rate, recovery patterns
-- Prompt regression detection — comparing behavior across prompt versions
+**What still requires Agent SDK data (AgentFluent-specific features):**
+- Prompt-to-behavior correlation — connecting system prompt phrasing to *specific* internal tool errors, retries, and stuck patterns (need per-tool-call traces)
+- Detailed error analysis — which tool failed, what the error was, how many retries
+- Prompt regression detection — comparing internal behavior across prompt versions
 - Internal reasoning analysis — did the agent follow its instructions or drift?
 
 ### Bootstrap Strategy
 
-Custom Claude Code subagents (e.g., a PM agent) provide a useful starting point for testing the **configuration quality and invocation tracking** features planned for CodeFluent v1.3 (#238-#240). However, the deeper **prompt-to-behavior diagnostics** that differentiate AgentFluent require full session traces, which only Agent SDK-based agents produce. The natural progression:
+**Updated 2026-04-14:** The metadata block discovery makes subagent data more useful than initially expected. Custom Claude Code subagents provide enough data for meaningful agent analytics — not just configuration quality, but cost tracking, efficiency metrics, failure detection, and continuity analysis.
 
-1. **Now:** Deploy custom subagents (PM agent, etc.) for real work in Claude Code
-2. **CodeFluent v1.3:** Use subagent data to validate agent config scanning and invocation tracking features
-3. **When the gap hurts:** If lack of internal visibility becomes a blocker for optimizing subagent prompts, rebuild key agents using the Agent SDK to get full traces — that's the trigger for an AgentFluent prototype
+1. **Done:** Deploy custom PM agent for real work in Claude Code. First invocations produced actionable data (April 14).
+2. **CodeFluent v1.2:** Capture metadata block in agent invocation tracking (#239) — `total_tokens`, `tool_uses`, `duration_ms`, `agentId`
+3. **CodeFluent v1.3:** Agent config scanning (#238), agent-aware recommendations (#240), agent advisor (#241)
+4. **When the gap hurts:** If lack of internal visibility (per-tool-call traces) becomes a blocker for optimizing subagent prompts, rebuild key agents using the Agent SDK to get full traces — that's the trigger for an AgentFluent prototype
+5. **AgentFluent signal:** The trigger is when you find yourself asking "why did my agent make 22 tool calls?" and the metadata alone can't answer it. That's when per-tool-call traces from the Agent SDK become essential.
 
 ---
 
