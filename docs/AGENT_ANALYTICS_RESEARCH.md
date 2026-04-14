@@ -253,6 +253,64 @@ Option 1 is cleanest for different audiences. Option 3 is most ambitious but ris
 
 ---
 
+## Community Validation: The Observability Gap Is Real
+
+### The Production Pain Point
+
+Reza Rezvani (CTO, Berlin-based), who runs Claude Code agents in production, identifies the gap directly in his [10-step framework article](https://alirezarezvani.medium.com/how-to-build-claude-code-agents-from-scratch-the-10-step-framework-i-actually-use-in-production-6f6a358f4f8c):
+
+> "No built-in observability. There is no dashboard, no trace viewer, no audit log. Hooks give you event-level control, but aggregating that into a monitoring system is your problem. For teams running agents at scale, this is a genuine gap."
+
+His broader experience (documented across multiple articles) highlights additional friction:
+- **Agent proliferation chaos** — losing track of which agent did what, agents stepping on each other's work, spending more time managing agents than they save
+- **Hook configuration brittleness** — case-sensitive matchers (`"bash"` doesn't match `"Bash"`), no warnings when nothing matches, 50% activation rate by default (improved to 84% with careful tuning)
+- **Framework fatigue** — moved away from LangChain because modifying agent behavior required "editing Python classes, redeploying containers, and debugging serialization errors"
+
+### The DIY Observability Problem
+
+A separate practitioner ([documented on Substack](https://doneyli.substack.com/p/i-built-my-own-observability-for)) identified seven specific failures when trying to build their own Claude Code observability:
+
+1. **Unbounded growth** — log files became thousands of lines without rotation
+2. **Truncated data** — prompts capped at 500 characters, losing crucial context
+3. **One-way capture** — only recorded inputs, not Claude's responses or tool usage
+4. **Non-queryable** — flat text files prevented analytical queries
+5. **Lost context** — multi-turn debugging sessions appeared as disconnected entries
+6. **Manual annotation** — outcome tracking abandoned after two attempts
+7. **Siloed data** — per-project logs with no cross-project pattern recognition
+
+Their solution was self-hosted Langfuse (6-service Docker stack) — effective but heavyweight infrastructure that most solo developers and small teams won't set up.
+
+### The Ecosystem Response
+
+The gap has spawned a growing ecosystem of community tools, all hook-based:
+
+| Tool | Approach | Limitation |
+|---|---|---|
+| [agents-observe](https://github.com/simple10/agents-observe) | Real-time hook streaming dashboard | Monitoring only, no quality analysis |
+| [Claude Code Agent Monitor](https://github.com/hoangsonww/Claude-Code-Agent-Monitor) | React + SQLite dashboard via hooks | Session tracking, no recommendations |
+| [claude-code-otel](https://github.com/ColeMurray/claude-code-otel) | OpenTelemetry bridge for Claude Code | Exports to OTel platforms, setup complexity |
+| [Claude HUD](https://aitoolly.com/ai-news/article/2026-03-20-claude-hud-a-new-plugin-for-real-time-monitoring-of-claude-code-context-and-agent-activity) | Plugin for context/agent monitoring | Real-time only, no historical analysis |
+| Self-hosted Langfuse | Full LLM observability platform | 6-service Docker stack, heavyweight |
+| [Datadog AI Agents Console](https://www.datadoghq.com/blog/claude-code-monitoring/) | Enterprise Claude Code monitoring | Enterprise pricing, org-level focus |
+| [Dynatrace integration](https://www.dynatrace.com/hub/detail/claude-code-agent-monitoring/) | Enterprise agent monitoring | Enterprise pricing, infrastructure-heavy |
+
+**Common pattern:** Every solution focuses on **monitoring** (what happened?) but none address **quality analysis** (was it good?) or **prompt diagnostics** (why did it fail and how do I fix the prompt?).
+
+### Where AgentFluent Fits
+
+The observability gap is well-established and widely felt. But the community response has converged on real-time dashboards and trace viewers — the equivalent of `tail -f` for agents. Nobody is building the analytical layer that answers:
+
+1. **"Is my agent getting better or worse over time?"** — trend analysis across prompt versions
+2. **"Why does my agent retry so much?"** — prompt-to-behavior correlation
+3. **"What should I change in my system prompt?"** — actionable recommendations, not just traces
+4. **"How does my agent compare to best practices?"** — scoring against agent design rubrics
+
+This is the layer between raw monitoring (agents-observe, Claude HUD) and heavyweight platforms (Langfuse, Datadog). A local-first tool that reads the same JSONL data everyone already has, requires no Docker stack or cloud infrastructure, and provides quality scoring + prompt diagnostics rather than just dashboards.
+
+The positioning would be: **"The tools that exist tell you what your agent did. This tool tells you what to change."**
+
+---
+
 ## Subagent Session Data Analysis (April 2026)
 
 ### How Subagent Data Appears in JSONL
@@ -335,9 +393,19 @@ Custom Claude Code subagents (e.g., a PM agent) provide a useful starting point 
 - [DeepEval AI Agent Evaluation](https://deepeval.com/guides/guides-ai-agent-evaluation)
 - [Microsoft AI Agent Performance Measurement](https://www.microsoft.com/en-us/dynamics-365/blog/it-professional/2026/02/04/ai-agent-performance-measurement/)
 
-### Claude Code Local Analytics
+### Claude Code Local Analytics & Observability
 - [claude-view: Mission Control Dashboard](https://recca0120.github.io/en/2026/04/07/claude-view-mission-control/)
 - [agents-observe: Real-time Claude Code Observability](https://github.com/simple10/agents-observe)
+- [Claude Code Agent Monitor](https://github.com/hoangsonww/Claude-Code-Agent-Monitor)
 - [claude-code-analytics](https://github.com/sujankapadia/claude-code-analytics)
 - [claude-code-otel: OpenTelemetry for Claude Code](https://github.com/ColeMurray/claude-code-otel)
+- [Claude HUD Plugin](https://aitoolly.com/ai-news/article/2026-03-20-claude-hud-a-new-plugin-for-real-time-monitoring-of-claude-code-context-and-agent-activity)
+- [Datadog AI Agents Console for Claude Code](https://www.datadoghq.com/blog/claude-code-monitoring/)
+- [Dynatrace Claude Code Agent Monitoring](https://www.dynatrace.com/hub/detail/claude-code-agent-monitoring/)
 - [awesome-claude-code](https://github.com/hesreallyhim/awesome-claude-code)
+
+### Practitioner Experiences
+- [Reza Rezvani: 10-Step Production Agent Framework](https://alirezarezvani.medium.com/how-to-build-claude-code-agents-from-scratch-the-10-step-framework-i-actually-use-in-production-6f6a358f4f8c)
+- [Reza Rezvani: 6-Month Production Hooks Report](https://alirezarezvani.medium.com/the-claude-code-hooks-nobody-talks-about-my-6-month-production-report-30eb8b4d9b30)
+- [Reza Rezvani: 4 Subagent Mistakes That Kill Your Workflow](https://dev.to/alireza_rezvani/4-claude-code-subagent-mistakes-that-kill-your-workflow-and-the-fixes-3n72)
+- [Building Custom Observability for Claude Code (Substack)](https://doneyli.substack.com/p/i-built-my-own-observability-for)
