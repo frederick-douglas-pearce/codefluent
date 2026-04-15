@@ -586,5 +586,109 @@ def main():
     print(f"Written to {output_path}")
 
 
+def scan_subagent_tokens(project_dir: Path) -> dict[str, dict]:
+    """Scan subagent JSONL files under a project directory for token usage.
+
+    Returns a dict of parent sessionId -> {input_tokens, output_tokens,
+    cache_creation_tokens, cache_read_tokens}.
+
+    Subagent files live at <project>/<session-uuid>/subagents/agent-<id>.jsonl
+    and their sessionId matches the parent UUID directory name.
+    Token deduplication (streaming chunks) is applied.
+    """
+    result: dict[str, dict] = {}
+
+    try:
+        entries = list(project_dir.iterdir())
+    except OSError:
+        return result
+
+    for entry in entries:
+        if not entry.is_dir() or not _UUID_PATTERN.match(entry.name):
+            continue
+        subagents_dir = entry / "subagents"
+        if not subagents_dir.is_dir():
+            continue
+
+        for sf in subagents_dir.iterdir():
+            if not sf.name.endswith(".jsonl"):
+                continue
+
+            session_id = None
+            total_input = 0
+            total_output = 0
+            total_cache_create = 0
+            total_cache_read = 0
+            pending_usage: dict | None = None
+            pending_sig = ""
+
+            def flush():
+                nonlocal total_input, total_output, total_cache_create, total_cache_read
+                nonlocal pending_usage, pending_sig
+                if pending_usage:
+                    total_input += pending_usage["input"]
+                    total_output += pending_usage["output"]
+                    total_cache_create += pending_usage["cache_create"]
+                    total_cache_read += pending_usage["cache_read"]
+                    pending_usage = None
+                    pending_sig = ""
+
+            try:
+                with open(sf, "r", errors="replace") as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            msg = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+
+                        if not session_id and msg.get("sessionId"):
+                            session_id = msg["sessionId"]
+
+                        if msg.get("type") == "assistant":
+                            usage = msg.get("message", {}).get("usage", {})
+                            if usage:
+                                sig = f"{usage.get('input_tokens', 0)}:{usage.get('cache_creation_input_tokens', 0)}:{usage.get('cache_read_input_tokens', 0)}"
+                                if sig != pending_sig:
+                                    flush()
+                                pending_usage = {
+                                    "input": usage.get("input_tokens", 0),
+                                    "output": usage.get("output_tokens", 0),
+                                    "cache_create": usage.get("cache_creation_input_tokens", 0),
+                                    "cache_read": usage.get("cache_read_input_tokens", 0),
+                                }
+                                pending_sig = sig
+                            else:
+                                flush()
+                        else:
+                            flush()
+                flush()
+            except OSError:
+                continue
+
+            if not session_id:
+                session_id = entry.name
+            total = total_input + total_output + total_cache_create + total_cache_read
+            if total == 0:
+                continue
+
+            if session_id in result:
+                result[session_id]["input_tokens"] += total_input
+                result[session_id]["output_tokens"] += total_output
+                result[session_id]["cache_creation_tokens"] += total_cache_create
+                result[session_id]["cache_read_tokens"] += total_cache_read
+            else:
+                result[session_id] = {
+                    "input_tokens": total_input,
+                    "output_tokens": total_output,
+                    "cache_creation_tokens": total_cache_create,
+                    "cache_read_tokens": total_cache_read,
+                }
+
+    return result
+
+
 if __name__ == "__main__":
     main()

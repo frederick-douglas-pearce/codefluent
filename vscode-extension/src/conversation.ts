@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { TimestampedMessage, SessionMessagesResult, parseSessionMessages } from './parser'
+import { TimestampedMessage, SessionMessagesResult, parseSessionMessages, scanSubagentTokens } from './parser'
 import { classifyTask } from './taskClassification'
 import { detectStructuredOutputAntiPattern } from './antiPatterns'
 import { computeConversationErrorRecovery } from './errorRecovery'
@@ -312,6 +312,41 @@ export function getAllConversations(
   for (const { project: proj, encoded, messages } of byProject.values()) {
     const convs = buildConversations(messages, proj, encoded, gap)
     allConversations.push(...convs)
+  }
+
+  // Add subagent token usage to conversations.
+  // Subagent tokens are real API costs but excluded from behavioral metrics by the
+  // sidechain filter. We attribute them to the FIRST conversation containing each
+  // session_id to avoid double-counting when a session spans multiple conversations.
+  const claimedSessions = new Set<string>()
+  for (const entry of fs.readdirSync(claudeDir).sort()) {
+    const projectDir = path.join(claudeDir, entry)
+    try {
+      if (!fs.statSync(projectDir).isDirectory()) continue
+    } catch { continue }
+    const subagentMap = scanSubagentTokens(projectDir)
+    if (subagentMap.size === 0) continue
+    for (const conv of allConversations) {
+      for (const sid of conv.session_ids) {
+        if (claimedSessions.has(sid)) continue
+        const tokens = subagentMap.get(sid)
+        if (!tokens) continue
+        claimedSessions.add(sid)
+        conv.total_input_tokens += tokens.input_tokens
+        conv.total_output_tokens += tokens.output_tokens
+        conv.total_cache_creation_tokens += tokens.cache_creation_tokens
+        conv.total_cache_read_tokens += tokens.cache_read_tokens
+        conv.total_tokens += tokens.input_tokens + tokens.output_tokens
+          + tokens.cache_creation_tokens + tokens.cache_read_tokens
+      }
+    }
+  }
+
+  // Recompute derived fields after adding subagent tokens
+  for (const conv of allConversations) {
+    conv.tokens_per_prompt = conv.prompt_count > 0 ? conv.total_tokens / conv.prompt_count : 0
+    const denom = conv.total_cache_read_tokens + conv.total_input_tokens + conv.total_cache_creation_tokens
+    conv.cache_hit_rate = denom > 0 ? conv.total_cache_read_tokens / denom : 0
   }
 
   // Sort by started_at descending

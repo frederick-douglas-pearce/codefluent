@@ -632,3 +632,126 @@ export function getAllSessions(limit?: number, project?: string, sessionDataPath
     },
   }
 }
+
+export interface SubagentTokens {
+  input_tokens: number
+  output_tokens: number
+  cache_creation_tokens: number
+  cache_read_tokens: number
+}
+
+/**
+ * Scan subagent JSONL files under a project directory for token usage.
+ * Returns a map of parent sessionId → aggregated token counts.
+ *
+ * Subagent files live at <project>/<session-uuid>/subagents/agent-<id>.jsonl
+ * and their sessionId matches the parent UUID directory name.
+ * Token deduplication (streaming chunks) is applied.
+ */
+export function scanSubagentTokens(projectDir: string): Map<string, SubagentTokens> {
+  const result = new Map<string, SubagentTokens>()
+
+  let entries: string[]
+  try {
+    entries = fs.readdirSync(projectDir)
+  } catch {
+    return result
+  }
+
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+
+  for (const entry of entries) {
+    if (!uuidPattern.test(entry)) continue
+    const subagentsDir = path.join(projectDir, entry, 'subagents')
+    let subFiles: string[]
+    try {
+      subFiles = fs.readdirSync(subagentsDir).filter(f => f.endsWith('.jsonl'))
+    } catch {
+      continue
+    }
+
+    for (const sf of subFiles) {
+      const filepath = path.join(subagentsDir, sf)
+      let raw: string
+      try {
+        raw = fs.readFileSync(filepath, 'utf8')
+      } catch {
+        continue
+      }
+
+      // Deduplicate assistant messages per turn (same as main parser)
+      let pendingUsage: { input: number; output: number; cacheCreate: number; cacheRead: number } | null = null
+      let pendingSig = ''
+      let sessionId: string | null = null
+      let totalInput = 0
+      let totalOutput = 0
+      let totalCacheCreate = 0
+      let totalCacheRead = 0
+
+      function flush(): void {
+        if (pendingUsage) {
+          totalInput += pendingUsage.input
+          totalOutput += pendingUsage.output
+          totalCacheCreate += pendingUsage.cacheCreate
+          totalCacheRead += pendingUsage.cacheRead
+          pendingUsage = null
+          pendingSig = ''
+        }
+      }
+
+      for (const line of raw.split('\n')) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+        let msg: any
+        try {
+          msg = JSON.parse(trimmed)
+        } catch {
+          continue
+        }
+
+        if (!sessionId && msg.sessionId) sessionId = msg.sessionId
+
+        if (msg.type === 'assistant') {
+          const usage = msg.message?.usage
+          if (usage) {
+            const sig = `${usage.input_tokens || 0}:${usage.cache_creation_input_tokens || 0}:${usage.cache_read_input_tokens || 0}`
+            if (sig !== pendingSig) flush()
+            pendingUsage = {
+              input: usage.input_tokens || 0,
+              output: usage.output_tokens || 0,
+              cacheCreate: usage.cache_creation_input_tokens || 0,
+              cacheRead: usage.cache_read_input_tokens || 0,
+            }
+            pendingSig = sig
+          } else {
+            flush()
+          }
+        } else {
+          flush()
+        }
+      }
+      flush()
+
+      if (!sessionId) sessionId = entry  // fallback to parent UUID dir name
+      const total = totalInput + totalOutput + totalCacheCreate + totalCacheRead
+      if (total === 0) continue
+
+      const existing = result.get(sessionId)
+      if (existing) {
+        existing.input_tokens += totalInput
+        existing.output_tokens += totalOutput
+        existing.cache_creation_tokens += totalCacheCreate
+        existing.cache_read_tokens += totalCacheRead
+      } else {
+        result.set(sessionId, {
+          input_tokens: totalInput,
+          output_tokens: totalOutput,
+          cache_creation_tokens: totalCacheCreate,
+          cache_read_tokens: totalCacheRead,
+        })
+      }
+    }
+  }
+
+  return result
+}
