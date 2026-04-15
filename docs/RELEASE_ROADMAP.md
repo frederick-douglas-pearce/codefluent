@@ -122,6 +122,7 @@ Features from different research docs that describe the same underlying capabili
   - Heuristic: detect error/failure states in conversation flow
   - Recovery strategy diversity scoring
   - `failure_to_resolution_turns` metric
+  - **v1.3 extension:** Apply same detection to subagent sessions (#256) — subagent error recovery reflects agent prompt quality rather than human fluency
 - **Verification behavior detection**
   - Tool sequence analysis: Read/Grep after Edit, Bash test commands before commit
   - `test_before_commit_rate`, `review_before_accept_rate`
@@ -151,6 +152,7 @@ Features from different research docs that describe the same underlying capabili
 - **Agentic pattern detection** (deeper than Epic 1)
   - Tool orchestration patterns (Read before Edit, Grep before Write)
   - Session management detection (--resume, fork_session)
+  - **Subagent trace analysis** (#255) — parse full subagent JSONL files for per-tool-type breakdown, error rates, per-step token usage, and retry patterns. Enables precise cost attribution and agent efficiency scoring for the Agentic Architecture radar axis.
 - **Context efficiency scoring**
   - Token growth rate per turn (bloat detection)
   - `/compact` usage detection (parser enhancement #160)
@@ -217,9 +219,9 @@ Features from different research docs that describe the same underlying capabili
 | Epic | Scope | Size |
 |------|-------|------|
 | Epic 2: Task Classification | Phase B (LLM layer) | M |
-| Epic 4: Interaction Quality Metrics | Full | L |
+| Epic 4: Interaction Quality Metrics | Full (main session only) | L |
 
-**Key properties:** First scoring prompt change (v1.0 → v2.0). Bundles all prompt-dependent features. LLM task classification enables normalization of Epic 1 metrics.
+**Key properties:** First scoring prompt change (v1.0 → v2.0). Bundles all prompt-dependent features. LLM task classification enables normalization of Epic 1 metrics. Error recovery (#245) targets main conversation flow — subagent extension deferred to v1.3.
 
 ### v1.3 — "Mastery"
 
@@ -227,8 +229,9 @@ Features from different research docs that describe the same underlying capabili
 |------|-------|------|
 | Epic 5: CCA Scoring Dimensions | Full | XL |
 | Epic 6: Scoring Quality | Full | L |
+| Agent trace analytics | Subagent JSONL parser (#255), subagent error recovery (#256), agent config scanning (#238), agent invocation tracking (#239), agent recommendations (#240) | L |
 
-**Key properties:** Establishes multi-dimensional scoring. Parser enhancement unlocks /compact and hook data. Scoring quality improvements after dimensions stabilize.
+**Key properties:** Establishes multi-dimensional scoring. Parser enhancement unlocks /compact and hook data. Scoring quality improvements after dimensions stabilize. Subagent trace parsing (#255) enables precise agent cost attribution and feeds the Agentic Architecture radar axis.
 
 ### v2.0 — "Outcomes"
 
@@ -254,6 +257,11 @@ Epic 2a (Heuristic Classification) ──→ Epic 2b (LLM) ──→ Epic 4 (Int
                                             │
                                             v
                                      Epic 7 (Outcomes)
+
+#254 (subagent token fix) ──→ #255 (subagent parser) ──→ #256 (subagent error recovery)
+                                       │
+                                       ├──→ #239 (enriched agent metrics)
+                                       └──→ #240 (trace-based recommendations)
 ```
 
 ---
@@ -266,7 +274,7 @@ Epic 2a (Heuristic Classification) ──→ Epic 2b (LLM) ──→ Epic 4 (Int
 | Bug fix correlation | NEW_METRICS | Deep git analysis; requires months of history |
 | Code churn | NEW_METRICS | Ambiguous signal (healthy iteration vs poor quality) |
 | Model selection scoring | NEW_METRICS + CCA | Subscription-tier confound; high gaming risk |
-| Subagent awareness | NEW_METRICS | Requires un-filtering sidechains; ambiguous attribution |
+| ~~Subagent awareness~~ | NEW_METRICS | **UNBLOCKED** — full subagent JSONL traces discovered (2026-04-15). Tracked as #255, #256 in v1.3. |
 | Context bridging | NEW_METRICS | High-effort cross-conversation analysis |
 | Temporal pattern scoring | NEW_METRICS | Personal/lifestyle factors; insight-only, not scored |
 | Interactive CCA practice mode | CCA | Different interaction paradigm entirely |
@@ -307,17 +315,29 @@ Epic 2a (Heuristic Classification) ──→ Epic 2b (LLM) ──→ Epic 4 (Int
 | #172 | Configuration maturity display and scoring UI | Epic 3 | v1.1 | ✅ |
 | #206 | Track custom command and skill usage | Epic 1 | v1.1 | ✅ |
 | #210 | MCP scanner project-level mcpServers | Epic 3 | v1.1 | ✅ |
-| #217 | Handle complex skills with context:fork | Backlog | — | Open |
-| #218 | Command adoption rate metric | Backlog | — | Open |
-| #219 | Incorporate command/skill usage into scoring | Backlog | — | Open |
+| #217 | Handle complex skills with context:fork | Backlog | — | ✅ (no changes needed) |
+| #218 | Command adoption rate metric | Backlog | v1.2 | Open |
+| #219 | Incorporate command/skill usage into scoring | Backlog | v1.2 | Open |
 | #128 | Review scoring prompt definitions | Epic 4 | v1.2 | Open |
 | #101 | Behavior-token breakdown | Epic 4 | v1.2 | Open |
+| #245 | Error recovery pattern detection | Epic 4 | v1.2 | PR #249 |
+| #246 | Verification behavior detection | Epic 4 | v1.2 | Open |
+| #247 | Learning trajectory metric | Epic 4 | v1.2 | Open |
+| #248 | Task-type normalization | Epic 4 | v1.2 | Open |
+| #251 | Usage tab project scoping (ccusage removal) | Bug fix | v1.2 | Open |
+| #238 | Scan .claude/agents/ for subagent definitions | Epic 5 | v1.3 | Open |
+| #239 | Track subagent invocations | Epic 4/5 | v1.3 | Open |
+| #240 | Agent-aware recommendations | Epic 4/5 | v1.3 | Open |
+| #254 | Include subagent token usage in totals | Bug fix | v1.1.1 | Open |
+| #255 | Parse subagent JSONL trace files | Epic 4/5 | v1.3 | Open |
+| #256 | Extend error recovery to subagent sessions | Epic 4/5 | v1.3 | Open |
 | #160 | Parser enhancement (progress messages) | Epic 5 | v1.3 | Open |
 | #112 | Multi-provider eval framework | Epic 6 | v1.3 | Open |
 | #113 | Human review loop | Epic 6 | v1.3 | Open |
 | #114 | Cross-model agreement | Epic 6 | v1.3 | Open |
 | #115 | Confidence calibration | Epic 6 | v1.3 | Open |
 | #116 | User feedback signal | Epic 6 | v1.3 | Open |
+| #241 | Agent advisor (LLM-powered) | Epic 5 | v2.0 | Open |
 
 ---
 
@@ -326,3 +346,4 @@ Epic 2a (Heuristic Classification) ──→ Epic 2b (LLM) ──→ Epic 4 (Int
 - [NEW_METRICS_RESEARCH.md](./NEW_METRICS_RESEARCH.md) — Full analysis of agent behavior, GitHub outcome, and novel scoring metrics
 - [TASK_CLASSIFICATION_RESEARCH.md](./TASK_CLASSIFICATION_RESEARCH.md) — Task classification taxonomy, tooling landscape, validation strategy
 - [CCA_FEATURE_RESEARCH.md](./CCA_FEATURE_RESEARCH.md) — CCA-F exam analysis, 14 features, three-category scoring expansion
+- [AGENT_ANALYTICS_RESEARCH.md](./AGENT_ANALYTICS_RESEARCH.md) — Agent SDK monitoring opportunity, subagent data availability, AgentFluent product concept

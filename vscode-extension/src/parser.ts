@@ -167,6 +167,23 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
   let totalCacheCreationTokens = 0
   let totalCacheReadTokens = 0
 
+  // Deduplication: Claude Code emits multiple assistant messages per API turn
+  // (streaming chunks). Each carries the same input/cache tokens but incrementing
+  // output tokens. We keep only the last message per turn to avoid over-counting.
+  let pendingTurnUsage: { input: number; output: number; cacheCreate: number; cacheRead: number } | null = null
+  let pendingTurnSig = '' // signature: "input:cacheCreate:cacheRead"
+
+  function flushPendingTurn(): void {
+    if (pendingTurnUsage) {
+      totalInputTokens += pendingTurnUsage.input
+      totalOutputTokens += pendingTurnUsage.output
+      totalCacheCreationTokens += pendingTurnUsage.cacheCreate
+      totalCacheReadTokens += pendingTurnUsage.cacheRead
+      pendingTurnUsage = null
+      pendingTurnSig = ''
+    }
+  }
+
   for (const msg of lines) {
     const msgType = msg.type || ''
 
@@ -181,6 +198,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     if (msg.timestamp) timestamps.push(msg.timestamp)
 
     if (msgType === 'user') {
+      flushPendingTurn()
       const content = msg.message?.content ?? ''
       const text = extractUserText(content)
       if (isSlashCommand(text)) {
@@ -197,15 +215,26 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
       }
       if (msg.planContent) usedPlanMode = true
     } else if (msgType === 'assistant') {
-      assistantMsgCount++
       const msgModel = msg.message?.model
       if (msgModel && !model) model = msgModel
       const usage = msg.message?.usage
       if (usage) {
-        totalInputTokens += usage.input_tokens || 0
-        totalOutputTokens += usage.output_tokens || 0
-        totalCacheCreationTokens += usage.cache_creation_input_tokens || 0
-        totalCacheReadTokens += usage.cache_read_input_tokens || 0
+        const sig = `${usage.input_tokens || 0}:${usage.cache_creation_input_tokens || 0}:${usage.cache_read_input_tokens || 0}`
+        if (sig !== pendingTurnSig) {
+          flushPendingTurn()
+          assistantMsgCount++
+        }
+        // Always overwrite — last message in the turn has final output_tokens
+        pendingTurnUsage = {
+          input: usage.input_tokens || 0,
+          output: usage.output_tokens || 0,
+          cacheCreate: usage.cache_creation_input_tokens || 0,
+          cacheRead: usage.cache_read_input_tokens || 0,
+        }
+        pendingTurnSig = sig
+      } else {
+        flushPendingTurn()
+        assistantMsgCount++
       }
       const content = msg.message?.content
       if (Array.isArray(content)) {
@@ -217,6 +246,7 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
         }
       }
     } else if (msgType === 'tool_use') {
+      flushPendingTurn()
       toolUseCount++
       let name = msg.name || msg.message?.name
       if (!name) {
@@ -232,9 +262,11 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
       }
       if (name) toolsUsed.add(name)
     } else if (msgType === 'thinking') {
+      flushPendingTurn()
       thinkingCount++
     }
   }
+  flushPendingTurn()
 
   if (isSidechain) return null
   if (userPrompts.length === 0) return null
@@ -315,6 +347,18 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
 
   const messages: TimestampedMessage[] = []
 
+  // Deduplication: buffer the last assistant message per turn, emit on turn boundary.
+  let pendingAssistant: TimestampedMessage | null = null
+  let pendingAssistantSig = ''
+
+  function flushPendingAssistant(): void {
+    if (pendingAssistant) {
+      messages.push(pendingAssistant)
+      pendingAssistant = null
+      pendingAssistantSig = ''
+    }
+  }
+
   for (let i = 0; i < lines.length; i++) {
     const msg = lines[i]
     const msgType = msg.type || ''
@@ -328,6 +372,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
     if (msg.isSidechain === true) isSidechain = true
 
     if (msgType === 'user') {
+      flushPendingAssistant()
       const content = msg.message?.content ?? ''
       const text = extractUserText(content)
       const isInterrupted = text === '[Request interrupted by user for tool use]'
@@ -375,9 +420,31 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
           cache_creation_input_tokens: usage.cache_creation_input_tokens || 0,
           cache_read_input_tokens: usage.cache_read_input_tokens || 0,
         }
+        const sig = `${usage.input_tokens || 0}:${usage.cache_creation_input_tokens || 0}:${usage.cache_read_input_tokens || 0}`
+        if (sig !== pendingAssistantSig) {
+          flushPendingAssistant()
+        }
+        // Merge tool_names from streaming chunks into the pending message
+        if (pendingAssistant && extracted.tool_names) {
+          const existing = pendingAssistant.tool_names || []
+          pendingAssistant.tool_names = [...existing, ...extracted.tool_names]
+        }
+        // Overwrite pending — last chunk has final output_tokens
+        if (pendingAssistant) {
+          pendingAssistant.usage = extracted.usage
+          pendingAssistant.timestamp = extracted.timestamp
+          pendingAssistant.file_position = extracted.file_position
+          if (extracted.model) pendingAssistant.model = extracted.model
+        } else {
+          pendingAssistant = extracted
+        }
+        pendingAssistantSig = sig
+      } else {
+        flushPendingAssistant()
+        messages.push(extracted)
       }
-      messages.push(extracted)
     } else if (msgType === 'tool_use') {
+      flushPendingAssistant()
       let name = msg.name || msg.message?.name
       if (!name) {
         const content = msg.message?.content
@@ -398,6 +465,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
         tool_names: name ? [name] : undefined,
       })
     } else if (msgType === 'thinking') {
+      flushPendingAssistant()
       messages.push({
         type: 'thinking',
         timestamp: msg.timestamp || null,
@@ -406,6 +474,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
       })
     }
   }
+  flushPendingAssistant()
 
   if (isSidechain) return null
 
