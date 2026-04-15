@@ -7,6 +7,7 @@ from extract_prompts import parse_session_messages, _get_project_path_encoded, _
 from config import get_config
 from task_classification import classify_task
 from anti_patterns import detect_structured_output_anti_pattern
+from error_recovery import compute_conversation_error_recovery
 
 CLAUDE_DATA_DIR = Path.home() / ".claude" / "projects"
 
@@ -174,6 +175,7 @@ def build_conversations(
             "heuristic_task_type": classify_task(git_branch, user_prompts),
             **{k: v for k, v in detect_structured_output_anti_pattern(user_prompts).items()
                if k != "structured_output_antipattern_indices"},
+            **compute_conversation_error_recovery(bucket),
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
             "total_cache_creation_tokens": total_cache_creation_tokens,

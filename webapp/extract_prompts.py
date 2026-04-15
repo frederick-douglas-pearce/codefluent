@@ -170,14 +170,44 @@ def parse_session_messages(filepath: Path) -> dict | None:
                 extracted["command_name"] = cmd_name
             messages.append(extracted)
 
+
+            # Extract tool_result blocks embedded in user message content
+            raw_content = msg.get("message", {}).get("content", "")
+            if isinstance(raw_content, list):
+                for block in raw_content:
+                    if isinstance(block, dict) and block.get("type") == "tool_result":
+                        is_error = block.get("is_error") is True
+                        error_content = None
+                        if is_error:
+                            block_content = block.get("content", "")
+                            if isinstance(block_content, str):
+                                error_content = block_content[:500]
+                            elif isinstance(block_content, list):
+                                for sub in block_content:
+                                    if isinstance(sub, dict) and sub.get("type") == "text":
+                                        error_content = (sub.get("text") or "")[:500]
+                                        break
+                        messages.append({
+                            "type": "tool_result",
+                            "timestamp": msg.get("timestamp"),
+                            "session_id": "",
+                            "file_position": i,
+                            "is_error": is_error or None,
+                            "tool_use_id": block.get("tool_use_id"),
+                            "error_content": error_content,
+                        })
+
         elif msg_type == "assistant":
             tool_names = []
+            tool_use_ids = []
             content = msg.get("message", {}).get("content", [])
             if isinstance(content, list):
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "tool_use":
                         if block.get("name"):
                             tool_names.append(block["name"])
+                        if block.get("id"):
+                            tool_use_ids.append(block["id"])
             usage = msg.get("message", {}).get("usage", {})
             extracted = {
                 "type": "assistant",
@@ -186,6 +216,7 @@ def parse_session_messages(filepath: Path) -> dict | None:
                 "file_position": i,
                 "model": msg.get("message", {}).get("model"),
                 "tool_names": tool_names if tool_names else None,
+                "tool_use_ids": tool_use_ids if tool_use_ids else None,
             }
             if usage:
                 extracted["usage"] = {

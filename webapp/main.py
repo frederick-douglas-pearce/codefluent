@@ -24,6 +24,7 @@ from anthropic import Anthropic
 from extract_prompts import get_all_sessions
 from conversations import get_all_conversations
 from agent_metrics import compute_agent_metrics, compute_weekly_agent_metrics
+from error_recovery import compute_error_recovery_metrics, compute_weekly_error_recovery
 from config_scanner import scan_configuration_maturity
 from enforcement_gaps import detect_enforcement_gaps
 
@@ -588,6 +589,8 @@ async def get_agent_metrics(
             conversations = [c for c in conversations if c.get("project") == project]
         result = compute_agent_metrics(conversations)
         result["weekly"] = compute_weekly_agent_metrics(conversations)
+        result["error_recovery"] = compute_error_recovery_metrics(conversations)
+        result["error_recovery_weekly"] = compute_weekly_error_recovery(conversations)
         return result
     except HTTPException:
         raise

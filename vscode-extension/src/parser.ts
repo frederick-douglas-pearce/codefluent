@@ -52,7 +52,12 @@ export interface TimestampedMessage {
   usage?: { input_tokens: number; output_tokens: number;
             cache_creation_input_tokens: number; cache_read_input_tokens: number }
   tool_names?: string[]         // tool names from assistant content blocks
+  tool_use_ids?: string[]       // tool_use block IDs from assistant content blocks
   model?: string
+  // Tool result fields
+  is_error?: boolean            // true if tool_result had is_error: true
+  tool_use_id?: string          // links to originating tool_use block
+  error_content?: string        // truncated error text (first 500 chars)
   // Metadata (from first message that has it)
   claude_code_version?: string
   git_branch?: string
@@ -349,13 +354,47 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
       if (!version && msg.version) extracted.claude_code_version = msg.version
       if (!gitBranch && msg.gitBranch) extracted.git_branch = msg.gitBranch
       messages.push(extracted)
+      // Extract tool_result blocks embedded in user message content
+      const rawContent = msg.message?.content
+      if (Array.isArray(rawContent)) {
+        for (const block of rawContent) {
+          if (block && typeof block === 'object' && block.type === 'tool_result') {
+            const isError = block.is_error === true
+            let errorContent: string | undefined
+            if (isError) {
+              const blockContent = block.content
+              if (typeof blockContent === 'string') {
+                errorContent = blockContent.slice(0, 500)
+              } else if (Array.isArray(blockContent)) {
+                for (const sub of blockContent) {
+                  if (sub && typeof sub === 'object' && (sub as any).type === 'text') {
+                    errorContent = ((sub as any).text || '').slice(0, 500)
+                    break
+                  }
+                }
+              }
+            }
+            messages.push({
+              type: 'tool_result',
+              timestamp: msg.timestamp || null,
+              session_id: '',
+              file_position: i,
+              is_error: isError || undefined,
+              tool_use_id: block.tool_use_id || undefined,
+              error_content: errorContent,
+            })
+          }
+        }
+      }
     } else if (msgType === 'assistant') {
       const toolNames: string[] = []
+      const toolUseIds: string[] = []
       const content = msg.message?.content
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block && typeof block === 'object' && block.type === 'tool_use') {
             if (block.name) toolNames.push(block.name)
+            if (block.id) toolUseIds.push(block.id)
           }
         }
       }
@@ -367,6 +406,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
         file_position: i,
         model: msg.message?.model || undefined,
         tool_names: toolNames.length > 0 ? toolNames : undefined,
+        tool_use_ids: toolUseIds.length > 0 ? toolUseIds : undefined,
       }
       if (usage) {
         extracted.usage = {

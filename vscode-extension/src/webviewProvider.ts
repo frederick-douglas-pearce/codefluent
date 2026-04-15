@@ -11,6 +11,7 @@ import { DataCache } from './dataCache'
 import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
 import { buildConversationAnalytics } from './analytics'
 import { computeAgentMetrics, computeWeeklyAgentMetrics, AgentMetrics, WeeklyAgentMetrics } from './agentMetrics'
+import { computeErrorRecoveryMetrics, computeWeeklyErrorRecovery, AggregateErrorRecovery, WeeklyErrorRecovery } from './errorRecovery'
 import { getConfig, getDisplayConfig } from './config'
 import { scanConfigurationMaturity } from './configScanner'
 import { detectEnforcementGaps } from './enforcementGaps'
@@ -553,7 +554,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     return response
   }
 
-  private async handleGetAgentMetrics(payload?: { project?: string }): Promise<AgentMetrics & { weekly: WeeklyAgentMetrics[] }> {
+  private async handleGetAgentMetrics(payload?: { project?: string }): Promise<
+    AgentMetrics & { weekly: WeeklyAgentMetrics[]; error_recovery: AggregateErrorRecovery; error_recovery_weekly: WeeklyErrorRecovery[] }
+  > {
     const project = payload?.project ?? this.getWorkspaceProjectName()
     const convData = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
     this.dataCache.setConversations(convData)
@@ -563,7 +566,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     }
     const metrics = computeAgentMetrics(conversations)
     const weekly = computeWeeklyAgentMetrics(conversations)
-    return { ...metrics, weekly }
+    const error_recovery = computeErrorRecoveryMetrics(conversations)
+    const error_recovery_weekly = computeWeeklyErrorRecovery(conversations)
+    return { ...metrics, weekly, error_recovery, error_recovery_weekly }
   }
 
   private async handleGetConversationAnalytics(payload?: { project?: string }) {
