@@ -130,6 +130,17 @@ def parse_session_messages(filepath: Path) -> dict | None:
 
     messages = []
 
+    # Deduplication: buffer the last assistant message per turn, emit on turn boundary.
+    pending_assistant: dict | None = None
+    pending_assistant_sig = ""
+
+    def flush_pending_assistant():
+        nonlocal pending_assistant, pending_assistant_sig
+        if pending_assistant:
+            messages.append(pending_assistant)
+            pending_assistant = None
+            pending_assistant_sig = ""
+
     for i, msg in enumerate(lines):
         msg_type = msg.get("type", "")
 
@@ -148,6 +159,7 @@ def parse_session_messages(filepath: Path) -> dict | None:
             is_sidechain = True
 
         if msg_type == "user":
+            flush_pending_assistant()
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
             is_interrupted = text == "[Request interrupted by user for tool use]"
@@ -194,9 +206,29 @@ def parse_session_messages(filepath: Path) -> dict | None:
                     "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
                     "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
                 }
-            messages.append(extracted)
+                sig = f"{usage.get('input_tokens', 0)}:{usage.get('cache_creation_input_tokens', 0)}:{usage.get('cache_read_input_tokens', 0)}"
+                if sig != pending_assistant_sig:
+                    flush_pending_assistant()
+                # Merge tool_names from streaming chunks
+                if pending_assistant and extracted.get("tool_names"):
+                    existing = pending_assistant.get("tool_names") or []
+                    pending_assistant["tool_names"] = existing + extracted["tool_names"]
+                # Overwrite pending — last chunk has final output_tokens
+                if pending_assistant:
+                    pending_assistant["usage"] = extracted["usage"]
+                    pending_assistant["timestamp"] = extracted["timestamp"]
+                    pending_assistant["file_position"] = extracted["file_position"]
+                    if extracted.get("model"):
+                        pending_assistant["model"] = extracted["model"]
+                else:
+                    pending_assistant = extracted
+                pending_assistant_sig = sig
+            else:
+                flush_pending_assistant()
+                messages.append(extracted)
 
         elif msg_type == "tool_use":
+            flush_pending_assistant()
             name = msg.get("name") or msg.get("message", {}).get("name")
             if not name:
                 content = msg.get("message", {}).get("content", [])
@@ -214,12 +246,15 @@ def parse_session_messages(filepath: Path) -> dict | None:
             })
 
         elif msg_type == "thinking":
+            flush_pending_assistant()
             messages.append({
                 "type": "thinking",
                 "timestamp": msg.get("timestamp"),
                 "session_id": "",
                 "file_position": i,
             })
+
+    flush_pending_assistant()
 
     if is_sidechain:
         return None
@@ -281,6 +316,24 @@ def parse_session_file(filepath: Path) -> dict | None:
     total_cache_creation_tokens = 0
     total_cache_read_tokens = 0
 
+    # Deduplication: Claude Code emits multiple assistant messages per API turn
+    # (streaming chunks). Each carries the same input/cache tokens but incrementing
+    # output tokens. We keep only the last message per turn to avoid over-counting.
+    pending_turn_usage: dict | None = None
+    pending_turn_sig = ""
+
+    def flush_pending_turn():
+        nonlocal total_input_tokens, total_output_tokens
+        nonlocal total_cache_creation_tokens, total_cache_read_tokens
+        nonlocal pending_turn_usage, pending_turn_sig
+        if pending_turn_usage:
+            total_input_tokens += pending_turn_usage["input"]
+            total_output_tokens += pending_turn_usage["output"]
+            total_cache_creation_tokens += pending_turn_usage["cache_create"]
+            total_cache_read_tokens += pending_turn_usage["cache_read"]
+            pending_turn_usage = None
+            pending_turn_sig = ""
+
     for msg in lines:
         msg_type = msg.get("type", "")
 
@@ -303,6 +356,7 @@ def parse_session_file(filepath: Path) -> dict | None:
             timestamps.append(timestamp)
 
         if msg_type == "user":
+            flush_pending_turn()
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
             if is_slash_command(text):
@@ -319,16 +373,25 @@ def parse_session_file(filepath: Path) -> dict | None:
                 used_plan_mode = True
 
         elif msg_type == "assistant":
-            assistant_msg_count += 1
             msg_model = msg.get("message", {}).get("model")
             if msg_model and not model:
                 model = msg_model
             usage = msg.get("message", {}).get("usage", {})
             if usage:
-                total_input_tokens += usage.get("input_tokens", 0)
-                total_output_tokens += usage.get("output_tokens", 0)
-                total_cache_creation_tokens += usage.get("cache_creation_input_tokens", 0)
-                total_cache_read_tokens += usage.get("cache_read_input_tokens", 0)
+                sig = f"{usage.get('input_tokens', 0)}:{usage.get('cache_creation_input_tokens', 0)}:{usage.get('cache_read_input_tokens', 0)}"
+                if sig != pending_turn_sig:
+                    flush_pending_turn()
+                    assistant_msg_count += 1
+                pending_turn_usage = {
+                    "input": usage.get("input_tokens", 0),
+                    "output": usage.get("output_tokens", 0),
+                    "cache_create": usage.get("cache_creation_input_tokens", 0),
+                    "cache_read": usage.get("cache_read_input_tokens", 0),
+                }
+                pending_turn_sig = sig
+            else:
+                flush_pending_turn()
+                assistant_msg_count += 1
             content = msg.get("message", {}).get("content", [])
             if isinstance(content, list):
                 for block in content:
@@ -338,6 +401,7 @@ def parse_session_file(filepath: Path) -> dict | None:
                             tools_used.add(block["name"])
 
         elif msg_type == "tool_use":
+            flush_pending_turn()
             tool_use_count += 1
             name = msg.get("name") or msg.get("message", {}).get("name")
             if not name:
@@ -351,7 +415,10 @@ def parse_session_file(filepath: Path) -> dict | None:
                 tools_used.add(name)
 
         elif msg_type == "thinking":
+            flush_pending_turn()
             thinking_count += 1
+
+    flush_pending_turn()
 
     if is_sidechain:
         return None

@@ -43,7 +43,8 @@ codefluent/
 │   ├── RELEASE_ROADMAP.md     # Epic definitions, release mapping, issue tracker
 │   ├── NEW_METRICS_RESEARCH.md          # Agent behavior + outcome metrics research
 │   ├── TASK_CLASSIFICATION_RESEARCH.md  # Task taxonomy + classification approach
-│   └── CCA_FEATURE_RESEARCH.md          # CCA-F exam feature extraction
+│   ├── CCA_FEATURE_RESEARCH.md          # CCA-F exam feature extraction
+│   └── AGENT_ANALYTICS_RESEARCH.md     # Agent SDK monitoring + AgentFluent opportunity
 ├── vscode-extension/          # VS Code extension (PRIMARY)
 │   ├── package.json           # Extension manifest + dependencies
 │   ├── tsconfig.json          # TypeScript config
@@ -109,6 +110,8 @@ codefluent/
 │       ├── checks.py              # 5 check implementations
 │       ├── report.py              # JSON + stdout output, cost tracking
 │       └── results/               # Output directory (gitignored)
+├── .claude/
+│   └── specs/                 # PM agent output (PRDs, decision logs)
 ├── .github/workflows/         # CI/CD
 │   ├── ci.yml                 # Tests + lint on PR
 │   ├── eval.yml               # Scoring regression checks on prompt changes
@@ -141,6 +144,8 @@ When adding features or changing architecture, check this list for files that ma
 | `docs/REFERENCES.md` | Research papers and external docs links | Adding new research foundations or external references |
 | `docs/DEMO_SCRIPT.md` | 3-minute demo walkthrough | Changing demo flow or feature highlights |
 | `docs/RELEASE_ROADMAP.md` | Epic definitions, release mapping, issue tracker | Completing epics, changing priorities, adding/closing issues |
+| `docs/AGENT_ANALYTICS_RESEARCH.md` | Agent SDK monitoring opportunity, market landscape | Adding agent-related research or competitive analysis |
+| `.claude/specs/` | PM agent output (PRDs, decision logs) | PM agent creates specs here; reference from epic issues |
 | Memory files (`~/.claude/projects/.../memory/`) | Test counts, lessons learned, project phase | Changing test counts, learning new project conventions |
 
 ## Key Commands
@@ -292,6 +297,39 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
 - **`release-please.yml`** — Auto-creates release PRs with changelog + version bumps from conventional commits. When a release is created, chains into a `build-release` job that builds VSIX, publishes to Marketplace, uploads to GitHub Release, and marks the release as non-draft.
 - **`release.yml`** — Manual fallback (`workflow_dispatch` only) for retrying failed releases or manual tag releases. Not triggered automatically.
+
+## Product Development Workflow
+
+This project uses a PM subagent (`~/.claude/agents/pm.md`) for feature specification and backlog management. The PM agent reads project context, creates GitHub issues (epics and stories), and writes longer-form specs to `.claude/specs/`. It has no access to Bash, Edit, or code — only Read, Write (scoped to `.claude/specs/` via hook), and GitHub MCP tools (issues + labels only).
+
+### When to invoke the PM agent
+
+Delegate to the pm subagent when the human's request involves:
+- A new feature or capability that needs scoping before implementation
+- A pain point or problem statement that needs translation into stories
+- Scope or priority questions ("should we do A or B first?")
+- Ambiguous requirements where assumptions would be required to proceed
+
+Do NOT invoke the PM agent for:
+- Bug fixes with clear reproduction steps
+- Refactoring with no behavior change
+- Purely technical decisions (dependency updates, tooling, CI)
+- Requests that reference an existing GitHub issue with clear acceptance criteria
+
+### Spec and issue conventions
+
+- **PRDs:** `.claude/specs/prd-<feature-slug>.md`
+- **Decision log:** `.claude/specs/decisions.md` (append-only)
+- **Epics:** GitHub issues with `epic:` label prefix
+- **Stories:** GitHub issues tagged with parent epic label
+
+### Working from specs
+
+When implementing from a PM-produced spec or issue:
+- Reference the story's acceptance criteria as your definition of done
+- Do not exceed the scope defined in the spec
+- If the spec is technically infeasible or incomplete, STOP and report
+  back to the human before proceeding — do not silently adapt
 
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
