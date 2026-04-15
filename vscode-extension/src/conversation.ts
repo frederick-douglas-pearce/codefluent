@@ -4,6 +4,7 @@ import * as os from 'os'
 import { TimestampedMessage, SessionMessagesResult, parseSessionMessages } from './parser'
 import { classifyTask } from './taskClassification'
 import { detectStructuredOutputAntiPattern } from './antiPatterns'
+import { computeConversationErrorRecovery } from './errorRecovery'
 
 export interface ParsedConversation {
   id: string
@@ -29,6 +30,11 @@ export interface ParsedConversation {
   heuristic_task_type: string | null
   has_structured_output_antipattern: boolean
   structured_output_antipattern_count: number
+  error_count: number
+  recovery_count: number
+  avg_failure_to_resolution_turns: number | null
+  recovery_strategy_diversity: number
+  error_tools: string[]
   total_input_tokens: number
   total_output_tokens: number
   total_cache_creation_tokens: number
@@ -176,6 +182,7 @@ export function buildConversations(
     )
 
     const antiPatternResult = detectStructuredOutputAntiPattern(userPrompts)
+    const errorRecovery = computeConversationErrorRecovery(bucket)
 
     conversations.push({
       id: '', // filled below with zero-padded index
@@ -201,6 +208,11 @@ export function buildConversations(
       heuristic_task_type: classifyTask(gitBranch, userPrompts),
       has_structured_output_antipattern: antiPatternResult.has_structured_output_antipattern,
       structured_output_antipattern_count: antiPatternResult.structured_output_antipattern_count,
+      error_count: errorRecovery.error_count,
+      recovery_count: errorRecovery.recovery_count,
+      avg_failure_to_resolution_turns: errorRecovery.avg_failure_to_resolution_turns,
+      recovery_strategy_diversity: errorRecovery.recovery_strategy_diversity,
+      error_tools: errorRecovery.error_tools,
       total_input_tokens: totalInputTokens,
       total_output_tokens: totalOutputTokens,
       total_cache_creation_tokens: totalCacheCreationTokens,
