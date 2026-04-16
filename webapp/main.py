@@ -525,6 +525,11 @@ async def get_conversation_analytics(
                 "heuristic_task_type": s.get("heuristic_task_type"),
                 "has_structured_output_antipattern": s.get("has_structured_output_antipattern", False),
                 "structured_output_antipattern_count": s.get("structured_output_antipattern_count", 0),
+                "error_count": s.get("error_count", 0),
+                "recovery_count": s.get("recovery_count", 0),
+                "avg_failure_to_resolution_turns": s.get("avg_failure_to_resolution_turns"),
+                "recovery_strategy_diversity": s.get("recovery_strategy_diversity", 0),
+                "error_tools": s.get("error_tools", []),
             })
 
         # Compute aggregates
