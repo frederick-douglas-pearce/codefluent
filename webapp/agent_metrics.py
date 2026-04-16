@@ -45,6 +45,7 @@ def compute_agent_metrics(conversations: list[dict]) -> dict:
             "plan_mode_adoption_rate": 0,
             "avg_cache_hit_rate": 0,
             "thinking_utilization_rate": 0,
+            "command_adoption_rate": 0,
             "avg_prompt_length": 0,
             "conversation_count": 0,
         }
@@ -68,6 +69,10 @@ def compute_agent_metrics(conversations: list[dict]) -> dict:
     total_assistant = sum(c.get("assistant_message_count", 0) for c in conversations)
     thinking_utilization_rate = total_thinking / total_assistant if total_assistant > 0 else 0
 
+    # Command adoption: fraction of conversations using custom commands/skills
+    command_count = sum(1 for c in conversations if c.get("commands_used"))
+    command_adoption_rate = command_count / n
+
     # Avg prompt length: mean across ALL user prompts
     all_prompts = [p for c in conversations for p in c.get("user_prompts", [])]
     avg_prompt_length = sum(len(p) for p in all_prompts) / len(all_prompts) if all_prompts else 0
@@ -77,6 +82,7 @@ def compute_agent_metrics(conversations: list[dict]) -> dict:
         "plan_mode_adoption_rate": round(plan_mode_adoption_rate, 4),
         "avg_cache_hit_rate": round(avg_cache_hit_rate, 4),
         "thinking_utilization_rate": round(thinking_utilization_rate, 4),
+        "command_adoption_rate": round(command_adoption_rate, 4),
         "avg_prompt_length": round(avg_prompt_length),
         "conversation_count": n,
     }
@@ -119,6 +125,7 @@ def compute_weekly_agent_metrics(conversations: list[dict]) -> list[dict]:
         cache_sum = sum(c.get("cache_hit_rate", 0) for c in week_convs)
         total_thinking = sum(c.get("thinking_count", 0) for c in week_convs)
         total_assistant = sum(c.get("assistant_message_count", 0) for c in week_convs)
+        cmd_count = sum(1 for c in week_convs if c.get("commands_used"))
 
         result.append({
             "week": week_key,
@@ -126,6 +133,7 @@ def compute_weekly_agent_metrics(conversations: list[dict]) -> list[dict]:
             "plan_mode_adoption_rate": round(plan_count / n, 4),
             "avg_cache_hit_rate": round(cache_sum / n, 4),
             "thinking_utilization_rate": round(total_thinking / total_assistant, 4) if total_assistant > 0 else 0,
+            "command_adoption_rate": round(cmd_count / n, 4),
             "conversation_count": n,
         })
 

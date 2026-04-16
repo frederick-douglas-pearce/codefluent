@@ -6,6 +6,7 @@ export interface AgentMetrics {
   plan_mode_adoption_rate: number    // conversations_with_plan / total, 0-1
   avg_cache_hit_rate: number         // mean of per-conversation cache_hit_rate, 0-1
   thinking_utilization_rate: number  // sum(thinking_count) / sum(assistant_message_count), 0-1
+  command_adoption_rate: number      // conversations_with_commands / total, 0-1
   avg_prompt_length: number          // mean character length across all user prompts
   conversation_count: number         // total conversations analyzed
 }
@@ -23,6 +24,7 @@ export interface WeeklyAgentMetrics {
   plan_mode_adoption_rate: number
   avg_cache_hit_rate: number
   thinking_utilization_rate: number
+  command_adoption_rate: number
   conversation_count: number
 }
 
@@ -53,6 +55,7 @@ export function computeAgentMetrics(conversations: ParsedConversation[]): AgentM
       plan_mode_adoption_rate: 0,
       avg_cache_hit_rate: 0,
       thinking_utilization_rate: 0,
+      command_adoption_rate: 0,
       avg_prompt_length: 0,
       conversation_count: 0,
     }
@@ -75,6 +78,10 @@ export function computeAgentMetrics(conversations: ParsedConversation[]): AgentM
   const totalAssistant = conversations.reduce((sum, c) => sum + c.assistant_message_count, 0)
   const thinkingUtilizationRate = totalAssistant > 0 ? totalThinking / totalAssistant : 0
 
+  // Command adoption: fraction of conversations using custom commands/skills
+  const commandCount = conversations.filter(c => (c.commands_used?.length ?? 0) > 0).length
+  const commandAdoptionRate = commandCount / conversations.length
+
   // Avg prompt length: mean across ALL user prompts from all conversations
   const allPrompts = conversations.flatMap(c => c.user_prompts)
   const avgPromptLength = allPrompts.length > 0
@@ -86,6 +93,7 @@ export function computeAgentMetrics(conversations: ParsedConversation[]): AgentM
     plan_mode_adoption_rate: roundRate(planModeAdoptionRate),
     avg_cache_hit_rate: roundRate(avgCacheHitRate),
     thinking_utilization_rate: roundRate(thinkingUtilizationRate),
+    command_adoption_rate: roundRate(commandAdoptionRate),
     avg_prompt_length: Math.round(avgPromptLength),
     conversation_count: conversations.length,
   }
@@ -127,6 +135,7 @@ export function computeWeeklyAgentMetrics(conversations: ParsedConversation[]): 
     const cacheSum = weekConvs.reduce((sum, c) => sum + c.cache_hit_rate, 0)
     const totalThinking = weekConvs.reduce((sum, c) => sum + c.thinking_count, 0)
     const totalAssistant = weekConvs.reduce((sum, c) => sum + c.assistant_message_count, 0)
+    const cmdCount = weekConvs.filter(c => (c.commands_used?.length ?? 0) > 0).length
 
     result.push({
       week,
@@ -134,6 +143,7 @@ export function computeWeeklyAgentMetrics(conversations: ParsedConversation[]): 
       plan_mode_adoption_rate: roundRate(planCount / n),
       avg_cache_hit_rate: roundRate(cacheSum / n),
       thinking_utilization_rate: roundRate(totalAssistant > 0 ? totalThinking / totalAssistant : 0),
+      command_adoption_rate: roundRate(cmdCount / n),
       conversation_count: n,
     })
   }

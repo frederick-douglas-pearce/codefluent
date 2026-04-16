@@ -1809,7 +1809,8 @@ function renderAgentMetrics(metrics) {
     { title: 'Tool Diversity', value: metrics.tool_diversity_index, detail: 'unique tools / total uses', key: 'tool_diversity_index', color: '#D97706', format: 'percent' },
     { title: 'Plan Mode Adoption', value: metrics.plan_mode_adoption_rate, detail: 'conversations using plan mode', key: 'plan_mode_adoption_rate', color: '#2563EB', format: 'percent' },
     { title: 'Cache Efficiency', value: metrics.avg_cache_hit_rate, detail: 'average cache hit rate', key: 'avg_cache_hit_rate', color: '#059669', format: 'percent' },
-    { title: 'Thinking Utilization', value: metrics.thinking_utilization_rate, detail: 'responses using extended thinking', key: 'thinking_utilization_rate', color: '#7C3AED', format: 'percent' }
+    { title: 'Thinking Utilization', value: metrics.thinking_utilization_rate, detail: 'responses using extended thinking', key: 'thinking_utilization_rate', color: '#7C3AED', format: 'percent' },
+    { title: 'Command Adoption', value: metrics.command_adoption_rate, detail: 'conversations using commands/skills', key: 'command_adoption_rate', color: '#0891B2', format: 'percent' }
   ]
 
   // Add error recovery cards if data is available

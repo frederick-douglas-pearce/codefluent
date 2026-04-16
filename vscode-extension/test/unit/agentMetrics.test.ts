@@ -50,6 +50,7 @@ describe('computeAgentMetrics', () => {
       plan_mode_adoption_rate: 0,
       avg_cache_hit_rate: 0,
       thinking_utilization_rate: 0,
+      command_adoption_rate: 0,
       avg_prompt_length: 0,
       conversation_count: 0,
     })
