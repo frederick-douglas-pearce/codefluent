@@ -156,7 +156,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": false,
           "clarifying_goals": true,
-          "specifying_format": true,
+          "specifying_format": false,
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
@@ -185,7 +185,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": false,
           "clarifying_goals": true,
-          "specifying_format": true,
+          "specifying_format": false,
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
@@ -339,7 +339,7 @@
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
-          "questioning_reasoning": true,
+          "questioning_reasoning": false,
           "identifying_missing_context": false,
           "adjusting_approach": true,
           "building_on_responses": true,
