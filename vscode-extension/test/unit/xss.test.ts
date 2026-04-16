@@ -439,7 +439,7 @@ describe('XSS vector coverage in webapp/static/app.js', () => {
   test('renderAgentMetrics escapes dynamic content', () => {
     expect(src).toContain('escapeHtml(item.title)')
     expect(src).toContain('escapeHtml(item.detail)')
-    expect(src).toMatch(/escapeHtml\(String\(Math\.round\(item\.value \* 100\)\)\)/)
+    expect(src).toContain('escapeHtml(displayValue)')
   })
 
   test('extension renderConversationDetailContent escapes all user content', () => {

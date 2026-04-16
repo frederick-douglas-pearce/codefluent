@@ -289,8 +289,7 @@ class TestWebappXSSVectors:
     def test_render_agent_metrics_escapes_dynamic_content(self):
         assert 'escapeHtml(item.title)' in self.src
         assert 'escapeHtml(item.detail)' in self.src
-        import re
-        assert re.search(r'escapeHtml\(String\(Math\.round\(item\.value \* 100\)\)\)', self.src)
+        assert 'escapeHtml(displayValue)' in self.src
 
     def test_conversation_detail_escapes_all_user_content(self):
         assert 'escapeHtml(model)' in self.src
