@@ -51,6 +51,11 @@ def fill_template(template, variables):
     result = template
     for key, value in variables.items():
         result = result.replace("{{" + key + "}}", str(value))
+    import re as _re
+    unfilled = _re.findall(r"\{\{[A-Z_]+\}\}", result)
+    if unfilled:
+        import logging
+        logging.getLogger(__name__).warning(f"Unfilled placeholders in prompt: {', '.join(unfilled)}")
     return result
 
 
@@ -79,6 +84,7 @@ def build_filled_prompt(entry, section, template):
             "USED_PLAN_MODE": str(meta.get("used_plan_mode", False)),
             "THINKING_COUNT": str(meta.get("thinking_count", 0)),
             "TOOLS_USED": ", ".join(meta.get("tools_used", [])) or "none",
+            "COMMANDS_USED": ", ".join(meta.get("commands_used", [])) or "none",
             "PROMPTS": prompt_tags,
         })
 

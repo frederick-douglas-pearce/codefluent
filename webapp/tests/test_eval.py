@@ -60,6 +60,7 @@ def _make_result(entry_id, section, actual_fb, expected_fb=None, **kwargs):
         actual = {
             "fluency_behaviors": actual_fb, "overall_score": 50,
             "coding_pattern": "ai_delegation", "one_line_summary": "test",
+            "task_type": "feature", "task_type_confidence": 0.9,
         }
         expected = {"fluency_behaviors": expected_fb or actual_fb}
     else:  # single_scoring
@@ -747,6 +748,8 @@ class TestFullPipelineMocked:
                         "overall_score": 50,
                         "coding_pattern": expected.get("coding_pattern", "ai_delegation"),
                         "one_line_summary": "test",
+                        "task_type": expected.get("task_type", "feature"),
+                        "task_type_confidence": 0.9,
                     }
                 elif section == "config_scoring":
                     response = {

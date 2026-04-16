@@ -6,6 +6,9 @@ from shared.eval.scorer import (
     BEHAVIORS, _sanitize_error, build_filled_prompt, call_with_retry, load_prompt,
 )
 
+# Canonical source: webapp/task_classification.py and vscode-extension/src/taskClassification.ts
+TASK_TYPES = ["feature", "bug_fix", "refactor", "debug", "test", "docs", "chore", "exploration"]
+
 
 def check_schema(results):
     """Validate each result has expected keys per section type.
@@ -58,6 +61,14 @@ def check_schema(results):
                 errors.append("Missing 'coding_pattern'")
             if "one_line_summary" not in actual:
                 errors.append("Missing 'one_line_summary'")
+            if "task_type" not in actual:
+                errors.append("Missing 'task_type'")
+            elif actual["task_type"] not in TASK_TYPES:
+                errors.append(f"Invalid task_type: {actual['task_type']}")
+            if "task_type_confidence" not in actual:
+                errors.append("Missing 'task_type_confidence'")
+            elif not isinstance(actual["task_type_confidence"], (int, float)):
+                errors.append(f"'task_type_confidence' is not numeric: {actual['task_type_confidence']}")
 
         elif section == "config_scoring":
             if "one_line_summary" not in actual:

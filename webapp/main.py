@@ -23,6 +23,7 @@ import subprocess
 from anthropic import Anthropic
 from extract_prompts import get_all_sessions
 from conversations import get_all_conversations
+from task_classification import TASK_TYPES
 from agent_metrics import compute_agent_metrics, compute_weekly_agent_metrics
 from error_recovery import compute_error_recovery_metrics, compute_weekly_error_recovery
 from config_scanner import scan_configuration_maturity
@@ -167,6 +168,11 @@ def _fill_template(template: str, variables: dict) -> str:
     result = template
     for key, value in variables.items():
         result = result.replace("{{" + key + "}}", value)
+    import re as _re
+    unfilled = _re.findall(r"\{\{[A-Z_]+\}\}", result)
+    if unfilled:
+        import logging
+        logging.getLogger(__name__).warning(f"Unfilled placeholders in prompt: {', '.join(unfilled)}")
     return result
 
 
@@ -812,6 +818,7 @@ async def score_conversations_endpoint(request: ScoreRequest):
             "USED_PLAN_MODE": str(session.get("used_plan_mode", False)),
             "THINKING_COUNT": str(session.get("thinking_count", 0)),
             "TOOLS_USED": ", ".join(session.get("tools_used", [])),
+            "COMMANDS_USED": ", ".join(session.get("commands_used", [])) or "none",
             "PROMPTS": prompts_text,
         })
 
@@ -1297,10 +1304,20 @@ def validate_score_result(raw, session_id: str, prompt_count: int) -> dict:
     if isinstance(raw_summary, str):
         one_line_summary = raw_summary[:200]
 
+    # task_type: must be in TASK_TYPES
+    raw_task_type = raw.get("task_type")
+    task_type = raw_task_type if isinstance(raw_task_type, str) and raw_task_type in TASK_TYPES else None
+
+    # task_type_confidence: clamp 0-1
+    task_type_confidence = None
+    raw_confidence = raw.get("task_type_confidence")
+    if isinstance(raw_confidence, (int, float)) and not isinstance(raw_confidence, bool):
+        task_type_confidence = min(1.0, max(0.0, float(raw_confidence)))
+
     all_behaviors_true = all(v is True for v in fluency_behaviors.values())
     suspicious_perfect_score = overall_score == 100 and all_behaviors_true
 
-    return {
+    result = {
         "session_id": session_id,
         "fluency_behaviors": fluency_behaviors,
         "overall_score": overall_score,
@@ -1310,6 +1327,11 @@ def validate_score_result(raw, session_id: str, prompt_count: int) -> dict:
         "low_confidence": prompt_count < 3,
         "suspicious_perfect_score": suspicious_perfect_score,
     }
+    if task_type is not None:
+        result["task_type"] = task_type
+    if task_type_confidence is not None:
+        result["task_type_confidence"] = task_type_confidence
+    return result
 
 
 def validate_config_score_result(raw) -> dict:
