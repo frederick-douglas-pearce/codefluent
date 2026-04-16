@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from extract_prompts import parse_session_messages, _get_project_path_encoded, _UUID_PATTERN
+from extract_prompts import parse_session_messages, _get_project_path_encoded, _UUID_PATTERN, scan_subagent_tokens
 from config import get_config
 from task_classification import classify_task
 from anti_patterns import detect_structured_output_anti_pattern
@@ -257,6 +257,40 @@ def get_all_conversations(
     for info in by_project.values():
         convs = build_conversations(info["messages"], info["project"], info["encoded"], gap_minutes)
         all_conversations.extend(convs)
+
+    # Add subagent token usage to conversations.
+    # Attribute to the FIRST conversation containing each session_id to avoid
+    # double-counting when a session spans multiple conversations.
+    claimed_sessions: set[str] = set()
+    for project_dir in sorted(data_dir.iterdir()):
+        if not project_dir.is_dir():
+            continue
+        subagent_map = scan_subagent_tokens(project_dir)
+        if not subagent_map:
+            continue
+        for conv in all_conversations:
+            for sid in conv.get("session_ids", []):
+                if sid in claimed_sessions:
+                    continue
+                tokens = subagent_map.get(sid)
+                if not tokens:
+                    continue
+                claimed_sessions.add(sid)
+                conv["total_input_tokens"] += tokens["input_tokens"]
+                conv["total_output_tokens"] += tokens["output_tokens"]
+                conv["total_cache_creation_tokens"] += tokens["cache_creation_tokens"]
+                conv["total_cache_read_tokens"] += tokens["cache_read_tokens"]
+                conv["total_tokens"] += (
+                    tokens["input_tokens"] + tokens["output_tokens"]
+                    + tokens["cache_creation_tokens"] + tokens["cache_read_tokens"]
+                )
+
+    # Recompute derived fields after adding subagent tokens
+    for conv in all_conversations:
+        pc = conv.get("prompt_count", 0)
+        conv["tokens_per_prompt"] = conv["total_tokens"] / pc if pc > 0 else 0
+        denom = conv["total_cache_read_tokens"] + conv["total_input_tokens"] + conv["total_cache_creation_tokens"]
+        conv["cache_hit_rate"] = conv["total_cache_read_tokens"] / denom if denom > 0 else 0
 
     # Sort by started_at descending
     all_conversations.sort(key=lambda c: c.get("started_at") or "", reverse=True)
