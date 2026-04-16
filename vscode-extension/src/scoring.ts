@@ -3,6 +3,7 @@ import { ParsedSession } from './parser'
 import { ParsedConversation } from './conversation'
 import { loadScoringPrompt, loadConfigPrompt, loadOptimizerPrompt, loadSingleScoringPrompt, fillTemplate } from './prompts'
 import { getConfig } from './config'
+import { TASK_TYPES } from './taskClassification'
 
 export type ScoringErrorType = 'rate_limit' | 'network' | 'server' | 'auth' | 'invalid_request' | 'unknown'
 
@@ -18,6 +19,8 @@ export interface ScoreResult {
   coding_pattern_quality?: string
   overall_score?: number
   one_line_summary?: string
+  task_type?: string
+  task_type_confidence?: number
   session_id: string
   error?: string
   low_confidence?: boolean
@@ -230,6 +233,16 @@ export function validateScoreResult(raw: unknown, sessionId: string, promptCount
     one_line_summary = obj.one_line_summary.slice(0, 200)
   }
 
+  // task_type: must be in TASK_TYPES
+  const task_type = typeof obj.task_type === 'string' && (TASK_TYPES as readonly string[]).includes(obj.task_type)
+    ? obj.task_type : undefined
+
+  // task_type_confidence: clamp 0-1
+  let task_type_confidence: number | undefined
+  if (typeof obj.task_type_confidence === 'number' && !isNaN(obj.task_type_confidence)) {
+    task_type_confidence = Math.min(1, Math.max(0, obj.task_type_confidence))
+  }
+
   const allBehaviorsTrue = Object.values(fluency_behaviors).every(v => v === true)
   const suspicious_perfect_score = overall_score === 100 && allBehaviorsTrue
 
@@ -240,6 +253,8 @@ export function validateScoreResult(raw: unknown, sessionId: string, promptCount
     coding_pattern,
     coding_pattern_quality,
     one_line_summary,
+    task_type,
+    task_type_confidence,
     low_confidence: promptCount < getConfig<number>('scoring.lowConfidenceThreshold'),
     suspicious_perfect_score,
   }
@@ -351,6 +366,7 @@ export async function scoreConversations(
       USED_PLAN_MODE: String(conversation.used_plan_mode),
       THINKING_COUNT: String(conversation.thinking_count),
       TOOLS_USED: conversation.tools_used.join(', '),
+      COMMANDS_USED: (conversation as ParsedConversation).commands_used?.join(', ') || 'none',
       PROMPTS: promptsText,
     })
 

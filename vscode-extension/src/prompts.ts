@@ -76,5 +76,9 @@ export function fillTemplate(template: string, vars: Record<string, string>): st
   for (const [key, value] of Object.entries(vars)) {
     result = result.split(`{{${key}}}`).join(value)
   }
+  const unfilled = result.match(/\{\{[A-Z_]+\}\}/g)
+  if (unfilled) {
+    console.warn(`[CodeFluent] Unfilled placeholders in prompt: ${unfilled.join(', ')}`)
+  }
   return result
 }
