@@ -2365,8 +2365,8 @@ function renderConversationDetailContent(conv) {
       ${(conv.error_count || 0) > 0 ? `<div class="detail-section">
         <h4>Error Recovery</h4>
         <div class="detail-meta">
-          <span><strong>Errors:</strong> ${conv.error_count}</span>
-          <span><strong>Recovered:</strong> ${conv.recovery_count || 0}/${conv.error_count}</span>
+          <span><strong>Errors:</strong> ${escapeHtml(String(conv.error_count))}</span>
+          <span><strong>Recovered:</strong> ${escapeHtml(String(conv.recovery_count || 0))}/${escapeHtml(String(conv.error_count))}</span>
           <span><strong>Avg Turns to Resolve:</strong> ${conv.avg_failure_to_resolution_turns != null ? conv.avg_failure_to_resolution_turns.toFixed(1) : '\u2014'}</span>
           <span><strong>Strategy Diversity:</strong> ${conv.recovery_strategy_diversity != null ? (conv.recovery_strategy_diversity * 100).toFixed(0) + '%' : '\u2014'}</span>
         </div>
