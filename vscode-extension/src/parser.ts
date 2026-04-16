@@ -172,22 +172,11 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
   let totalCacheCreationTokens = 0
   let totalCacheReadTokens = 0
 
-  // Deduplication: Claude Code emits multiple assistant messages per API turn
-  // (streaming chunks). Each carries the same input/cache tokens but incrementing
-  // output tokens. We keep only the last message per turn to avoid over-counting.
-  let pendingTurnUsage: { input: number; output: number; cacheCreate: number; cacheRead: number } | null = null
-  let pendingTurnSig = '' // signature: "input:cacheCreate:cacheRead"
-
-  function flushPendingTurn(): void {
-    if (pendingTurnUsage) {
-      totalInputTokens += pendingTurnUsage.input
-      totalOutputTokens += pendingTurnUsage.output
-      totalCacheCreationTokens += pendingTurnUsage.cacheCreate
-      totalCacheReadTokens += pendingTurnUsage.cacheRead
-      pendingTurnUsage = null
-      pendingTurnSig = ''
-    }
-  }
+  // Deduplication: Claude Code emits multiple assistant messages per API call
+  // (streaming snapshots). Per Anthropic docs, deduplicate by message.id and
+  // keep the highest output_tokens. Input/cache tokens are identical across
+  // duplicates; output_tokens may increment with each snapshot.
+  const seenMessageIds = new Map<string, { input: number; output: number; cacheCreate: number; cacheRead: number }>()
 
   for (const msg of lines) {
     const msgType = msg.type || ''
@@ -203,7 +192,6 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
     if (msg.timestamp) timestamps.push(msg.timestamp)
 
     if (msgType === 'user') {
-      flushPendingTurn()
       const content = msg.message?.content ?? ''
       const text = extractUserText(content)
       if (isSlashCommand(text)) {
@@ -223,22 +211,33 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
       const msgModel = msg.message?.model
       if (msgModel && !model) model = msgModel
       const usage = msg.message?.usage
-      if (usage) {
-        const sig = `${usage.input_tokens || 0}:${usage.cache_creation_input_tokens || 0}:${usage.cache_read_input_tokens || 0}`
-        if (sig !== pendingTurnSig) {
-          flushPendingTurn()
+      const messageId = msg.message?.id
+      if (usage && messageId) {
+        const existing = seenMessageIds.get(messageId)
+        if (existing) {
+          // Keep highest output_tokens per Anthropic recommendation
+          if ((usage.output_tokens || 0) > existing.output) {
+            existing.output = usage.output_tokens || 0
+          }
+        } else {
           assistantMsgCount++
+          seenMessageIds.set(messageId, {
+            input: usage.input_tokens || 0,
+            output: usage.output_tokens || 0,
+            cacheCreate: usage.cache_creation_input_tokens || 0,
+            cacheRead: usage.cache_read_input_tokens || 0,
+          })
         }
-        // Always overwrite — last message in the turn has final output_tokens
-        pendingTurnUsage = {
+      } else if (usage) {
+        // No message ID — count directly (legacy entries)
+        assistantMsgCount++
+        seenMessageIds.set(`_no_id_${assistantMsgCount}`, {
           input: usage.input_tokens || 0,
           output: usage.output_tokens || 0,
           cacheCreate: usage.cache_creation_input_tokens || 0,
           cacheRead: usage.cache_read_input_tokens || 0,
-        }
-        pendingTurnSig = sig
+        })
       } else {
-        flushPendingTurn()
         assistantMsgCount++
       }
       const content = msg.message?.content
@@ -251,7 +250,6 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
         }
       }
     } else if (msgType === 'tool_use') {
-      flushPendingTurn()
       toolUseCount++
       let name = msg.name || msg.message?.name
       if (!name) {
@@ -267,11 +265,17 @@ export function parseSessionFile(filepath: string): ParsedSession | null {
       }
       if (name) toolsUsed.add(name)
     } else if (msgType === 'thinking') {
-      flushPendingTurn()
       thinkingCount++
     }
   }
-  flushPendingTurn()
+
+  // Sum deduplicated usage
+  for (const usage of seenMessageIds.values()) {
+    totalInputTokens += usage.input
+    totalOutputTokens += usage.output
+    totalCacheCreationTokens += usage.cacheCreate
+    totalCacheReadTokens += usage.cacheRead
+  }
 
   if (isSidechain) return null
   if (userPrompts.length === 0) return null
@@ -352,15 +356,18 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
 
   const messages: TimestampedMessage[] = []
 
-  // Deduplication: buffer the last assistant message per turn, emit on turn boundary.
-  let pendingAssistant: TimestampedMessage | null = null
-  let pendingAssistantSig = ''
+  // Deduplication: Claude Code emits multiple assistant messages per API call
+  // (streaming snapshots). Per Anthropic docs, deduplicate by message.id and
+  // keep the highest output_tokens. We buffer by message ID and emit when a
+  // new ID is seen or a non-assistant message arrives.
+  const seenAssistantIds = new Map<string, TimestampedMessage>()
+  let pendingAssistantId: string | null = null
 
   function flushPendingAssistant(): void {
-    if (pendingAssistant) {
-      messages.push(pendingAssistant)
-      pendingAssistant = null
-      pendingAssistantSig = ''
+    if (pendingAssistantId) {
+      const pending = seenAssistantIds.get(pendingAssistantId)
+      if (pending) messages.push(pending)
+      pendingAssistantId = null
     }
   }
 
@@ -453,32 +460,49 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
         tool_names: toolNames.length > 0 ? toolNames : undefined,
         tool_use_ids: toolUseIds.length > 0 ? toolUseIds : undefined,
       }
-      if (usage) {
+      const messageId = msg.message?.id
+      if (usage && messageId) {
         extracted.usage = {
           input_tokens: usage.input_tokens || 0,
           output_tokens: usage.output_tokens || 0,
           cache_creation_input_tokens: usage.cache_creation_input_tokens || 0,
           cache_read_input_tokens: usage.cache_read_input_tokens || 0,
         }
-        const sig = `${usage.input_tokens || 0}:${usage.cache_creation_input_tokens || 0}:${usage.cache_read_input_tokens || 0}`
-        if (sig !== pendingAssistantSig) {
-          flushPendingAssistant()
-        }
-        // Merge tool_names from streaming chunks into the pending message
-        if (pendingAssistant && extracted.tool_names) {
-          const existing = pendingAssistant.tool_names || []
-          pendingAssistant.tool_names = [...existing, ...extracted.tool_names]
-        }
-        // Overwrite pending — last chunk has final output_tokens
-        if (pendingAssistant) {
-          pendingAssistant.usage = extracted.usage
-          pendingAssistant.timestamp = extracted.timestamp
-          pendingAssistant.file_position = extracted.file_position
-          if (extracted.model) pendingAssistant.model = extracted.model
+        const existing = seenAssistantIds.get(messageId)
+        if (existing) {
+          // Duplicate — keep highest output_tokens, merge tool_names
+          if (extracted.usage.output_tokens > (existing.usage?.output_tokens || 0)) {
+            existing.usage = extracted.usage
+          }
+          if (extracted.tool_names) {
+            const prev = existing.tool_names || []
+            existing.tool_names = [...prev, ...extracted.tool_names]
+          }
+          if (extracted.tool_use_ids) {
+            const prev = existing.tool_use_ids || []
+            existing.tool_use_ids = [...prev, ...extracted.tool_use_ids]
+          }
+          existing.timestamp = extracted.timestamp
+          existing.file_position = extracted.file_position
+          if (extracted.model) existing.model = extracted.model
         } else {
-          pendingAssistant = extracted
+          // New message ID — flush previous, start buffering new
+          if (pendingAssistantId && pendingAssistantId !== messageId) {
+            flushPendingAssistant()
+          }
+          seenAssistantIds.set(messageId, extracted)
+          pendingAssistantId = messageId
         }
-        pendingAssistantSig = sig
+      } else if (usage) {
+        // No message ID — emit directly (legacy entries)
+        flushPendingAssistant()
+        extracted.usage = {
+          input_tokens: usage.input_tokens || 0,
+          output_tokens: usage.output_tokens || 0,
+          cache_creation_input_tokens: usage.cache_creation_input_tokens || 0,
+          cache_read_input_tokens: usage.cache_read_input_tokens || 0,
+        }
+        messages.push(extracted)
       } else {
         flushPendingAssistant()
         messages.push(extracted)
@@ -679,25 +703,10 @@ export function scanSubagentTokens(projectDir: string): Map<string, SubagentToke
         continue
       }
 
-      // Deduplicate assistant messages per turn (same as main parser)
-      let pendingUsage: { input: number; output: number; cacheCreate: number; cacheRead: number } | null = null
-      let pendingSig = ''
+      // Deduplicate by message.id — keep highest output_tokens per ID
+      const msgIdUsage = new Map<string, { input: number; output: number; cacheCreate: number; cacheRead: number }>()
       let sessionId: string | null = null
-      let totalInput = 0
-      let totalOutput = 0
-      let totalCacheCreate = 0
-      let totalCacheRead = 0
-
-      function flush(): void {
-        if (pendingUsage) {
-          totalInput += pendingUsage.input
-          totalOutput += pendingUsage.output
-          totalCacheCreate += pendingUsage.cacheCreate
-          totalCacheRead += pendingUsage.cacheRead
-          pendingUsage = null
-          pendingSig = ''
-        }
-      }
+      let noIdCounter = 0
 
       for (const line of raw.split('\n')) {
         const trimmed = line.trim()
@@ -713,24 +722,33 @@ export function scanSubagentTokens(projectDir: string): Map<string, SubagentToke
 
         if (msg.type === 'assistant') {
           const usage = msg.message?.usage
+          const messageId = msg.message?.id
           if (usage) {
-            const sig = `${usage.input_tokens || 0}:${usage.cache_creation_input_tokens || 0}:${usage.cache_read_input_tokens || 0}`
-            if (sig !== pendingSig) flush()
-            pendingUsage = {
-              input: usage.input_tokens || 0,
-              output: usage.output_tokens || 0,
-              cacheCreate: usage.cache_creation_input_tokens || 0,
-              cacheRead: usage.cache_read_input_tokens || 0,
+            const key = messageId || `_no_id_${++noIdCounter}`
+            const existing = msgIdUsage.get(key)
+            if (existing) {
+              if ((usage.output_tokens || 0) > existing.output) {
+                existing.output = usage.output_tokens || 0
+              }
+            } else {
+              msgIdUsage.set(key, {
+                input: usage.input_tokens || 0,
+                output: usage.output_tokens || 0,
+                cacheCreate: usage.cache_creation_input_tokens || 0,
+                cacheRead: usage.cache_read_input_tokens || 0,
+              })
             }
-            pendingSig = sig
-          } else {
-            flush()
           }
-        } else {
-          flush()
         }
       }
-      flush()
+
+      let totalInput = 0, totalOutput = 0, totalCacheCreate = 0, totalCacheRead = 0
+      for (const u of msgIdUsage.values()) {
+        totalInput += u.input
+        totalOutput += u.output
+        totalCacheCreate += u.cacheCreate
+        totalCacheRead += u.cacheRead
+      }
 
       if (!sessionId) sessionId = entry  // fallback to parent UUID dir name
       const total = totalInput + totalOutput + totalCacheCreate + totalCacheRead

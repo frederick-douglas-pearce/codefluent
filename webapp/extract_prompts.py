@@ -130,16 +130,17 @@ def parse_session_messages(filepath: Path) -> dict | None:
 
     messages = []
 
-    # Deduplication: buffer the last assistant message per turn, emit on turn boundary.
-    pending_assistant: dict | None = None
-    pending_assistant_sig = ""
+    # Deduplication: buffer assistant messages by message.id, emit when ID changes.
+    seen_assistant_ids: dict[str, dict] = {}
+    pending_assistant_id: str | None = None
 
     def flush_pending_assistant():
-        nonlocal pending_assistant, pending_assistant_sig
-        if pending_assistant:
-            messages.append(pending_assistant)
-            pending_assistant = None
-            pending_assistant_sig = ""
+        nonlocal pending_assistant_id
+        if pending_assistant_id:
+            pending = seen_assistant_ids.get(pending_assistant_id)
+            if pending:
+                messages.append(pending)
+            pending_assistant_id = None
 
     for i, msg in enumerate(lines):
         msg_type = msg.get("type", "")
@@ -230,30 +231,43 @@ def parse_session_messages(filepath: Path) -> dict | None:
                 "tool_names": tool_names if tool_names else None,
                 "tool_use_ids": tool_use_ids if tool_use_ids else None,
             }
-            if usage:
+            message_id = msg.get("message", {}).get("id")
+            if usage and message_id:
                 extracted["usage"] = {
                     "input_tokens": usage.get("input_tokens", 0),
                     "output_tokens": usage.get("output_tokens", 0),
                     "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
                     "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
                 }
-                sig = f"{usage.get('input_tokens', 0)}:{usage.get('cache_creation_input_tokens', 0)}:{usage.get('cache_read_input_tokens', 0)}"
-                if sig != pending_assistant_sig:
-                    flush_pending_assistant()
-                # Merge tool_names from streaming chunks
-                if pending_assistant and extracted.get("tool_names"):
-                    existing = pending_assistant.get("tool_names") or []
-                    pending_assistant["tool_names"] = existing + extracted["tool_names"]
-                # Overwrite pending — last chunk has final output_tokens
-                if pending_assistant:
-                    pending_assistant["usage"] = extracted["usage"]
-                    pending_assistant["timestamp"] = extracted["timestamp"]
-                    pending_assistant["file_position"] = extracted["file_position"]
+                existing = seen_assistant_ids.get(message_id)
+                if existing:
+                    # Duplicate — keep highest output_tokens, merge tool_names
+                    if extracted["usage"]["output_tokens"] > (existing.get("usage", {}).get("output_tokens", 0)):
+                        existing["usage"] = extracted["usage"]
+                    if extracted.get("tool_names"):
+                        prev = existing.get("tool_names") or []
+                        existing["tool_names"] = prev + extracted["tool_names"]
+                    if extracted.get("tool_use_ids"):
+                        prev = existing.get("tool_use_ids") or []
+                        existing["tool_use_ids"] = prev + extracted["tool_use_ids"]
+                    existing["timestamp"] = extracted["timestamp"]
+                    existing["file_position"] = extracted["file_position"]
                     if extracted.get("model"):
-                        pending_assistant["model"] = extracted["model"]
+                        existing["model"] = extracted["model"]
                 else:
-                    pending_assistant = extracted
-                pending_assistant_sig = sig
+                    if pending_assistant_id and pending_assistant_id != message_id:
+                        flush_pending_assistant()
+                    seen_assistant_ids[message_id] = extracted
+                    pending_assistant_id = message_id
+            elif usage:
+                flush_pending_assistant()
+                extracted["usage"] = {
+                    "input_tokens": usage.get("input_tokens", 0),
+                    "output_tokens": usage.get("output_tokens", 0),
+                    "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+                    "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+                }
+                messages.append(extracted)
             else:
                 flush_pending_assistant()
                 messages.append(extracted)
@@ -347,23 +361,11 @@ def parse_session_file(filepath: Path) -> dict | None:
     total_cache_creation_tokens = 0
     total_cache_read_tokens = 0
 
-    # Deduplication: Claude Code emits multiple assistant messages per API turn
-    # (streaming chunks). Each carries the same input/cache tokens but incrementing
-    # output tokens. We keep only the last message per turn to avoid over-counting.
-    pending_turn_usage: dict | None = None
-    pending_turn_sig = ""
-
-    def flush_pending_turn():
-        nonlocal total_input_tokens, total_output_tokens
-        nonlocal total_cache_creation_tokens, total_cache_read_tokens
-        nonlocal pending_turn_usage, pending_turn_sig
-        if pending_turn_usage:
-            total_input_tokens += pending_turn_usage["input"]
-            total_output_tokens += pending_turn_usage["output"]
-            total_cache_creation_tokens += pending_turn_usage["cache_create"]
-            total_cache_read_tokens += pending_turn_usage["cache_read"]
-            pending_turn_usage = None
-            pending_turn_sig = ""
+    # Deduplication: Claude Code emits multiple assistant messages per API call
+    # (streaming snapshots). Per Anthropic docs, deduplicate by message.id and
+    # keep the highest output_tokens.
+    seen_message_ids: dict[str, dict] = {}
+    _no_id_counter = 0
 
     for msg in lines:
         msg_type = msg.get("type", "")
@@ -387,7 +389,6 @@ def parse_session_file(filepath: Path) -> dict | None:
             timestamps.append(timestamp)
 
         if msg_type == "user":
-            flush_pending_turn()
             content = msg.get("message", {}).get("content", "")
             text = extract_user_text(content)
             if is_slash_command(text):
@@ -408,20 +409,30 @@ def parse_session_file(filepath: Path) -> dict | None:
             if msg_model and not model:
                 model = msg_model
             usage = msg.get("message", {}).get("usage", {})
-            if usage:
-                sig = f"{usage.get('input_tokens', 0)}:{usage.get('cache_creation_input_tokens', 0)}:{usage.get('cache_read_input_tokens', 0)}"
-                if sig != pending_turn_sig:
-                    flush_pending_turn()
+            message_id = msg.get("message", {}).get("id")
+            if usage and message_id:
+                existing = seen_message_ids.get(message_id)
+                if existing:
+                    if (usage.get("output_tokens", 0)) > existing["output"]:
+                        existing["output"] = usage.get("output_tokens", 0)
+                else:
                     assistant_msg_count += 1
-                pending_turn_usage = {
+                    seen_message_ids[message_id] = {
+                        "input": usage.get("input_tokens", 0),
+                        "output": usage.get("output_tokens", 0),
+                        "cache_create": usage.get("cache_creation_input_tokens", 0),
+                        "cache_read": usage.get("cache_read_input_tokens", 0),
+                    }
+            elif usage:
+                _no_id_counter += 1
+                assistant_msg_count += 1
+                seen_message_ids[f"_no_id_{_no_id_counter}"] = {
                     "input": usage.get("input_tokens", 0),
                     "output": usage.get("output_tokens", 0),
                     "cache_create": usage.get("cache_creation_input_tokens", 0),
                     "cache_read": usage.get("cache_read_input_tokens", 0),
                 }
-                pending_turn_sig = sig
             else:
-                flush_pending_turn()
                 assistant_msg_count += 1
             content = msg.get("message", {}).get("content", [])
             if isinstance(content, list):
@@ -432,7 +443,6 @@ def parse_session_file(filepath: Path) -> dict | None:
                             tools_used.add(block["name"])
 
         elif msg_type == "tool_use":
-            flush_pending_turn()
             tool_use_count += 1
             name = msg.get("name") or msg.get("message", {}).get("name")
             if not name:
@@ -446,10 +456,14 @@ def parse_session_file(filepath: Path) -> dict | None:
                 tools_used.add(name)
 
         elif msg_type == "thinking":
-            flush_pending_turn()
             thinking_count += 1
 
-    flush_pending_turn()
+    # Sum deduplicated usage
+    for u in seen_message_ids.values():
+        total_input_tokens += u["input"]
+        total_output_tokens += u["output"]
+        total_cache_creation_tokens += u["cache_create"]
+        total_cache_read_tokens += u["cache_read"]
 
     if is_sidechain:
         return None
@@ -615,23 +629,8 @@ def scan_subagent_tokens(project_dir: Path) -> dict[str, dict]:
                 continue
 
             session_id = None
-            total_input = 0
-            total_output = 0
-            total_cache_create = 0
-            total_cache_read = 0
-            pending_usage: dict | None = None
-            pending_sig = ""
-
-            def flush():
-                nonlocal total_input, total_output, total_cache_create, total_cache_read
-                nonlocal pending_usage, pending_sig
-                if pending_usage:
-                    total_input += pending_usage["input"]
-                    total_output += pending_usage["output"]
-                    total_cache_create += pending_usage["cache_create"]
-                    total_cache_read += pending_usage["cache_read"]
-                    pending_usage = None
-                    pending_sig = ""
+            msg_id_usage: dict[str, dict] = {}
+            no_id_counter = 0
 
             try:
                 with open(sf, "r", errors="replace") as fh:
@@ -649,24 +648,30 @@ def scan_subagent_tokens(project_dir: Path) -> dict[str, dict]:
 
                         if msg.get("type") == "assistant":
                             usage = msg.get("message", {}).get("usage", {})
+                            message_id = msg.get("message", {}).get("id")
                             if usage:
-                                sig = f"{usage.get('input_tokens', 0)}:{usage.get('cache_creation_input_tokens', 0)}:{usage.get('cache_read_input_tokens', 0)}"
-                                if sig != pending_sig:
-                                    flush()
-                                pending_usage = {
-                                    "input": usage.get("input_tokens", 0),
-                                    "output": usage.get("output_tokens", 0),
-                                    "cache_create": usage.get("cache_creation_input_tokens", 0),
-                                    "cache_read": usage.get("cache_read_input_tokens", 0),
-                                }
-                                pending_sig = sig
-                            else:
-                                flush()
-                        else:
-                            flush()
-                flush()
+                                key = message_id or f"_no_id_{no_id_counter}"
+                                if not message_id:
+                                    no_id_counter += 1
+                                existing = msg_id_usage.get(key)
+                                if existing:
+                                    if (usage.get("output_tokens", 0)) > existing["output"]:
+                                        existing["output"] = usage.get("output_tokens", 0)
+                                else:
+                                    msg_id_usage[key] = {
+                                        "input": usage.get("input_tokens", 0),
+                                        "output": usage.get("output_tokens", 0),
+                                        "cache_create": usage.get("cache_creation_input_tokens", 0),
+                                        "cache_read": usage.get("cache_read_input_tokens", 0),
+                                    }
+
             except OSError:
                 continue
+
+            total_input = sum(u["input"] for u in msg_id_usage.values())
+            total_output = sum(u["output"] for u in msg_id_usage.values())
+            total_cache_create = sum(u["cache_create"] for u in msg_id_usage.values())
+            total_cache_read = sum(u["cache_read"] for u in msg_id_usage.values())
 
             if not session_id:
                 session_id = entry.name
