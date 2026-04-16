@@ -107,7 +107,7 @@ The inactivity threshold is configurable:
 
 **Source:** `vscode-extension/src/conversation.ts`, `webapp/conversations.py`
 
-## ParsedConversation Fields (v1.1)
+## ParsedConversation Fields (v1.2)
 
 Each assembled conversation includes these computed fields:
 
@@ -119,6 +119,11 @@ Each assembled conversation includes these computed fields:
 | `commands_used` | string[] | Custom commands/skills invoked (e.g., `["/rebuild", "/review-labels"]`). System commands excluded. |
 | `prompt_timestamps` | string[] | ISO timestamps of user prompts (used for inter-prompt gap analysis) |
 | `content_hash` | string | Stable fingerprint for score cache lookup, independent of conversation index position |
+| `error_count` | number | Tool errors detected (`is_error: true` on `tool_result` blocks) |
+| `recovery_count` | number | Errors followed by successful tool execution within 20 messages |
+| `avg_failure_to_resolution_turns` | number \| null | Average messages between error and resolution (`null` if no recoveries) |
+| `recovery_strategy_diversity` | number | Unique recovery strategies / recovery count (0–1) |
+| `error_tools` | string[] | Tool names that produced errors (e.g., `["Bash", "Read"]`) |
 
 ## JSONL Session Format
 
@@ -139,15 +144,67 @@ Assistant messages include a `usage` block with per-message token counts:
 
 ```json
 {
-  "usage": {
-    "input_tokens": 3,
-    "output_tokens": 2,
-    "cache_creation_input_tokens": 14450,
-    "cache_read_input_tokens": 19155
+  "type": "assistant",
+  "message": {
+    "id": "msg_01SXAh7gdpJh841mLrTdzcRD",
+    "usage": {
+      "input_tokens": 3,
+      "output_tokens": 355,
+      "cache_creation_input_tokens": 14450,
+      "cache_read_input_tokens": 19155
+    }
   }
 }
 ```
 
-These are aggregated per conversation to compute cost estimates, cache efficiency ratios, and output/input ratios. Cost calculations use model-specific pricing from `shared/pricing.json`, which maps model name prefixes to per-token rates for input, output, cache creation, and cache read.
+### Streaming deduplication (critical)
+
+Claude Code writes **multiple assistant messages per API call** as streaming snapshots. All snapshots for the same API call share the same `message.id`. Within a group:
+- `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens` are **identical** across all snapshots
+- `output_tokens` may **increase** with each snapshot (early snapshots have partial counts, the final has the complete count)
+
+**Example from real data (one API call = 4 JSONL entries):**
+
+```
+msg_01SXAh7... → in=3 out=  30 cc=31809 cr=11270  ← streaming snapshot
+msg_01SXAh7... → in=3 out=  30 cc=31809 cr=11270  ← streaming snapshot
+msg_01SXAh7... → in=3 out=  30 cc=31809 cr=11270  ← streaming snapshot
+msg_01SXAh7... → in=3 out=1068 cc=31809 cr=11270  ← final (highest output)
+```
+
+Naively summing all entries would count `cr=11270` four times. Per Anthropic's [Agent SDK cost tracking docs](https://code.claude.com/docs/en/agent-sdk/cost-tracking):
+
+> "Deduplicate by ID to avoid double-counting. Use the highest value — the final message in a group typically contains the accurate total."
+
+**Correct aggregation:** Group by `message.id`, keep the entry with the **highest `output_tokens`**, sum across unique IDs.
+
+### Observed patterns (verified April 2026)
+
+| Statistic | Value |
+|-----------|-------|
+| `message.id` present | 100% of assistant messages (3,164 IDs across 10 sessions) |
+| Average duplicates per ID | 1.5 |
+| IDs with varying `output_tokens` | 26% (early snapshots have partial counts like 2 or 61) |
+| Over-count without dedup | ~1.4x on cache_read tokens |
+
+### Subagent token usage
+
+Subagent sessions (files with `isSidechain: true` at `<session-uuid>/subagents/agent-<id>.jsonl`) contain their own assistant messages with independent token usage. These tokens represent **real API costs** billed to the user but are **not included in the parent session's token counts**.
+
+To get accurate total usage:
+1. Parse and deduplicate main session tokens (by `message.id`)
+2. Parse and deduplicate subagent session tokens (same approach)
+3. Sum both — attribute subagent tokens to the parent session via `sessionId` field
+
+### ccusage comparison
+
+The `ccusage` npm package is a popular third-party tool for Claude Code usage tracking. As of April 2026, it has known issues:
+- **First-wins dedup** (Issue ryoppippi/ccusage#938) — keeps the first streaming snapshot per `message.id:requestId` hash, which has partial `output_tokens`. Under-reports output by ~2.7x.
+- **No subagent filtering** (Issue ryoppippi/ccusage#913) — includes subagent files via `**/*.jsonl` glob but doesn't filter `isSidechain`. Some sidechains (e.g., `/btw`) re-log conversation history, causing 2-2.25x overcounting.
+- **These partially cancel out** — which is why users don't always notice discrepancies.
+
+CodeFluent uses message-ID-based dedup with highest-output-wins (per Anthropic recommendation) and scans subagent files separately for token-only attribution.
+
+Cost calculations use model-specific pricing from `shared/pricing.json`, which maps model name prefixes to per-token rates for input, output, cache creation, and cache read.
 
 The conversation analytics UI (Usage tab) uses this data to render efficiency summary cards, cost-efficiency scatter charts, and a sortable conversation details table. See `docs/TECHNICAL_SPEC.md` §7 for full details.

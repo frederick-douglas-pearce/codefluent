@@ -8,7 +8,7 @@ CodeFluent uses two independent data sources, both reading from the same JSONL s
 
 | Concern | Source | How it works |
 |---------|--------|--------------|
-| All-projects token/cost data | [`ccusage`](https://github.com/ryoppippi/ccusage) (npm) | Aggregates daily, monthly, and per-session totals. Webapp stores results in `data/ccusage/`. Extension calls via IPC. |
+| All-projects token/cost data | [`ccusage`](https://github.com/ryoppippi/ccusage) (npm) | Aggregates daily, monthly, and per-session totals. Webapp stores results in `data/ccusage/`. Extension calls via IPC. **Planned for removal** (#251) — has known dedup bugs; being replaced by JSONL-derived data. |
 | Per-conversation prompts + token analytics | JSONL parser + conversation assembly | Parses `~/.claude/projects/*.jsonl`, assembles conversations via gap-based splitting. Extension: `parser.ts` + `conversation.ts` + `analytics.ts`. Webapp: `extract_prompts.py` + `conversations.py`. |
 | Agent behavior metrics | Computed from parsed conversations | Tool diversity, plan mode adoption, cache hit rate, thinking utilization. Extension: `agentMetrics.ts`. Webapp: `agent_metrics.py`. |
 | Task classification | Heuristic (branch prefix + keyword regex) | Classifies conversations into 8 categories. Extension: `taskClassification.ts`. Webapp: `task_classification.py`. |
@@ -19,7 +19,9 @@ Both interfaces parse JSONL directly on demand — there is no pre-generated int
 
 ---
 
-## 2. ccusage Integration
+## 2. ccusage Integration (Deprecated — Planned Removal)
+
+> **Status:** Planned for removal in v1.2 (#251). ccusage has known token counting bugs (see below) and doesn't support project-level scoping. Being replaced by JSONL-derived data using the same parser as Conversation Analytics.
 
 The webapp fetches three ccusage data types on demand via `/api/usage/refresh`:
 
@@ -46,6 +48,17 @@ Each data type returns arrays with the same structure (grouped by day, month, or
 | `modelsUsed` | string[] | Model IDs used in period |
 | `modelBreakdowns` | object[] | Per-model token/cost split |
 
+### Known ccusage issues (as of April 2026)
+
+| Issue | Impact | Source |
+|-------|--------|--------|
+| First-wins dedup | Under-reports `output_tokens` by ~2.7x — keeps first streaming snapshot (partial count) instead of last (final count) | ryoppippi/ccusage#938 |
+| No subagent filtering | Over-counts by ~2x when `/btw` sidechains re-log conversation history | ryoppippi/ccusage#913, #806 |
+| No project scoping | Reports across all projects — can't filter to current workspace | #251 |
+| No `isSidechain` handling | Schema ignores the `isSidechain` flag entirely | Source code review |
+
+These bugs partially cancel out, but the net result is unreliable totals.
+
 **Source:** `webapp/main.py` (usage endpoints), `vscode-extension/src/usage.ts`
 
 ---
@@ -62,7 +75,8 @@ Both interfaces parse Claude Code session files from `~/.claude/projects/`. See 
 - **Custom command tracking** — Custom commands/skills (e.g., `/rebuild`, `/review-labels`) are tracked in `commands_used` on each conversation, separate from system commands (`/clear`, `/compact`, etc.)
 - **Interrupted prompts** — Messages containing only `[Request interrupted by user for tool use]` are skipped
 - **Prompt truncation** — User prompts are capped at 2000 characters for scoring
-- **Token aggregation** — Assistant message `usage` blocks are summed per session for cost estimation
+- **Token deduplication** — Assistant messages are deduplicated by `message.id` (streaming snapshots share the same ID). Highest `output_tokens` per ID is kept. See [`SESSION_DATA.md`](SESSION_DATA.md#streaming-deduplication-critical) for details.
+- **Subagent token inclusion** — Subagent sessions (`isSidechain: true`) are excluded from behavioral metrics but their token usage is scanned separately and attributed to the parent conversation via `sessionId` linkage
 - **UUID subdirectories** — Parser handles both flat `.jsonl` files and UUID-based subdirectory structures
 - **Anti-pattern detection** — Structured output anti-pattern (e.g., "output as JSON") is detected via 9 regex patterns and flagged on each conversation
 
@@ -158,7 +172,7 @@ The Usage tab includes a **Conversation Analytics** section that aggregates per-
 
 ### Data flow
 
-Token data comes from `type: "assistant"` messages in JSONL session files (see [`SESSION_DATA.md`](SESSION_DATA.md#token-usage-data-for-conversation-analytics)). These are summed per conversation. Cost estimates use model-specific pricing from `shared/pricing.json`.
+Token data comes from `type: "assistant"` messages in JSONL session files (see [`SESSION_DATA.md`](SESSION_DATA.md#token-usage-data-for-conversation-analytics)). Messages are **deduplicated by `message.id`** (streaming snapshots share the same ID; highest `output_tokens` wins) then summed per conversation. Subagent tokens from `<session-uuid>/subagents/` are scanned separately and added to parent conversations. Cost estimates use model-specific pricing from `shared/pricing.json`.
 
 | Component | Extension | Webapp |
 |-----------|-----------|--------|
@@ -214,6 +228,39 @@ Computed metrics derived from conversation metadata — zero API cost, pure aggr
 Metrics are computed per ISO week for sparkline trend visualization. Weekly data points enable the frontend to render 4 Chart.js sparkline charts showing metric trends over time.
 
 **Source:** `vscode-extension/src/agentMetrics.ts`, `webapp/agent_metrics.py`
+
+---
+
+## 8b. Error Recovery Detection
+
+Heuristic detection of error-recovery patterns within conversations. Analyzes tool_use/tool_result message sequences to identify when errors occur and how effectively they are resolved.
+
+### How it works
+
+1. **Error detection** — `tool_result` blocks (embedded in `user`-type messages) with `is_error: true` are identified. The `tool_use_id` field links each error back to the originating tool via the assistant message's `tool_use` block IDs.
+2. **Resolution scanning** — For each error, scan forward up to 20 messages for the next successful `tool_result` (one without `is_error`).
+3. **Strategy categorization** — Each recovery is classified:
+   - `retry_same_tool` — the successful result uses the same tool name as the error
+   - `switch_tool` — a different tool succeeds
+   - `user_intervention` — a user message with content appears between the error and resolution
+
+### Metrics
+
+| Metric | Scope | Description |
+|--------|-------|-------------|
+| `error_count` | Per-conversation | Total tool errors detected |
+| `recovery_count` | Per-conversation | Errors followed by successful resolution within window |
+| `avg_failure_to_resolution_turns` | Per-conversation | Mean messages between error and resolution |
+| `recovery_strategy_diversity` | Per-conversation | Unique strategies / recovery count (0–1) |
+| `error_tools` | Per-conversation | Tool names that produced errors |
+| `recovery_rate` | Aggregate | Total recoveries / total errors across conversations |
+| `insufficient_data` | Aggregate | Boolean hint when fewer than 5 conversations have errors |
+
+### Aggregate and weekly
+
+Aggregate metrics (`computeErrorRecoveryMetrics`) sum across conversations. Weekly breakdown (`computeWeeklyErrorRecovery`) groups by ISO week. The `insufficient_data` flag is a frontend hint — metrics are always computed and returned regardless.
+
+**Source:** `vscode-extension/src/errorRecovery.ts`, `webapp/error_recovery.py`
 
 ---
 
