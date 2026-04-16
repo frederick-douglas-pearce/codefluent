@@ -28,6 +28,10 @@
           {
             "type": "command",
             "command": "find . -path ./node_modules -prune -o -path ./.git -prune -o \\( -name '*.test.*' -o -name '*_test.*' -o -name 'test_*' -o -name 'conftest.py' \\) -type f -print | grep -q . || (echo 'Warning: No test files detected. All new features should have tests.' >&2 && exit 2)"
+          },
+          {
+            "type": "command",
+            "command": "if git diff --name-only HEAD 2>/dev/null | grep -qE '\\.(ts|js|py|tsx|jsx)$'; then echo 'Reminder: Run /simplify to review changed code for reuse, quality, and efficiency before committing.'; fi"
           }
         ]
       }
