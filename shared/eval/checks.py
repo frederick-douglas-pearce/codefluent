@@ -154,12 +154,15 @@ def check_agreement(results, threshold=0.85):
             stats["matches"] / stats["total"] if stats["total"] > 0 else 0.0, 4
         )
 
+    passed = overall >= threshold and len(below_threshold) == 0
+
     return {
         "overall_agreement": round(overall, 4),
         "per_behavior": per_behavior_rates,
         "below_threshold": below_threshold,
         "by_section": section_rates,
         "threshold": threshold,
+        "passed": passed,
     }
 
 

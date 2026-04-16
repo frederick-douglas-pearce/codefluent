@@ -209,6 +209,16 @@ def main(argv=None):
         filepath = save_results(results, check_results, metadata, args.output)
         print(f"\nResults saved to: {filepath}")
 
+    # Exit non-zero if any check failed
+    any_failed = False
+    for name, result in check_results.items():
+        if name == "schema" and result.get("failed", 0) > 0:
+            any_failed = True
+        elif name == "agreement" and not result.get("passed", True):
+            any_failed = True
+    if any_failed:
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
