@@ -102,7 +102,8 @@ def print_summary(check_name, check_result):
     elif check_name == "agreement":
         overall = check_result["overall_agreement"]
         threshold = check_result["threshold"]
-        icon = "PASS" if overall >= threshold else "FAIL"
+        passed = check_result.get("passed", overall >= threshold)
+        icon = "PASS" if passed else "FAIL"
         print(f"  [{icon}] Overall agreement: {overall:.1%} (threshold: {threshold:.0%})")
 
         if check_result["by_section"]:
@@ -111,7 +112,7 @@ def print_summary(check_name, check_result):
                 print(f"    {section}: {rate:.1%}")
 
         if check_result["below_threshold"]:
-            print(f"  Behaviors below {threshold:.0%}:")
+            print(f"  [FAIL] Behaviors below {threshold:.0%}:")
             for item in check_result["below_threshold"]:
                 print(f"    - {item['behavior']}: {item['agreement']:.1%}")
 
