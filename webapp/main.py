@@ -312,7 +312,8 @@ def _get_version() -> str:
     if pyproject.exists():
         for line in pyproject.read_text().splitlines():
             if line.strip().startswith("version"):
-                return line.split("=")[1].strip().strip('"')
+                value = line.split("=")[1].split("#")[0].strip().strip('"')
+                return value
     return "unknown"
 
 

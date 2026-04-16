@@ -1,6 +1,6 @@
 [project]
 name = "codefluent"
-version = "1.1.0"
+version = "1.1.0" # x-release-please-version
 description = "Personal AI fluency analytics for Claude Code users"
 readme = "README.md"
 requires-python = ">=3.12"
