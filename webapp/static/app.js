@@ -1900,55 +1900,92 @@ function renderAgentMetrics(metrics) {
   const section = document.getElementById('agent-metrics-section')
   if (!metrics || !container || !section) return
 
+  const items = [
+    { title: 'Tool Diversity', value: metrics.tool_diversity_index, detail: 'unique tools / total uses', key: 'tool_diversity_index', color: '#D97706', format: 'percent' },
+    { title: 'Plan Mode Adoption', value: metrics.plan_mode_adoption_rate, detail: 'conversations using plan mode', key: 'plan_mode_adoption_rate', color: '#2563EB', format: 'percent' },
+    { title: 'Cache Efficiency', value: metrics.avg_cache_hit_rate, detail: 'average cache hit rate', key: 'avg_cache_hit_rate', color: '#059669', format: 'percent' },
+    { title: 'Thinking Utilization', value: metrics.thinking_utilization_rate, detail: 'responses using extended thinking', key: 'thinking_utilization_rate', color: '#7C3AED', format: 'percent' }
+  ]
+
+  // Add error recovery cards if data is available
+  const er = metrics.error_recovery
+  if (er && er.total_error_count > 0) {
+    const caveat = er.insufficient_data ? ' *' : ''
+    items.push({
+      title: 'Recovery Rate',
+      value: er.recovery_rate,
+      detail: er.total_recovery_count + '/' + er.total_error_count + ' errors recovered' + caveat,
+      key: 'recovery_rate',
+      color: '#059669',
+      format: 'percent',
+      weeklyData: metrics.error_recovery_weekly
+    })
+    items.push({
+      title: 'Avg Recovery Turns',
+      value: er.avg_failure_to_resolution_turns,
+      detail: 'turns from error to resolution' + caveat,
+      key: null,
+      color: '#D97706',
+      format: 'number'
+    })
+  }
+
   // Destroy previous sparkline charts
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < items.length; i++) {
     destroyChart('agentSparkline' + i)
   }
 
-  const items = [
-    { title: 'Tool Diversity', value: metrics.tool_diversity_index, detail: 'unique tools / total uses', key: 'tool_diversity_index', color: '#D97706' },
-    { title: 'Plan Mode Adoption', value: metrics.plan_mode_adoption_rate, detail: 'conversations using plan mode', key: 'plan_mode_adoption_rate', color: '#2563EB' },
-    { title: 'Cache Efficiency', value: metrics.avg_cache_hit_rate, detail: 'average cache hit rate', key: 'avg_cache_hit_rate', color: '#059669' },
-    { title: 'Thinking Utilization', value: metrics.thinking_utilization_rate, detail: 'responses using extended thinking', key: 'thinking_utilization_rate', color: '#7C3AED' }
-  ]
-
   container.innerHTML = items.map(function(item, i) {
+    var displayValue
+    if (item.format === 'number') {
+      displayValue = item.value != null ? item.value.toFixed(1) : '\u2014'
+    } else {
+      displayValue = Math.round(item.value * 100) + '%'
+    }
     return '<div class="pace-card">' +
       '<div class="pace-card-title">' + escapeHtml(item.title) + '</div>' +
-      '<div class="pace-card-value">' + escapeHtml(String(Math.round(item.value * 100))) + '%</div>' +
+      '<div class="pace-card-value">' + escapeHtml(displayValue) + '</div>' +
       '<div class="pace-card-detail">' + escapeHtml(item.detail) + '</div>' +
       '<div style="height:40px; margin-top:8px"><canvas id="agent-sparkline-' + i + '" style="width:100%; height:40px"></canvas></div>' +
       '</div>'
   }).join('')
 
-  if (metrics.weekly && metrics.weekly.length > 1) {
-    items.forEach(function(item, i) {
-      var canvas = document.getElementById('agent-sparkline-' + i)
-      if (!canvas) return
-      var weeks = metrics.weekly.map(function(w) { return w.week })
-      var values = metrics.weekly.map(function(w) { return w[item.key] })
-      charts['agentSparkline' + i] = new Chart(canvas.getContext('2d'), {
-        type: 'line',
-        data: {
-          labels: weeks,
-          datasets: [{
-            data: values,
-            borderColor: item.color,
-            borderWidth: 1.5,
-            pointRadius: 0,
-            tension: 0.3,
-            fill: false
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { enabled: false } },
-          scales: { x: { display: false }, y: { display: false } }
-        }
-      })
-    })
+  // Add insufficient data footnote if needed
+  if (er && er.insufficient_data && er.total_error_count > 0) {
+    container.insertAdjacentHTML('beforeend',
+      '<div class="agent-metrics-footnote" style="width:100%; font-size:11px; opacity:0.7; margin-top:4px">* Low sample size (' + er.conversations_with_errors + ' conversations with errors)</div>')
   }
+
+  // Sparklines — each item resolves its own weekly data source
+  items.forEach(function(item, i) {
+    if (!item.key) return
+    var source = item.weeklyData || metrics.weekly
+    if (!source || source.length <= 1) return
+    var canvas = document.getElementById('agent-sparkline-' + i)
+    if (!canvas) return
+    var weeks = source.map(function(w) { return w.week })
+    var values = source.map(function(w) { return w[item.key] })
+    charts['agentSparkline' + i] = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: weeks,
+        datasets: [{
+          data: values,
+          borderColor: item.color,
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.3,
+          fill: false
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false } }
+      }
+    })
+  })
 
   section.style.display = ''
 }
@@ -2311,6 +2348,7 @@ function renderConversationsListTable(conversations) {
       case 'tools': return dir * ((a.tool_use_count || 0) - (b.tool_use_count || 0))
       case 'score': return dir * ((a.overall_score ?? -1) - (b.overall_score ?? -1))
       case 'task_type': return dir * ((a.heuristic_task_type || 'zzz').localeCompare(b.heuristic_task_type || 'zzz'))
+      case 'errors': return dir * ((a.error_count || 0) - (b.error_count || 0))
       default: return 0
     }
   })
@@ -2327,6 +2365,7 @@ function renderConversationsListTable(conversations) {
     const taskTypeLabel = c.heuristic_task_type
       ? (TASK_TYPE_LABELS[c.heuristic_task_type] || c.heuristic_task_type)
       : '\u2014'
+    const errors = c.error_count || 0
 
     return `<tr data-conv-id="${escapeHtml(c.id || c.session_id || '')}">
       <td>${escapeHtml(date)}</td>
@@ -2339,6 +2378,7 @@ function renderConversationsListTable(conversations) {
       <td>${escapeHtml(String(tools))}</td>
       <td>${escapeHtml(String(score))}</td>
       <td>${escapeHtml(taskTypeLabel)}</td>
+      <td>${errors > 0 ? escapeHtml(String(errors)) : '\u2014'}</td>
     </tr>`
   }).join('')
 
@@ -2422,6 +2462,18 @@ function renderConversationDetailContent(conv) {
           `<span class="tool-tag">${escapeHtml(c)}</span>`
         ).join('')}</div>
       </div>` : ''}
+      ${(conv.error_count || 0) > 0 ? `<div class="detail-section">
+        <h4>Error Recovery</h4>
+        <div class="detail-meta">
+          <span><strong>Errors:</strong> ${escapeHtml(String(conv.error_count))}</span>
+          <span><strong>Recovered:</strong> ${escapeHtml(String(conv.recovery_count || 0))}/${escapeHtml(String(conv.error_count))}</span>
+          <span><strong>Avg Turns to Resolve:</strong> ${conv.avg_failure_to_resolution_turns != null ? conv.avg_failure_to_resolution_turns.toFixed(1) : '\u2014'}</span>
+          <span><strong>Strategy Diversity:</strong> ${conv.recovery_strategy_diversity != null ? (conv.recovery_strategy_diversity * 100).toFixed(0) + '%' : '\u2014'}</span>
+        </div>
+        ${(conv.error_tools || []).length > 0 ? `<div class="detail-tools" style="margin-top:6px">${(conv.error_tools || []).map(t =>
+          `<span class="tool-tag" style="border-color:#DC2626; color:#DC2626">${escapeHtml(t)}</span>`
+        ).join('')}</div>` : ''}
+      </div>` : ''}
       <div class="detail-section">
         <h4>User Prompts (${(conv.user_prompts || []).length})</h4>
         <div class="detail-prompts">${promptsHtml}</div>
@@ -2449,18 +2501,18 @@ async function toggleConversationDetail(row) {
 
   const detailRow = document.createElement('tr')
   detailRow.className = 'conversation-detail-row'
-  detailRow.innerHTML = `<td colspan="10" class="conv-detail-content"><em>Loading...</em></td>`
+  detailRow.innerHTML = `<td colspan="11" class="conv-detail-content"><em>Loading...</em></td>`
   row.after(detailRow)
 
   try {
     const conv = await fetchConversationDetail(convId)
     if (!conv) {
-      detailRow.innerHTML = `<td colspan="10" class="conv-detail-content"><em>Conversation not found</em></td>`
+      detailRow.innerHTML = `<td colspan="11" class="conv-detail-content"><em>Conversation not found</em></td>`
       return
     }
-    detailRow.innerHTML = `<td colspan="10" class="conv-detail-content">${renderConversationDetailContent(conv)}</td>`
+    detailRow.innerHTML = `<td colspan="11" class="conv-detail-content">${renderConversationDetailContent(conv)}</td>`
   } catch (e) {
-    detailRow.innerHTML = `<td colspan="10" class="conv-detail-content"><em>Failed to load details</em></td>`
+    detailRow.innerHTML = `<td colspan="11" class="conv-detail-content"><em>Failed to load details</em></td>`
   }
 }
 

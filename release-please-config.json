@@ -25,6 +25,10 @@
         {
           "type": "generic",
           "path": ".claude/commands/rebuild.md"
+        },
+        {
+          "type": "generic",
+          "path": "webapp/pyproject.toml"
         }
       ]
     }
