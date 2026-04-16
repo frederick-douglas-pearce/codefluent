@@ -216,6 +216,12 @@ def main(argv=None):
             any_failed = True
         elif name == "agreement" and not result.get("passed", True):
             any_failed = True
+        elif name == "consistency" and result.get("self_agreement", 1.0) < 0.85:
+            any_failed = True
+        elif name == "drift" and result.get("drifted"):
+            any_failed = True
+        elif name == "regression" and result.get("entries_changed", 0) > 0:
+            any_failed = True
     if any_failed:
         sys.exit(1)
 

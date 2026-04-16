@@ -107,6 +107,7 @@ def print_summary(check_name, check_result):
         print(f"  [{icon}] Overall agreement: {overall:.1%} (threshold: {threshold:.0%})")
 
         if check_result["by_section"]:
+            print("  By section:")
             for section, rate in check_result["by_section"].items():
                 print(f"    {section}: {rate:.1%}")
 
