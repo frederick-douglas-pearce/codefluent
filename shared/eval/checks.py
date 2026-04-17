@@ -1,6 +1,7 @@
-"""Five regression check implementations for the eval runner."""
+"""Six regression check implementations for the eval runner."""
 
 import time
+from collections import Counter
 
 from shared.eval.scorer import (
     BEHAVIORS, _sanitize_error, build_filled_prompt, call_with_retry, load_prompt,
@@ -177,15 +178,13 @@ def _cohen_kappa(expected, actual, categories):
     n = len(expected)
     if n == 0:
         return 0.0
-    agreements = sum(1 for e, a in zip(expected, actual) if e == a)
-    po = agreements / n
-
-    pe = 0.0
-    for c in categories:
-        p_expected = sum(1 for e in expected if e == c) / n
-        p_actual = sum(1 for a in actual if a == c) / n
-        pe += p_expected * p_actual
-
+    expected_counts = Counter(expected)
+    actual_counts = Counter(actual)
+    po = sum(1 for e, a in zip(expected, actual) if e == a) / n
+    pe = sum(
+        (expected_counts[c] / n) * (actual_counts[c] / n)
+        for c in categories
+    )
     if pe >= 1.0:
         return 1.0 if po == 1.0 else 0.0
     return (po - pe) / (1 - pe)
@@ -201,10 +200,6 @@ def check_task_type_agreement(results, kappa_threshold=0.7, min_precision=0.5):
     has precision >= min_precision. The precision guard catches the Kappa
     prevalence trap, where high scores on common categories mask poor
     performance on rare ones.
-
-    Returns:
-        dict with kappa, per_category (precision/recall/support),
-        confusion_matrix, passed, thresholds, min_precision_category.
     """
     pairs = []
     for r in results:
@@ -221,7 +216,8 @@ def check_task_type_agreement(results, kappa_threshold=0.7, min_precision=0.5):
             "n": 0, "kappa": None, "per_category": {}, "confusion_matrix": {},
             "passed": True, "kappa_threshold": kappa_threshold,
             "min_precision_threshold": min_precision,
-            "min_precision_category": None, "skipped": True,
+            "min_precision_category": None, "min_precision_value": None,
+            "skipped": True,
         }
 
     expected_list = [e for e, _ in pairs]
@@ -234,17 +230,15 @@ def check_task_type_agreement(results, kappa_threshold=0.7, min_precision=0.5):
         if e in confusion and a in confusion[e]:
             confusion[e][a] += 1
 
-    # Per-category precision/recall/support
     per_category = {}
     min_precision_value = 1.0
     min_precision_cat = None
     for c in TASK_TYPES:
-        support = sum(1 for e in expected_list if e == c)
-        tp = sum(1 for e, a in pairs if e == c and a == c)
-        fp = sum(1 for e, a in pairs if e != c and a == c)
-        fn = sum(1 for e, a in pairs if e == c and a != c)
-        precision = tp / (tp + fp) if (tp + fp) > 0 else None
-        recall = tp / (tp + fn) if (tp + fn) > 0 else None
+        tp = confusion[c][c]
+        support = sum(confusion[c].values())
+        predicted = sum(confusion[e][c] for e in TASK_TYPES)
+        precision = tp / predicted if predicted > 0 else None
+        recall = tp / support if support > 0 else None
         per_category[c] = {
             "precision": round(precision, 4) if precision is not None else None,
             "recall": round(recall, 4) if recall is not None else None,
@@ -255,9 +249,8 @@ def check_task_type_agreement(results, kappa_threshold=0.7, min_precision=0.5):
             min_precision_cat = c
 
     precision_pass = all(
-        (per_category[c]["precision"] is None) or
-        (per_category[c]["precision"] >= min_precision)
-        for c in TASK_TYPES if per_category[c]["support"] > 0
+        (stats["precision"] is None) or (stats["precision"] >= min_precision)
+        for stats in per_category.values() if stats["support"] > 0
     )
     passed = kappa >= kappa_threshold and precision_pass
 

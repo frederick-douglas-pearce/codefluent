@@ -401,22 +401,22 @@ class TestCohenKappa:
         assert _cohen_kappa([], [], self.CATS) == 0.0
 
     def test_chance_level_agreement(self):
-        # Random-like: when po ≈ pe, kappa ≈ 0
+        # po = pe = 0.5 for these inputs, so kappa == exactly 0
         expected = ["feature", "bug_fix", "feature", "bug_fix"]
-        actual = ["feature", "feature", "bug_fix", "bug_fix"]  # 50% agreement, 50% chance
-        k = _cohen_kappa(expected, actual, self.CATS)
-        assert abs(k) < 0.01
+        actual = ["feature", "feature", "bug_fix", "bug_fix"]
+        assert _cohen_kappa(expected, actual, self.CATS) == pytest.approx(0.0, abs=1e-9)
 
     def test_single_class_all_agree(self):
         # Degenerate: both rater distributions collapse to one class; pe == 1, po == 1
         assert _cohen_kappa(["feature"] * 3, ["feature"] * 3, self.CATS) == 1.0
 
     def test_substantial_agreement(self):
-        # 9/10 match, with minority class present so pe < 1
+        # 9/10 match with minority class. po=0.9, pe=0.7*0.7 + 0.3*0.2 = 0.55,
+        # kappa = (0.9 - 0.55) / (1 - 0.55) = 0.35 / 0.45 ≈ 0.7778
         expected = ["feature"] * 7 + ["bug_fix"] * 3
         actual = ["feature"] * 7 + ["bug_fix"] * 2 + ["refactor"]
         k = _cohen_kappa(expected, actual, self.CATS)
-        assert k > 0.7  # substantial
+        assert k == pytest.approx(0.35 / 0.45, abs=1e-9)
 
 
 class TestCheckTaskTypeAgreement:
@@ -764,23 +764,27 @@ class TestPrintSummary:
         assert "0.85" in out
 
     def test_task_type_agreement_fail_low_precision(self, capsys):
+        cats = ["feature", "bug_fix", "refactor", "debug",
+                "test", "docs", "chore", "exploration"]
+        per_category = {c: {"precision": None, "recall": None, "support": 0} for c in cats}
+        # docs has real support but only 30% precision — this is what should fail
+        per_category["docs"] = {"precision": 0.3, "recall": 0.5, "support": 5}
+        per_category["feature"] = {"precision": 1.0, "recall": 1.0, "support": 5}
+        confusion = {c: {c2: 0 for c2 in cats} for c in cats}
+        confusion["feature"]["feature"] = 5
+        confusion["docs"]["docs"] = 2
+        confusion["docs"]["feature"] = 3  # misclassifications that drive low precision
         print_summary("task_type_agreement", {
             "n": 10, "kappa": 0.72, "kappa_threshold": 0.7,
             "min_precision_threshold": 0.5,
             "min_precision_category": "docs", "min_precision_value": 0.3,
-            "per_category": {c: {"precision": None, "recall": None, "support": 0}
-                             for c in ["feature", "bug_fix", "refactor", "debug",
-                                       "test", "docs", "chore", "exploration"]},
-            "confusion_matrix": {c: {c2: 0 for c2 in [
-                "feature", "bug_fix", "refactor", "debug", "test", "docs", "chore", "exploration"
-            ]} for c in [
-                "feature", "bug_fix", "refactor", "debug", "test", "docs", "chore", "exploration"
-            ]},
+            "per_category": per_category, "confusion_matrix": confusion,
             "passed": False,
         })
-        # Give docs some actual support so it renders
         out = capsys.readouterr().out
         assert "FAIL" in out
+        assert "docs" in out
+        assert "30" in out  # the 30% low-precision value rendered
 
     def test_task_type_agreement_skipped(self, capsys):
         print_summary("task_type_agreement", {
