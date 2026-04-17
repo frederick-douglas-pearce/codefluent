@@ -166,6 +166,114 @@ def check_agreement(results, threshold=0.85):
     }
 
 
+def _cohen_kappa(expected, actual, categories):
+    """Hand-rolled Cohen's Kappa for nominal categories.
+
+    kappa = (po - pe) / (1 - pe), where po is observed agreement and pe is
+    expected agreement by chance (sum of marginal-product across categories).
+
+    If pe == 1 (single-class degenerate case), returns 1.0 if po == 1 else 0.0.
+    """
+    n = len(expected)
+    if n == 0:
+        return 0.0
+    agreements = sum(1 for e, a in zip(expected, actual) if e == a)
+    po = agreements / n
+
+    pe = 0.0
+    for c in categories:
+        p_expected = sum(1 for e in expected if e == c) / n
+        p_actual = sum(1 for a in actual if a == c) / n
+        pe += p_expected * p_actual
+
+    if pe >= 1.0:
+        return 1.0 if po == 1.0 else 0.0
+    return (po - pe) / (1 - pe)
+
+
+def check_task_type_agreement(results, kappa_threshold=0.7, min_precision=0.5):
+    """Measure agreement between LLM-assigned and expected task_type.
+
+    Section-aware: filters to entries where expected.task_type is present (any
+    section that labels task_type qualifies — not hardcoded to session_scoring).
+
+    Pass gate: kappa >= kappa_threshold AND every category with support >= 1
+    has precision >= min_precision. The precision guard catches the Kappa
+    prevalence trap, where high scores on common categories mask poor
+    performance on rare ones.
+
+    Returns:
+        dict with kappa, per_category (precision/recall/support),
+        confusion_matrix, passed, thresholds, min_precision_category.
+    """
+    pairs = []
+    for r in results:
+        if r.get("actual") is None or r.get("parse_error"):
+            continue
+        expected_tt = r.get("expected", {}).get("task_type")
+        actual_tt = r.get("actual", {}).get("task_type")
+        if expected_tt is None:
+            continue
+        pairs.append((expected_tt, actual_tt))
+
+    if not pairs:
+        return {
+            "n": 0, "kappa": None, "per_category": {}, "confusion_matrix": {},
+            "passed": True, "kappa_threshold": kappa_threshold,
+            "min_precision_threshold": min_precision,
+            "min_precision_category": None, "skipped": True,
+        }
+
+    expected_list = [e for e, _ in pairs]
+    actual_list = [a for _, a in pairs]
+    kappa = _cohen_kappa(expected_list, actual_list, TASK_TYPES)
+
+    # Confusion matrix: rows = expected, cols = actual
+    confusion = {e: {a: 0 for a in TASK_TYPES} for e in TASK_TYPES}
+    for e, a in pairs:
+        if e in confusion and a in confusion[e]:
+            confusion[e][a] += 1
+
+    # Per-category precision/recall/support
+    per_category = {}
+    min_precision_value = 1.0
+    min_precision_cat = None
+    for c in TASK_TYPES:
+        support = sum(1 for e in expected_list if e == c)
+        tp = sum(1 for e, a in pairs if e == c and a == c)
+        fp = sum(1 for e, a in pairs if e != c and a == c)
+        fn = sum(1 for e, a in pairs if e == c and a != c)
+        precision = tp / (tp + fp) if (tp + fp) > 0 else None
+        recall = tp / (tp + fn) if (tp + fn) > 0 else None
+        per_category[c] = {
+            "precision": round(precision, 4) if precision is not None else None,
+            "recall": round(recall, 4) if recall is not None else None,
+            "support": support,
+        }
+        if support > 0 and precision is not None and precision < min_precision_value:
+            min_precision_value = precision
+            min_precision_cat = c
+
+    precision_pass = all(
+        (per_category[c]["precision"] is None) or
+        (per_category[c]["precision"] >= min_precision)
+        for c in TASK_TYPES if per_category[c]["support"] > 0
+    )
+    passed = kappa >= kappa_threshold and precision_pass
+
+    return {
+        "n": len(pairs),
+        "kappa": round(kappa, 4),
+        "per_category": per_category,
+        "confusion_matrix": confusion,
+        "passed": passed,
+        "kappa_threshold": kappa_threshold,
+        "min_precision_threshold": min_precision,
+        "min_precision_category": min_precision_cat,
+        "min_precision_value": round(min_precision_value, 4) if min_precision_cat else None,
+    }
+
+
 def check_consistency(client, golden_set, n_runs=3, subset_size=10, delay=0.5):
     """Run a subset multiple times and measure self-agreement.
 

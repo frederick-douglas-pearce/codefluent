@@ -115,28 +115,33 @@ cd webapp && uv run python ../shared/eval/run_eval.py --verbose
 |-------|-------------|-----------|--------|
 | `schema` | Validates response structure (keys, types, value ranges) | Included in default run | Default |
 | `agreement` | Compares actual vs expected behaviors per entry (target: 85%+) | Included in default run | Default |
+| `task_type_agreement` | Cohen's Kappa between LLM-assigned and expected `task_type` on entries that have it. Pass gate: Kappa ≥ 0.7 AND every category with support ≥ 1 has precision ≥ 0.5 (prevalence-trap guard) | Included in default run | Default |
 | `consistency` | Runs subset N times, measures self-agreement across runs | N × subset_size | `--check consistency` |
 | `drift` | Compares activation rates against a baseline, flags >15pp shifts | 0 (uses saved results) | `--check drift --baseline PATH` |
 | `regression` | Runs a section with two prompt versions, diffs behavior changes | 2 × section_size | `--check regression` |
 
-`--check all` (the default) runs schema + agreement in a single API pass. Consistency, drift, and regression are opt-in because they require additional API calls or a baseline file.
+`--check all` (the default) runs schema + agreement + task_type_agreement in a single API pass. Consistency, drift, and regression are opt-in because they require additional API calls or a baseline file.
+
+The `task_type_agreement` check is section-aware: it filters to results where `expected.task_type` is present, so it naturally applies to `session_scoring` today and any future section that adds task_type labels. It skips gracefully when no such entries exist.
 
 ### CLI Options
 
 ```
---check {all,schema,agreement,consistency,drift,regression}  (default: all)
---threshold FLOAT       Agreement threshold (default: 0.85)
---sections LIST         Comma-separated sections (default: all)
---delay FLOAT           Seconds between API calls (default: 0.5)
---runs INT              Consistency runs (default: 3)
---subset INT            Consistency subset size (default: 10)
---baseline PATH         For drift check
---old-version PATH      For regression (e.g., scoring/v1.0.md)
---new-version PATH      For regression (e.g., scoring/v1.1.md)
---regression-section    Which section for regression
---output DIR            Output dir (default: shared/eval/results/)
---dry-run               Show what would run, no API calls
---verbose               Print each API call
+--check {all,schema,agreement,task_type_agreement,consistency,drift,regression}  (default: all)
+--threshold FLOAT           Agreement threshold (default: 0.85)
+--kappa-threshold FLOAT     Cohen's Kappa threshold for task_type_agreement (default: 0.7)
+--min-precision FLOAT       Min per-category precision for task_type_agreement (default: 0.5)
+--sections LIST             Comma-separated sections (default: all)
+--delay FLOAT               Seconds between API calls (default: 0.5)
+--runs INT                  Consistency runs (default: 3)
+--subset INT                Consistency subset size (default: 10)
+--baseline PATH             For drift check
+--old-version PATH          For regression (e.g., scoring/v1.0.md)
+--new-version PATH          For regression (e.g., scoring/v1.1.md)
+--regression-section        Which section for regression
+--output DIR                Output dir (default: shared/eval/results/)
+--dry-run                   Show what would run, no API calls
+--verbose                   Print each API call
 ```
 
 ### Example Output
@@ -161,6 +166,18 @@ Running golden set (all sections)
     - iteration_and_refinement: 78.0%
     - clarifying_goals: 78.0%
 
+  TASK_TYPE_AGREEMENT
+  [PASS] Cohen's Kappa: 0.812 (threshold: 0.7) on n=46
+  Per-category precision/recall (support):
+    feature: P=85.7% R=85.7% (n=7)
+    refactor: P=100.0% R=85.7% (n=7)
+    test: P=100.0% R=100.0% (n=7)
+    bug_fix: P=80.0% R=80.0% (n=5)
+    debug: P=83.3% R=100.0% (n=5)
+    docs: P=100.0% R=80.0% (n=5)
+    chore: P=80.0% R=80.0% (n=5)
+    exploration: P=100.0% R=80.0% (n=5)
+
   Cost: 34,046 input + 9,762 output tokens
   Estimated: $0.2486
 
@@ -170,26 +187,24 @@ Results saved to: shared/eval/results/2026-03-19_183628_agreement_schema.json
 ### Cost
 
 - Full golden set (84 entries): ~$0.35-0.50
-- CI subset (33 entries, single + config): ~$0.10-0.15
+- CI subset (79 entries, single + session + config): ~$0.30-0.50
 - Consistency (10 entries × 3 runs): ~$0.10
 - Regression (one section, 2 versions): ~$0.05-0.25
 
 ### CI Integration
 
-A GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement checks on PRs that modify `shared/prompts/**`. It currently uses the `single_scoring` + `config_scoring` subset (33 entries, ~$0.15/run) and requires the `ANTHROPIC_API_KEY` repo secret. Skipped for Dependabot PRs.
-
-Note: `session_scoring` is currently excluded from CI. It will be added when #244 (task_type_agreement check) ships; expect CI eval cost to rise to ~$0.30-0.50/run once session entries are included.
+A GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement + task_type_agreement checks on PRs that modify `shared/prompts/**`. It uses the `single_scoring` + `session_scoring` + `config_scoring` subset (79 entries, ~$0.30-0.50/run) and requires the `ANTHROPIC_API_KEY` repo secret. Skipped for Dependabot PRs.
 
 ### Tests
 
-82 tests in `webapp/tests/test_eval.py`:
+101 tests total (98 default + 3 live) in `webapp/tests/test_eval.py`:
 
 | Category | Tests | What it covers |
 |----------|-------|----------------|
 | `scorer.py` | 18 | Prompt loading, template filling, golden set template integration |
-| `checks.py` | 19 | Schema validation, agreement computation, drift detection, regression diffing |
-| `report.py` | 11 | Cost computation, JSON output, stdout formatting |
-| `run_eval.py` | 15 | Argument parsing, dry-run, section filtering, check routing, error handling |
+| `checks.py` | 33 | Schema validation, agreement, Cohen's Kappa, task_type_agreement, drift, regression |
+| `report.py` | 14 | Cost computation, JSON output, stdout formatting (incl. task_type_agreement) |
+| `run_eval.py` | 17 | Argument parsing, dry-run, section filtering, check routing, error handling |
 | Integration | 16 | End-to-end pipeline with mocked API, golden set structure verification |
 | Live API | 3 | Real API calls against golden set entries (excluded by default) |
 

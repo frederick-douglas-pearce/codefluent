@@ -24,4 +24,4 @@ jobs:
         working-directory: webapp
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: uv run python ../shared/eval/run_eval.py --check all --sections single_scoring,config_scoring --verbose
+        run: uv run python ../shared/eval/run_eval.py --check all --sections single_scoring,session_scoring,config_scoring --verbose
