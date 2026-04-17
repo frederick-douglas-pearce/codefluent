@@ -141,12 +141,14 @@ cd webapp && uv run python ../shared/eval/run_eval.py --verbose
 
 ### Example Output
 
+Example shape only — numbers are illustrative from an older run and will differ in practice.
+
 ```
 Running golden set (all sections)
   Scored 84 entries
 
   SCHEMA
-  [PASS] 50/50 entries have valid schema
+  [PASS] 84/84 entries have valid schema
 
   AGREEMENT
   [PASS] Overall agreement: 88.5% (threshold: 85%)

@@ -1930,7 +1930,7 @@
           "iteration_and_refinement": true,
           "clarifying_goals": true,
           "specifying_format": false,
-          "providing_examples": true,
+          "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
           "questioning_reasoning": true,
@@ -1946,7 +1946,6 @@
       "rationale": {
         "clarifying_goals": "Repro, expected, hypothesis, and constraint (preserve prorated)",
         "questioning_reasoning": "Asks why Claude's code is structured that way",
-        "providing_examples": "Specific numeric examples ($79.20, $76)",
         "providing_feedback": "'Confirmed', 'I see' — evaluating Claude's analysis"
       },
       "tags": [
@@ -2148,7 +2147,7 @@
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
-          "questioning_reasoning": true,
+          "questioning_reasoning": false,
           "identifying_missing_context": true,
           "adjusting_approach": false,
           "building_on_responses": true,
@@ -2160,7 +2159,7 @@
       },
       "rationale": {
         "clarifying_goals": "Symptoms (spike pattern, memory stable), and asks for diagnostic help",
-        "questioning_reasoning": "'why would that spike CPU' — asks for rationale",
+        "questioning_reasoning": "'why would that spike CPU' is a conceptual question about the user's system, not Claude's reasoning — NOT questioning_reasoning per v2.0",
         "identifying_missing_context": "Adds cron + table-size context Claude needed"
       },
       "tags": [
@@ -2436,7 +2435,7 @@
       },
       "expected": {
         "fluency_behaviors": {
-          "iteration_and_refinement": true,
+          "iteration_and_refinement": false,
           "clarifying_goals": false,
           "specifying_format": false,
           "providing_examples": false,
@@ -2454,6 +2453,8 @@
       },
       "rationale": {
         "clarifying_goals": "No scope, style, or audience",
+        "iteration_and_refinement": "'more comments' provides no direction to refine — no feedback, no scope adjustment. Pure additive request without engagement",
+        "building_on_responses": "No explicit reference to Claude's output; the 'more' is volume, not foundation",
         "coding_pattern": "Pure delegation with no engagement"
       },
       "tags": [
@@ -2776,7 +2777,7 @@
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
-          "questioning_reasoning": true,
+          "questioning_reasoning": false,
           "identifying_missing_context": true,
           "adjusting_approach": false,
           "building_on_responses": true,
@@ -2788,7 +2789,7 @@
       },
       "rationale": {
         "clarifying_goals": "Team context, current stack, and the specific evaluation question",
-        "questioning_reasoning": "'wins vs what we'd give up' — trade-off analysis",
+        "questioning_reasoning": "'wins vs what we'd give up' is a conceptual trade-off about Rust vs Python — unrelated to Claude's output (prompt 1, no prior response to question). Per v2.0, conceptual comparisons not about Claude's reasoning are excluded. Consistent with session_045 treatment",
         "identifying_missing_context": "Flags ecosystem gap as the key concern Claude should address"
       },
       "tags": [
