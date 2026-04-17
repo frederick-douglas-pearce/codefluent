@@ -4,16 +4,31 @@ Golden set and regression testing for CodeFluent's scoring prompts.
 
 ## Golden Set (`golden_set.json`)
 
-A curated set of 50 entries with human-verified expected scores for regression testing prompt changes, cross-model comparison, and scoring accuracy validation.
+A curated set of 84 entries with human-verified expected scores for regression testing prompt changes, cross-model comparison, and scoring accuracy validation.
 
 ### Structure
 
 | Section | Count | What it tests |
 |---------|-------|---------------|
 | `single_scoring` | 25 | Single-prompt behavior classification across the full score range |
-| `session_scoring` | 12 | Multi-prompt sessions with metadata signals and pattern classification |
+| `session_scoring` | 46 | Multi-prompt sessions with task_type labels, metadata signals, and pattern classification |
 | `config_scoring` | 8 | CLAUDE.md config files testing behavior credit boundaries |
 | `optimizer` | 5 | Prompt optimizer input scoring, config skip logic, and early exit |
+
+### Task Type Coverage (session_scoring)
+
+Every `session_scoring` entry has an `expected.task_type` label in one of 8 categories. Distribution targets 5+ entries per type to support Cohen's Kappa reliability for the task_type_agreement check (see #244).
+
+| Task type | Count | Notes |
+|-----------|-------|-------|
+| `feature` | 7 | New functionality |
+| `refactor` | 7 | Restructuring, higher count for design trade-off variety |
+| `test` | 7 | Test writing, higher count for mocking/edge-case variety |
+| `bug_fix` | 5 | Fixing broken behavior |
+| `debug` | 5 | Diagnosis (not necessarily fixing) |
+| `docs` | 5 | Documentation, comments, READMEs |
+| `chore` | 5 | CI/CD, tooling, dependencies |
+| `exploration` | 5 | Learning, prototyping, conceptual questions |
 
 ### Domain Coverage
 
@@ -25,6 +40,7 @@ Each entry has tags for filtering:
 - **Fluency level:** `low-fluency`, `medium-fluency`, `high-fluency`, `very-high-fluency`
 - **Domain:** `web-dev`, `data-science`, `mobile`, `infrastructure`, `devops`, etc.
 - **Edge cases:** `edge-case-short`, `edge-case-vague`, `edge-case-code-only`, `edge-case-injection`
+- **Borderline:** `borderline-questioning-reasoning`, `conceptual-not-questioning` (cases where v2.0 tightened definitions differ from v1.0)
 - **Config-specific:** `key-regression-118`, `should-be-zero-post-118`, `gold-standard-post-118`
 
 ### Config Scoring and Eligible Behaviors
@@ -65,7 +81,7 @@ Automated regression checker that scores the golden set against the Anthropic AP
 
 ```
 shared/eval/
-├── golden_set.json    # 50 human-labeled test cases
+├── golden_set.json    # 84 human-labeled test cases
 ├── run_eval.py        # CLI entry point (argparse)
 ├── scorer.py          # Prompt loading, template filling, API calls with retry
 ├── checks.py          # 5 check implementations (schema, agreement, consistency, drift, regression)
@@ -125,12 +141,14 @@ cd webapp && uv run python ../shared/eval/run_eval.py --verbose
 
 ### Example Output
 
+Example shape only — numbers are illustrative from an older run and will differ in practice.
+
 ```
 Running golden set (all sections)
-  Scored 50 entries
+  Scored 84 entries
 
   SCHEMA
-  [PASS] 50/50 entries have valid schema
+  [PASS] 84/84 entries have valid schema
 
   AGREEMENT
   [PASS] Overall agreement: 88.5% (threshold: 85%)
@@ -151,14 +169,16 @@ Results saved to: shared/eval/results/2026-03-19_183628_agreement_schema.json
 
 ### Cost
 
-- Full golden set (50 entries): ~$0.20-0.30
-- CI subset (33 entries): ~$0.10-0.15
+- Full golden set (84 entries): ~$0.35-0.50
+- CI subset (33 entries, single + config): ~$0.10-0.15
 - Consistency (10 entries × 3 runs): ~$0.10
-- Regression (one section, 2 versions): ~$0.05-0.15
+- Regression (one section, 2 versions): ~$0.05-0.25
 
 ### CI Integration
 
-A GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement checks on PRs that modify `shared/prompts/**`. It uses the `single_scoring` + `config_scoring` subset (33 entries, ~$0.15/run) and requires the `ANTHROPIC_API_KEY` repo secret. Skipped for Dependabot PRs.
+A GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement checks on PRs that modify `shared/prompts/**`. It currently uses the `single_scoring` + `config_scoring` subset (33 entries, ~$0.15/run) and requires the `ANTHROPIC_API_KEY` repo secret. Skipped for Dependabot PRs.
+
+Note: `session_scoring` is currently excluded from CI. It will be added when #244 (task_type_agreement check) ships; expect CI eval cost to rise to ~$0.30-0.50/run once session entries are included.
 
 ### Tests
 
