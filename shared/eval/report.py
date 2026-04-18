@@ -116,6 +116,44 @@ def print_summary(check_name, check_result):
             for item in check_result["below_threshold"]:
                 print(f"    - {item['behavior']}: {item['agreement']:.1%}")
 
+    elif check_name == "task_type_agreement":
+        if check_result.get("skipped"):
+            print("  [SKIP] No entries with expected.task_type found")
+            return
+        kappa = check_result["kappa"]
+        kt = check_result["kappa_threshold"]
+        passed = check_result["passed"]
+        icon = "PASS" if passed else "FAIL"
+        print(f"  [{icon}] Cohen's Kappa: {kappa:.3f} (threshold: {kt}) on n={check_result['n']}")
+
+        print("  Per-category precision/recall (support):")
+        for cat, stats in check_result["per_category"].items():
+            if stats["support"] == 0:
+                continue
+            p = stats["precision"]
+            r = stats["recall"]
+            p_str = f"{p:.1%}" if p is not None else "—"
+            r_str = f"{r:.1%}" if r is not None else "—"
+            print(f"    {cat}: P={p_str} R={r_str} (n={stats['support']})")
+
+        mp_cat = check_result.get("min_precision_category")
+        mp_thresh = check_result["min_precision_threshold"]
+        if mp_cat and check_result.get("min_precision_value") is not None:
+            mp_val = check_result["min_precision_value"]
+            if mp_val < mp_thresh:
+                print(f"  [FAIL] Lowest precision: {mp_cat} at {mp_val:.1%} (threshold: {mp_thresh:.0%})")
+
+        # Compact confusion matrix: only rows/cols with support
+        cm = check_result["confusion_matrix"]
+        active = [c for c, stats in check_result["per_category"].items() if stats["support"] > 0]
+        if active:
+            print("  Confusion (rows=expected, cols=actual):")
+            header = "          " + " ".join(f"{c[:6]:>6}" for c in active)
+            print(header)
+            for e in active:
+                row = " ".join(f"{cm[e].get(a, 0):>6}" for a in active)
+                print(f"    {e[:8]:<8}{row}")
+
     elif check_name == "consistency":
         sa = check_result["self_agreement"]
         print(f"  Self-agreement: {sa:.1%} ({check_result['entries_tested']} entries, {check_result['runs_per_entry']} runs)")

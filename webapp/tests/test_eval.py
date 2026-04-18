@@ -20,10 +20,12 @@ from shared.eval.scorer import (
     load_prompt,
 )
 from shared.eval.checks import (
+    _cohen_kappa,
     check_agreement,
     check_drift,
     check_regression,
     check_schema,
+    check_task_type_agreement,
 )
 from shared.eval.report import compute_cost, print_summary, save_results
 from shared.eval.run_eval import parse_args
@@ -370,6 +372,142 @@ class TestCheckAgreement:
         assert check["overall_agreement"] == 0.0
 
 
+def _make_task_type_result(entry_id, expected_tt, actual_tt, section="session_scoring"):
+    """Result fixture where expected/actual task_type can be set independently."""
+    r = _make_result(entry_id, section, _make_behaviors())
+    if expected_tt is None:
+        r["expected"].pop("task_type", None)
+    else:
+        r["expected"]["task_type"] = expected_tt
+    if section != "config_scoring":
+        r["actual"]["task_type"] = actual_tt
+    return r
+
+
+class TestCohenKappa:
+    CATS = ["feature", "bug_fix", "refactor", "debug", "test", "docs", "chore", "exploration"]
+
+    def test_perfect_agreement(self):
+        assert _cohen_kappa(["feature"] * 5, ["feature"] * 5, self.CATS) == 1.0
+
+    def test_perfect_disagreement(self):
+        # Two classes only, fully misaligned; single-class degenerate doesn't apply
+        expected = ["feature", "bug_fix"] * 5
+        actual = ["bug_fix", "feature"] * 5
+        k = _cohen_kappa(expected, actual, self.CATS)
+        assert k == -1.0
+
+    def test_empty_input(self):
+        assert _cohen_kappa([], [], self.CATS) == 0.0
+
+    def test_chance_level_agreement(self):
+        # po = pe = 0.5 for these inputs, so kappa == exactly 0
+        expected = ["feature", "bug_fix", "feature", "bug_fix"]
+        actual = ["feature", "feature", "bug_fix", "bug_fix"]
+        assert _cohen_kappa(expected, actual, self.CATS) == pytest.approx(0.0, abs=1e-9)
+
+    def test_single_class_all_agree(self):
+        # Degenerate: both rater distributions collapse to one class; pe == 1, po == 1
+        assert _cohen_kappa(["feature"] * 3, ["feature"] * 3, self.CATS) == 1.0
+
+    def test_substantial_agreement(self):
+        # 9/10 match with minority class. po=0.9, pe=0.7*0.7 + 0.3*0.2 = 0.55,
+        # kappa = (0.9 - 0.55) / (1 - 0.55) = 0.35 / 0.45 ≈ 0.7778
+        expected = ["feature"] * 7 + ["bug_fix"] * 3
+        actual = ["feature"] * 7 + ["bug_fix"] * 2 + ["refactor"]
+        k = _cohen_kappa(expected, actual, self.CATS)
+        assert k == pytest.approx(0.35 / 0.45, abs=1e-9)
+
+
+class TestCheckTaskTypeAgreement:
+    def test_perfect_agreement_passes(self):
+        # 8 entries, one per category, all match
+        cats = ["feature", "bug_fix", "refactor", "debug", "test", "docs", "chore", "exploration"]
+        results = [_make_task_type_result(f"s{i}", c, c) for i, c in enumerate(cats)]
+        check = check_task_type_agreement(results)
+        assert check["passed"] is True
+        assert check["kappa"] == 1.0
+        assert check["n"] == 8
+
+    def test_below_kappa_threshold_fails(self):
+        # 4/10 agreement with spread, kappa will be low
+        expected = ["feature"] * 5 + ["bug_fix"] * 5
+        actual = ["bug_fix"] * 5 + ["feature"] * 5
+        results = [_make_task_type_result(f"s{i}", e, a)
+                   for i, (e, a) in enumerate(zip(expected, actual))]
+        check = check_task_type_agreement(results)
+        assert check["passed"] is False
+        assert check["kappa"] < 0.7
+
+    def test_prevalence_trap_caught(self):
+        # Kappa can sneak above 0.7 while a rare category has zero precision.
+        # 5 feature correct, 5 bug_fix correct, 5 docs all misclassified as feature
+        expected = ["feature"] * 5 + ["bug_fix"] * 5 + ["docs"] * 5
+        actual = ["feature"] * 5 + ["bug_fix"] * 5 + ["feature"] * 5
+        results = [_make_task_type_result(f"s{i}", e, a)
+                   for i, (e, a) in enumerate(zip(expected, actual))]
+        # docs has 0 recall (all predicted as feature)
+        # feature precision: tp=5, fp=5, precision = 0.5
+        check = check_task_type_agreement(results, kappa_threshold=0.3, min_precision=0.6)
+        # feature precision = 0.5 which is below 0.6 → should FAIL
+        assert check["passed"] is False
+        assert check["per_category"]["docs"]["recall"] == 0.0
+        assert check["per_category"]["feature"]["precision"] == 0.5
+
+    def test_section_aware_filter(self):
+        # Entries without expected.task_type (e.g., single_scoring) are excluded
+        results = [
+            _make_task_type_result("s1", "feature", "feature"),
+            _make_task_type_result("s2", None, "feature", section="single_scoring"),
+            _make_task_type_result("s3", "bug_fix", "bug_fix"),
+        ]
+        check = check_task_type_agreement(results)
+        assert check["n"] == 2  # only s1 and s3
+
+    def test_skips_when_no_task_type_entries(self):
+        results = [
+            _make_task_type_result("s1", None, "feature", section="single_scoring"),
+            _make_task_type_result("s2", None, "feature", section="single_scoring"),
+        ]
+        check = check_task_type_agreement(results)
+        assert check["skipped"] is True
+        assert check["n"] == 0
+        assert check["passed"] is True  # skipped doesn't fail
+
+    def test_skips_failed_and_parse_error_results(self):
+        r1 = _make_task_type_result("s1", "feature", "feature")
+        r2 = _make_task_type_result("s2", "bug_fix", "bug_fix")
+        r2["actual"] = None
+        r3 = _make_task_type_result("s3", "docs", "docs")
+        r3["parse_error"] = "json error"
+        check = check_task_type_agreement([r1, r2, r3])
+        assert check["n"] == 1
+
+    def test_confusion_matrix_structure(self):
+        # 2 feature→feature, 1 bug_fix→feature (misclassification)
+        results = [
+            _make_task_type_result("s1", "feature", "feature"),
+            _make_task_type_result("s2", "feature", "feature"),
+            _make_task_type_result("s3", "bug_fix", "feature"),
+        ]
+        check = check_task_type_agreement(results, kappa_threshold=0.0, min_precision=0.0)
+        cm = check["confusion_matrix"]
+        assert cm["feature"]["feature"] == 2
+        assert cm["bug_fix"]["feature"] == 1
+        assert cm["feature"]["bug_fix"] == 0
+
+    def test_per_category_support_counts(self):
+        results = [
+            _make_task_type_result("s1", "feature", "feature"),
+            _make_task_type_result("s2", "feature", "bug_fix"),
+            _make_task_type_result("s3", "bug_fix", "bug_fix"),
+        ]
+        check = check_task_type_agreement(results, kappa_threshold=0.0, min_precision=0.0)
+        assert check["per_category"]["feature"]["support"] == 2
+        assert check["per_category"]["bug_fix"]["support"] == 1
+        assert check["per_category"]["docs"]["support"] == 0
+
+
 class TestCheckDrift:
     def test_no_drift(self, tmp_path):
         fb = _make_behaviors({"clarifying_goals": True})
@@ -599,6 +737,64 @@ class TestPrintSummary:
         assert "2/10" in out
         assert "clarifying_goals" in out
 
+    def test_task_type_agreement_pass(self, capsys):
+        print_summary("task_type_agreement", {
+            "n": 10, "kappa": 0.85, "kappa_threshold": 0.7,
+            "min_precision_threshold": 0.5,
+            "min_precision_category": "bug_fix", "min_precision_value": 0.75,
+            "per_category": {
+                "feature": {"precision": 1.0, "recall": 1.0, "support": 5},
+                "bug_fix": {"precision": 0.75, "recall": 1.0, "support": 3},
+                "refactor": {"precision": None, "recall": None, "support": 0},
+                "debug": {"precision": None, "recall": None, "support": 0},
+                "test": {"precision": None, "recall": None, "support": 0},
+                "docs": {"precision": None, "recall": None, "support": 0},
+                "chore": {"precision": None, "recall": None, "support": 0},
+                "exploration": {"precision": 1.0, "recall": 1.0, "support": 2},
+            },
+            "confusion_matrix": {c: {c2: 0 for c2 in [
+                "feature", "bug_fix", "refactor", "debug", "test", "docs", "chore", "exploration"
+            ]} for c in [
+                "feature", "bug_fix", "refactor", "debug", "test", "docs", "chore", "exploration"
+            ]},
+            "passed": True,
+        })
+        out = capsys.readouterr().out
+        assert "PASS" in out
+        assert "0.85" in out
+
+    def test_task_type_agreement_fail_low_precision(self, capsys):
+        cats = ["feature", "bug_fix", "refactor", "debug",
+                "test", "docs", "chore", "exploration"]
+        per_category = {c: {"precision": None, "recall": None, "support": 0} for c in cats}
+        # docs has real support but only 30% precision — this is what should fail
+        per_category["docs"] = {"precision": 0.3, "recall": 0.5, "support": 5}
+        per_category["feature"] = {"precision": 1.0, "recall": 1.0, "support": 5}
+        confusion = {c: {c2: 0 for c2 in cats} for c in cats}
+        confusion["feature"]["feature"] = 5
+        confusion["docs"]["docs"] = 2
+        confusion["docs"]["feature"] = 3  # misclassifications that drive low precision
+        print_summary("task_type_agreement", {
+            "n": 10, "kappa": 0.72, "kappa_threshold": 0.7,
+            "min_precision_threshold": 0.5,
+            "min_precision_category": "docs", "min_precision_value": 0.3,
+            "per_category": per_category, "confusion_matrix": confusion,
+            "passed": False,
+        })
+        out = capsys.readouterr().out
+        assert "FAIL" in out
+        assert "docs" in out
+        assert "30" in out  # the 30% low-precision value rendered
+
+    def test_task_type_agreement_skipped(self, capsys):
+        print_summary("task_type_agreement", {
+            "n": 0, "kappa": None, "per_category": {}, "confusion_matrix": {},
+            "passed": True, "kappa_threshold": 0.7, "min_precision_threshold": 0.5,
+            "min_precision_category": None, "skipped": True,
+        })
+        out = capsys.readouterr().out
+        assert "SKIP" in out
+
 
 # ─── run_eval.py tests ───────────────────────────────────────────────────────
 
@@ -658,6 +854,18 @@ class TestParseArgs:
     def test_output_dir(self):
         args = parse_args(["--output", "/tmp/results"])
         assert args.output == "/tmp/results"
+
+    def test_task_type_agreement_thresholds(self):
+        args = parse_args(["--check", "task_type_agreement",
+                           "--kappa-threshold", "0.8", "--min-precision", "0.6"])
+        assert args.check == "task_type_agreement"
+        assert args.kappa_threshold == 0.8
+        assert args.min_precision == 0.6
+
+    def test_task_type_agreement_defaults(self):
+        args = parse_args([])
+        assert args.kappa_threshold == 0.7
+        assert args.min_precision == 0.5
 
 
 class TestDryRun:

@@ -28,13 +28,22 @@ def parse_args(argv=None):
     )
     parser.add_argument(
         "--check",
-        choices=["all", "schema", "agreement", "consistency", "drift", "regression"],
+        choices=["all", "schema", "agreement", "task_type_agreement",
+                 "consistency", "drift", "regression"],
         default="all",
-        help="Which check to run (default: all = schema + agreement)",
+        help="Which check to run (default: all = schema + agreement + task_type_agreement)",
     )
     parser.add_argument(
         "--threshold", type=float, default=0.85,
         help="Agreement threshold (default: 0.85)",
+    )
+    parser.add_argument(
+        "--kappa-threshold", type=float, default=0.7,
+        help="Cohen's Kappa threshold for task_type_agreement (default: 0.7)",
+    )
+    parser.add_argument(
+        "--min-precision", type=float, default=0.5,
+        help="Minimum per-category precision for task_type_agreement (default: 0.5)",
     )
     parser.add_argument(
         "--sections",
@@ -98,7 +107,7 @@ def main(argv=None):
     # Determine which checks to run
     check = args.check
     if check == "all":
-        checks_to_run = ["schema", "agreement"]
+        checks_to_run = ["schema", "agreement", "task_type_agreement"]
     else:
         checks_to_run = [check]
 
@@ -121,6 +130,8 @@ def main(argv=None):
         print(f"Sections: {', '.join(run_sections)}")
         print(f"Total entries: {total}")
         print(f"Threshold: {args.threshold}")
+        if "task_type_agreement" in checks_to_run:
+            print(f"Kappa threshold: {args.kappa_threshold} | Min precision: {args.min_precision}")
         print(f"Delay: {args.delay}s")
         if "consistency" in checks_to_run:
             print(f"Consistency: {args.runs} runs × {args.subset} entries")
@@ -135,7 +146,7 @@ def main(argv=None):
     from shared.eval.scorer import create_client, load_pricing, run_golden_set
     from shared.eval.checks import (
         check_agreement, check_consistency, check_drift,
-        check_regression, check_schema,
+        check_regression, check_schema, check_task_type_agreement,
     )
     from shared.eval.report import compute_cost, print_cost, print_summary, save_results
 
@@ -146,8 +157,8 @@ def main(argv=None):
     check_results = {}
 
     try:
-        # Run golden set through API (needed for schema, agreement, drift)
-        needs_run = bool({"schema", "agreement", "drift"} & set(checks_to_run))
+        # Run golden set through API (needed for schema, agreement, task_type_agreement, drift)
+        needs_run = bool({"schema", "agreement", "task_type_agreement", "drift"} & set(checks_to_run))
         if needs_run:
             print(f"Running golden set ({', '.join(sections or ['all sections'])})")
             results = run_golden_set(
@@ -164,6 +175,13 @@ def main(argv=None):
         if "agreement" in checks_to_run:
             check_results["agreement"] = check_agreement(results, threshold=args.threshold)
             print_summary("agreement", check_results["agreement"])
+
+        if "task_type_agreement" in checks_to_run:
+            check_results["task_type_agreement"] = check_task_type_agreement(
+                results, kappa_threshold=args.kappa_threshold,
+                min_precision=args.min_precision,
+            )
+            print_summary("task_type_agreement", check_results["task_type_agreement"])
 
         if "consistency" in checks_to_run:
             print(f"Running consistency check ({args.runs} runs × {args.subset} entries)")
@@ -215,6 +233,8 @@ def main(argv=None):
         if name == "schema" and result.get("failed", 0) > 0:
             any_failed = True
         elif name == "agreement" and not result.get("passed", True):
+            any_failed = True
+        elif name == "task_type_agreement" and not result.get("passed", True):
             any_failed = True
         elif name == "consistency" and result.get("self_agreement", 1.0) < 0.85:
             any_failed = True
