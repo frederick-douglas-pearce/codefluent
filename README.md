@@ -310,6 +310,19 @@ Cost: ~$0.25 for a full 50-entry run, ~$0.15 for CI (33-entry subset). See [`sha
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
 
+### Secrets handling
+
+CodeFluent parses `~/.claude/projects/` — and those JSONL files can contain anything Claude Code has ever read during a session, including your own `.env` files. `.gitignore` doesn't prevent this local persistence. If the session that leaked a credential was the one where you set up CodeFluent's API key, the key ends up in the same data CodeFluent analyzes.
+
+This repo ships two Claude Code hooks in [`.claude/settings.json`](.claude/settings.json) that reduce the risk:
+
+- **PreToolUse block** ([`.claude/hooks/block_secret_reads.py`](.claude/hooks/block_secret_reads.py)) — denies reads of `.env` variants, shell rc files, SSH keys, `credentials.json`, `secrets.{yaml,yml,json}`, `*.pem`, and `webapp/config.json`. Blocks *before* execution, so nothing enters the transcript.
+- **PostToolUse detect** ([`.claude/hooks/detect_secrets_in_output.py`](.claude/hooks/detect_secrets_in_output.py)) — if a tool result contains an `sk-ant-*`, `sk-proj-*`, `ghp_*`, `github_pat_*`, `AKIA*`, or `AIza*` token, emits a block signal so Claude doesn't echo or summarize it. Caveat: the raw value is already on disk at this point — rotate any key it catches.
+
+Any future CodeFluent feature that renders raw session content (diff viewers, prompt excerpts, coaching snippets) must re-apply secret-pattern redaction at the display layer — existing `_sanitize_error()` (webapp) and `sanitizeError()` (extension) helpers are the pattern to reuse.
+
+See [`SECURITY.md`](SECURITY.md) for the full policy: leak vector, defense architecture, discipline rules, historical-leak audit one-liner, user-scope deployment, and the bypass surface the hooks do not cover.
+
 ## Troubleshooting
 
 | Problem | Solution |

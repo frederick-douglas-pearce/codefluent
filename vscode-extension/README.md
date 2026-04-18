@@ -144,9 +144,19 @@ CodeFluent uses the following resolution order:
 2. `.env` file in your workspace root
 3. VS Code SecretStorage (persisted after first prompt)
 
+**Prefer SecretStorage over `.env` when you have the choice.** SecretStorage is backed by your OS keychain and never persists to a readable file. If you enter the key through the interactive prompt, CodeFluent stores it in SecretStorage automatically and you don't need a workspace `.env` at all. See the [Secrets handling](#secrets-handling) note below for why this matters.
+
 ## Privacy
 
 All data stays on your machine. CodeFluent reads local session files and makes direct Anthropic API calls for scoring — no telemetry, no external servers, no data collection.
+
+### Secrets handling
+
+Claude Code persists every tool call and its output to JSONL transcripts at `~/.claude/projects/`. If Claude ever reads a `.env` file during a session (yours or one in your workspace), the contents of that file end up in those transcripts in plaintext — the same transcripts CodeFluent parses. `.gitignore` does not protect against this.
+
+To reduce the risk, prefer VS Code SecretStorage for your Anthropic API key (see above), scope the key to CodeFluent alone with a monthly spend cap in the [Anthropic console](https://console.anthropic.com/settings/keys), and never paste raw `sk-ant-*` values into Claude prompts.
+
+The CodeFluent repository itself ships Claude Code hooks that block reads of `.env`, SSH keys, and other credential files during development — see [`SECURITY.md`](https://github.com/frederick-douglas-pearce/codefluent/blob/main/SECURITY.md) for the full policy, an audit one-liner for historical leaks in your existing `~/.claude/projects/`, and instructions for deploying the same hooks at user scope to protect all your Claude Code sessions.
 
 ## Troubleshooting
 
