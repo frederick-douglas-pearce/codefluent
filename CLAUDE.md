@@ -133,6 +133,7 @@ When adding features or changing architecture, check this list for files that ma
 |------|---------|----------------|
 | `CLAUDE.md` | AI coding instructions, architecture, conventions, commands | Adding files, commands, test suites, or CI workflows |
 | `README.md` | Public-facing project overview, features, setup, eval framework | Adding user-visible features, changing test counts, updating setup steps |
+| `SECURITY.md` | Vulnerability reporting + full secrets-handling policy (hooks, audit, forward-compat rule) | Changing hook behavior, adding display surfaces that quote session content, or changing the key-rotation guidance |
 | `vscode-extension/README.md` | Extension setup, features, screenshots, marketplace listing | Changing extension features, installation steps, or screenshots |
 | `webapp/README.md` | Webapp setup, design choices, security, testing | Changing webapp features, test counts, security controls, or API surface |
 | `shared/eval/README.md` | Golden set structure, eval runner CLI, checks, CI integration | Changing eval checks, CLI options, test counts, or CI workflow |
@@ -354,6 +355,26 @@ When implementing from a PM-produced spec or issue:
 - **No regressions:** `npm test` must pass (currently 907 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
+
+## Secrets handling
+
+Do not read `.env`, `.envrc`, `credentials.json`, `secrets.ya?ml`, SSH private keys (`id_rsa`, `id_ed25519`, `*.pem`), shell rc files (`.bashrc`, `.bash_profile`, `.profile`, `.zshrc`, `.zshenv`, `.zprofile`), or `webapp/config.json`.
+
+Anything read via Read, Bash (`cat`, `grep`, `source`), or Grep is persisted verbatim in the Claude Code session JSONL at `~/.claude/projects/<slug>/*.jsonl` — plaintext, forever. `.gitignore` does not protect against this.
+
+Two hooks enforce the rule:
+
+- **`.claude/hooks/block_secret_reads.py`** (PreToolUse) — denies Read/Edit/Write/Grep/Glob/NotebookEdit/Bash calls targeting the files above. A block message from this hook means the read was prevented *before* it executed, so nothing leaked.
+- **`.claude/hooks/detect_secrets_in_output.py`** (PostToolUse) — scans Read/Grep/Bash output for known secret patterns (`sk-ant-*`, `sk-proj-*`, `ghp_*`, `github_pat_*`, `AKIA*`, `AIza*`). A block message from this hook means the tool already executed and the raw value was persisted to the JSONL transcript. Report to the user that the key is compromised and should be rotated. Do not retry the same command.
+
+The rule generalizes beyond what the hooks catch:
+
+- If a tool result contains credential-looking values, never echo them in replies.
+- Do not emit generated code that prints env vars matching `KEY|TOKEN|SECRET|PASSWORD`.
+- To verify a credential file exists, use `test -f <path>` rather than reading it.
+- Any new feature that renders session content to the user (prompt excerpts, diffs, summaries) must re-apply secret-pattern redaction at the display layer — see the Production Standards security bullet above for the canonical redaction helpers.
+
+See [`SECURITY.md`](SECURITY.md) for the full policy, layered defense model, the audit one-liner for historical leaks, and the bypass surface the hooks do not cover.
 
 ## JSONL Data Format (VERIFIED against real data)
 
