@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe('getConfig', () => {
   it('returns default value when no VS Code setting is set', () => {
-    expect(getConfig('scoring.model')).toBe('claude-sonnet-4-20250514')
+    expect(getConfig('scoring.model')).toBe('claude-sonnet-4-6')
     expect(getConfig('scoring.maxPromptsPerConversation')).toBe(20)
     expect(getConfig('retry.maxAttempts')).toBe(3)
   })
@@ -107,15 +107,15 @@ describe('defaults.json integrity', () => {
   })
 
   it('default values match previously hardcoded values', () => {
-    expect(defaults['scoring.model']).toBe('claude-sonnet-4-20250514')
+    expect(defaults['scoring.model']).toBe('claude-sonnet-4-6')
     expect(defaults['scoring.maxPromptsPerConversation']).toBe(20)
     expect(defaults['scoring.configTruncationChars']).toBe(4000)
     expect(defaults['scoring.maxTokens']).toBe(1024)
     expect(defaults['scoring.lowConfidenceThreshold']).toBe(3)
-    expect(defaults['optimizer.model']).toBe('claude-sonnet-4-20250514')
+    expect(defaults['optimizer.model']).toBe('claude-sonnet-4-6')
     expect(defaults['optimizer.maxTokens']).toBe(2048)
     expect(defaults['optimizer.alreadyGoodThreshold']).toBe(90)
-    expect(defaults['quickwins.model']).toBe('claude-sonnet-4-20250514')
+    expect(defaults['quickwins.model']).toBe('claude-sonnet-4-6')
     expect(defaults['quickwins.maxTokens']).toBe(2048)
     expect(defaults['quickwins.claudeMdTruncationChars']).toBe(2000)
     expect(defaults['retry.maxAttempts']).toBe(3)

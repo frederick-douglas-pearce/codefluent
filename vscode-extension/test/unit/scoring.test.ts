@@ -53,6 +53,7 @@ function makeScoreResult(overrides: Partial<ScoreResult> = {}): ScoreResult {
     overall_score: 72,
     one_line_summary: 'Good iterative engagement with clear goals.',
     prompt_version: SCORING_PROMPT_VERSION,
+    model: 'claude-sonnet-4-6',
     ...overrides,
   }
 }
@@ -114,7 +115,7 @@ describe('scoreSessions', () => {
     await scoreSessions(['sess-1'], sessions, {}, client)
 
     const callArgs = client.messages.create.mock.calls[0][0]
-    expect(callArgs.model).toBe('claude-sonnet-4-20250514')
+    expect(callArgs.model).toBe('claude-sonnet-4-6')
     expect(callArgs.max_tokens).toBe(1024)
     expect(callArgs.temperature).toBe(0)
   })
@@ -359,7 +360,7 @@ describe('scoreSessions', () => {
       'sess-empty': makeSession({ user_prompts: [] }),
     }
     const cached: Record<string, any> = {
-      'sess-cached': { session_id: 'sess-cached', fluency_behaviors: {}, prompt_version: SCORING_PROMPT_VERSION },
+      'sess-cached': { session_id: 'sess-cached', fluency_behaviors: {}, prompt_version: SCORING_PROMPT_VERSION, model: 'claude-sonnet-4-6' },
     }
 
     const { stats } = await scoreSessions(

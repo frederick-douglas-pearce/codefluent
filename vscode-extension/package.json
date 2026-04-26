@@ -71,7 +71,7 @@
         },
         "codefluent.scoring.model": {
           "type": "string",
-          "default": "claude-sonnet-4-20250514",
+          "default": "claude-sonnet-4-6",
           "markdownDescription": "Model ID for fluency scoring API calls.",
           "scope": "machine"
         },

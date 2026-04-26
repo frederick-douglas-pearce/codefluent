@@ -90,7 +90,7 @@ Both interfaces parse Claude Code session files from `~/.claude/projects/`. See 
 
 1. User selects conversations to score
 2. Backend loads prompts (up to 20 per conversation, max 2000 chars each) and conversation metadata (plan mode, thinking count, tools used)
-3. Prompts are sent to Claude Sonnet (`claude-sonnet-4-20250514`, `temperature: 0`) using a versioned scoring prompt template
+3. Prompts are sent to Claude Sonnet (`claude-sonnet-4-6`, `temperature: 0`) using a versioned scoring prompt template
 4. Response is parsed for: 11 boolean fluency behaviors, coding interaction pattern, overall score (0–100), one-line summary
 5. Results are cached (keyed by conversation ID + prompt version) to avoid re-scoring
 6. Aggregate metrics are computed across all scored conversations

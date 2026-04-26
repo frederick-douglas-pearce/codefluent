@@ -156,6 +156,7 @@ class TestGetScores:
                 "overall_score": 45,
                 "coding_pattern": "conceptual_inquiry",
                 "prompt_version": main.SCORING_PROMPT_VERSION,
+                "model": main.get_config("scoring.model"),
             }
         }
         (data_dir / "scores.json").write_text(json.dumps(scores))
@@ -180,12 +181,14 @@ class TestGetScores:
                 "fluency_behaviors": {b: True for b in main.BEHAVIORS},
                 "overall_score": 90,
                 "prompt_version": main.SCORING_PROMPT_VERSION,
+                "model": main.get_config("scoring.model"),
             },
             "sess-b": {
                 "session_id": "sess-b",
                 "fluency_behaviors": {b: False for b in main.BEHAVIORS},
                 "overall_score": 10,
                 "prompt_version": main.SCORING_PROMPT_VERSION,
+                "model": main.get_config("scoring.model"),
             },
         }
         (data_dir / "scores.json").write_text(json.dumps(scores))
@@ -280,6 +283,7 @@ class TestPostScore:
             "overall_score": 80,
             "coding_pattern": "conceptual_inquiry",
             "prompt_version": main.SCORING_PROMPT_VERSION,
+            "model": main.get_config("scoring.model"),
         }
         (data_dir / "scores.json").write_text(json.dumps({"cached-session": cached_score}))
 
@@ -306,6 +310,7 @@ class TestPostScore:
             "overall_score": 80,
             "coding_pattern": "conceptual_inquiry",
             "prompt_version": main.SCORING_PROMPT_VERSION,
+            "model": main.get_config("scoring.model"),
             "content_hash": "proj:2026-01-01T00:00:00Z:2:hello",
         }
         (data_dir / "scores.json").write_text(json.dumps({"sess-1": cached_score}))
@@ -341,6 +346,7 @@ class TestPostScore:
                 "fluency_behaviors": {b: True for b in main.BEHAVIORS},
                 "overall_score": 90,
                 "prompt_version": main.SCORING_PROMPT_VERSION,
+                "model": main.get_config("scoring.model"),
             },
         }
         (data_dir / "scores.json").write_text(json.dumps(cached))
@@ -686,6 +692,7 @@ class TestSessionAnalytics:
                 "overall_score": 65,
                 "coding_pattern": "conceptual_inquiry",
                 "prompt_version": main.SCORING_PROMPT_VERSION,
+                "model": main.get_config("scoring.model"),
             }
         }
         (data_dir / "scores.json").write_text(json.dumps(scores))

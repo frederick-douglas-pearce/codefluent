@@ -105,7 +105,7 @@ Track daily and monthly token usage, costs, and conversation history. Powered by
 
 1. **Parse** — JSONL session files from `~/.claude/projects/` are parsed to extract user prompts, assistant responses, and token usage metadata. System commands (`/clear`, `/compact`, etc.) are filtered out; custom commands and skills are tracked separately.
 2. **Assemble conversations** — All messages per project are pooled, sorted by timestamp, and split into conversations at inactivity gaps between user prompts (`codefluent.conversation.inactivityGapMinutes`, default: 60 minutes). `/clear` commands force a conversation boundary. Each conversation is classified by task type (feature, bug fix, refactor, etc.) via heuristic analysis of branch names and prompt keywords.
-3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`codefluent.scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
+3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`codefluent.scoring.model`, default: `claude-sonnet-4-6`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
 4. **Config scoring** — If a `CLAUDE.md` exists, it's scored against 3 config-eligible meta-interaction behaviors. Results are merged via `effective = conversation OR config`
 5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
 6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
@@ -129,7 +129,7 @@ Search "CodeFluent" in VS Code Settings (`Ctrl+,`) to configure:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `codefluent.sessionDataPath` | `~/.claude/projects/` | Custom path to Claude Code session data directory |
-| `codefluent.scoring.model` | `claude-sonnet-4-20250514` | Model ID for fluency scoring API calls |
+| `codefluent.scoring.model` | `claude-sonnet-4-6` | Model ID for fluency scoring API calls |
 | `codefluent.scoring.maxPromptsPerConversation` | `20` | Maximum prompts per conversation sent for scoring |
 | `codefluent.optimizer.alreadyGoodThreshold` | `90` | Score (0–100) at or above which prompts are considered already effective |
 | `codefluent.conversation.inactivityGapMinutes` | `60` | Minutes of inactivity that defines a conversation boundary |

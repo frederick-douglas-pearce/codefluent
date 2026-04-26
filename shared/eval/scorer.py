@@ -17,7 +17,20 @@ BEHAVIORS = [
     "adjusting_approach", "building_on_responses", "providing_feedback",
 ]
 
-MODEL = "claude-sonnet-4-20250514"
+def _load_default_scoring_model():
+    """Read scoring.model from shared/defaults.json (canonical source).
+
+    Env var CODEFLUENT_SCORING_MODEL overrides for ad-hoc eval runs (parity
+    with webapp/config.py resolution: env > defaults).
+    """
+    env = os.environ.get("CODEFLUENT_SCORING_MODEL")
+    if env:
+        return env
+    with open(SHARED_DIR / "defaults.json") as f:
+        return json.load(f)["scoring.model"]
+
+
+MODEL = _load_default_scoring_model()
 
 
 def load_prompt(prompt_type, version_override=None):
