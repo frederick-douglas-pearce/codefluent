@@ -162,12 +162,24 @@ cp .claude/hooks/detect_secrets_in_output.py ~/.claude/hooks/
 
 Note: the `webapp/config.json` path-scoped block is CodeFluent-specific and will simply never match in other projects, so it's safe to deploy at user scope as-is.
 
+### Convention: project-scope hooks must use `$CLAUDE_PROJECT_DIR`
+
+Project-scope `command` fields in `.claude/settings.json` must invoke hook scripts via `$CLAUDE_PROJECT_DIR` (the absolute path of the repo root, populated by Claude Code in the hook environment), not via paths relative to the session cwd:
+
+```json
+{ "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/block_secret_reads.py\"" }
+```
+
+A relative form like `python3 .claude/hooks/block_secret_reads.py` works only while the session cwd is the repo root. As soon as a Bash call drifts cwd into a subdirectory (e.g. `cd webapp && uv run …`), the hook script can no longer be located, Python exits non-zero, and Claude Code fails closed — every subsequent tool call is blocked until the session is restarted. New hooks added to project scope should follow this convention from day one.
+
+Troubleshooting: if hooks unexpectedly block all tool calls and you suspect the path resolution, verify `$CLAUDE_PROJECT_DIR` is populated in the hook environment by temporarily writing it to a file from the hook command (e.g., `echo "$CLAUDE_PROJECT_DIR" > /tmp/cpd.log && python3 …`) and inspecting `/tmp/cpd.log` after one tool call.
+
 ### How project-level and user-level hooks interact
 
 Both scopes load. Per the Claude Code hooks documentation, *"all matching hooks run in parallel, and identical handlers are deduplicated automatically. Command hooks are deduplicated by command string."* That means:
 
 - If you copy the same hook configuration (same `command` string) into both `~/.claude/settings.json` and the project's `.claude/settings.json`, it runs once, not twice.
-- If the command strings differ (e.g. user-scope uses an absolute path like `python3 /home/you/.claude/hooks/block_secret_reads.py` while the project uses the relative path `python3 .claude/hooks/block_secret_reads.py`), both commands fire.
+- If the command strings differ (e.g. user-scope uses an absolute path like `python3 /home/you/.claude/hooks/block_secret_reads.py` while the project uses the `$CLAUDE_PROJECT_DIR`-prefixed form `python3 "$CLAUDE_PROJECT_DIR/.claude/hooks/block_secret_reads.py"`), both commands fire — the literal `command` strings differ pre-expansion, so deduplication does not collapse them.
 
 Deploying at both scopes is safe and is the right move for layered coverage: project scope protects contributors on this repo; user scope protects every other Claude Code session on your machine.
 
