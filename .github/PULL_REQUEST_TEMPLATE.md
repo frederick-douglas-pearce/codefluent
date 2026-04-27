@@ -5,3 +5,6 @@
 - [ ] Unit tests pass: `npm test` (vscode-extension) and `uv run pytest tests/` (webapp)
 - [ ] E2E smoke test via Playwright MCP (see CLAUDE.md checklist) — required for UI/API changes
 - [ ] No security regressions (XSS, injection, path traversal)
+
+## Pre-merge checklist
+- [ ] Add `needs-security-review` label and confirm review passes before merging
