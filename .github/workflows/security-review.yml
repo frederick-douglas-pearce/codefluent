@@ -2,6 +2,19 @@ name: Security Review
 
 on:
   pull_request:
+    types: [labeled]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'images/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - 'LICENSE'
+      - 'CHANGELOG.md'
+
+concurrency:
+  group: security-review-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   pull-requests: write
@@ -9,24 +22,41 @@ permissions:
 
 jobs:
   security:
-    # Skip for Dependabot PRs (no access to secrets)
-    if: github.actor != 'dependabot[bot]'
+    # Triggered only when the `needs-security-review` label is added — see #283.
+    # Dependabot PRs don't have access to secrets, so they're excluded.
+    if: github.event.label.name == 'needs-security-review' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 2
 
-      - uses: anthropics/claude-code-security-review@main
+      # Pinned to a SHA for supply-chain safety — upstream has no tagged releases.
+      - uses: anthropics/claude-code-security-review@0c6a49f1fa56a1d472575da86a94dbc1edb78eda # 2026-02-11
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           comment-pr: true
           claude-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-          exclude-directories: node_modules,out,data,.claude
+          # Pin to Sonnet; routine security scans don't need Opus-level reasoning.
+          claude-model: claude-sonnet-4-6
+          # Excludes build artifacts and caches only. .claude/ is intentionally
+          # NOT excluded — it contains hook scripts and settings that handle
+          # credentials and execute arbitrary shell on every tool call.
+          exclude-directories: node_modules,out,data,.venv,dist,build,.mypy_cache,.pytest_cache,.ruff_cache,coverage
           custom-security-scan-instructions: |
-            This project has two attack surfaces:
-            1. VS Code webview (media/app.js) — nonce-based CSP, must use escapeHtml() for all user strings
-            2. Web app (webapp/static/app.js + webapp/main.py) — localhost-only CORS, Pydantic validation
+            This project has three attack surfaces:
+            1. VS Code webview (media/app.js) — nonce-based CSP, must use escapeHtml()
+               for all user strings.
+            2. Web app (webapp/static/app.js + webapp/main.py) — localhost-only CORS,
+               Pydantic validation.
+            3. Project-scope Claude Code config (.claude/) — hooks (.claude/hooks/*.py +
+               .claude/settings.json) execute arbitrary shell on every tool call and
+               handle credential redaction; agent definitions (.claude/agents/*.md)
+               control tool permissions; custom slash commands (.claude/commands/*.md)
+               feed prompts to LLMs.
             Pay special attention to: XSS via HTML injection, shell command injection via
-            unsanitized input to subprocess/execFileSync, and path traversal in the data_path parameter.
+            unsanitized input to subprocess/execFileSync, path traversal in the
+            data_path parameter, hook scripts that write secret-pattern matches verbatim
+            to logs (defeating their own redaction), and agent definitions that grant
+            overly-broad tool access.
