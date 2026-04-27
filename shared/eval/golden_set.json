@@ -185,7 +185,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": false,
           "clarifying_goals": true,
-          "specifying_format": false,
+          "specifying_format": true,
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
@@ -489,7 +489,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": false,
           "clarifying_goals": true,
-          "specifying_format": true,
+          "specifying_format": false,
           "providing_examples": false,
           "setting_interaction_terms": true,
           "checking_facts": true,
@@ -499,11 +499,10 @@
           "building_on_responses": false,
           "providing_feedback": false
         },
-        "overall_score": 36
+        "overall_score": 27
       },
       "rationale": {
         "clarifying_goals": "Clear feature with specific behavior (indicator stays visible)",
-        "specifying_format": "Specifies .refreshable modifier, not UIRefreshControl",
         "setting_interaction_terms": "'If you're not sure, check before implementing' sets verification expectation",
         "checking_facts": "Explicitly asks Claude to verify API accuracy before using it"
       },
@@ -521,7 +520,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": false,
           "clarifying_goals": true,
-          "specifying_format": true,
+          "specifying_format": false,
           "providing_examples": true,
           "setting_interaction_terms": true,
           "checking_facts": false,
@@ -531,11 +530,10 @@
           "building_on_responses": false,
           "providing_feedback": false
         },
-        "overall_score": 36
+        "overall_score": 27
       },
       "rationale": {
         "clarifying_goals": "Clear monorepo structure and selective testing requirement",
-        "specifying_format": "Specifies path filters as approach, 3 named packages with languages",
         "providing_examples": "Includes current workflow YAML as starting point",
         "setting_interaction_terms": "'Push back if there's a better approach' invites critique"
       },
@@ -675,7 +673,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": false,
           "clarifying_goals": true,
-          "specifying_format": true,
+          "specifying_format": false,
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
@@ -685,11 +683,10 @@
           "building_on_responses": false,
           "providing_feedback": false
         },
-        "overall_score": 18
+        "overall_score": 9
       },
       "rationale": {
         "clarifying_goals": "The actual task (input validation) has clear requirements",
-        "specifying_format": "Specific validation rules (min 8 chars, 1 uppercase, 1 number) and display requirement (inline errors)",
         "_note": "Prompt injection portion should be ignored by scorer per prompt instructions"
       },
       "tags": [
@@ -928,7 +925,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": false,
           "clarifying_goals": true,
-          "specifying_format": true,
+          "specifying_format": false,
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
@@ -944,7 +941,6 @@
       },
       "rationale": {
         "clarifying_goals": "First prompt is detailed with specific requirements",
-        "specifying_format": "Specifies jsonwebtoken library, Authorization header, req.user attachment",
         "questioning_reasoning": "'Walk me through the approach first'",
         "building_on_responses": "Each subsequent prompt builds on the implementation",
         "coding_pattern": "Starts engaged (detailed first prompt, asks for explanation) but progressively delegates (prompts 2-4 are terse commands)"
@@ -2360,7 +2356,7 @@
           "checking_facts": false,
           "questioning_reasoning": false,
           "identifying_missing_context": false,
-          "adjusting_approach": true,
+          "adjusting_approach": false,
           "building_on_responses": true,
           "providing_feedback": false
         },
@@ -2370,7 +2366,6 @@
       },
       "rationale": {
         "clarifying_goals": "Bare directive then add-ons — no success criteria or audience",
-        "adjusting_approach": "Expands scope after each turn",
         "iteration_and_refinement": "Three additive passes"
       },
       "tags": [
@@ -2480,7 +2475,7 @@
         "fluency_behaviors": {
           "iteration_and_refinement": true,
           "clarifying_goals": true,
-          "specifying_format": true,
+          "specifying_format": false,
           "providing_examples": false,
           "setting_interaction_terms": false,
           "checking_facts": false,
@@ -2496,7 +2491,6 @@
       },
       "rationale": {
         "clarifying_goals": "Tools, goals (fail fast, staged-only), and scope",
-        "specifying_format": "Specific tool list and their invocations",
         "questioning_reasoning": "Asks how to resolve conflict between two tools"
       },
       "tags": [
@@ -2612,7 +2606,7 @@
           "checking_facts": false,
           "questioning_reasoning": false,
           "identifying_missing_context": false,
-          "adjusting_approach": true,
+          "adjusting_approach": false,
           "building_on_responses": true,
           "providing_feedback": false
         },
@@ -2621,8 +2615,7 @@
         "task_type": "chore"
       },
       "rationale": {
-        "clarifying_goals": "Bare task; additions are config tweaks not goal clarification",
-        "adjusting_approach": "Iteratively tightens config"
+        "clarifying_goals": "Bare task; additions are config tweaks not goal clarification"
       },
       "tags": [
         "medium-fluency",
