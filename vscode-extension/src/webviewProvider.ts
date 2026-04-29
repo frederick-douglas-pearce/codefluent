@@ -379,7 +379,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     severity?: string
     lineNumber?: number
     source?: string
-  }): Promise<{ hookConfig: any; explanation: string; applyInstructions: string; prompt_version: string }> {
+  }): Promise<{ hookConfig: any; explanation: string; applyInstructions: string; prompt_version: string; model?: string }> {
     const statement = payload?.statement?.trim()
     if (!statement) {
       throw new Error('Enforcement statement is required')
@@ -395,7 +395,8 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const { version: promptVersion, template } = loadConfigAdvisorPrompt()
     const cacheKey = ScoreCache.contentHash(statement + hookEvent + matcher)
     const advisorCache = this.cache.readConfigAdvisor()
-    if (advisorCache[cacheKey]?.prompt_version === promptVersion) {
+    const currentAdvisorModel = getConfig<string>('optimizer.model')
+    if (advisorCache[cacheKey]?.prompt_version === promptVersion && advisorCache[cacheKey]?.model === currentAdvisorModel) {
       return advisorCache[cacheKey]
     }
 
@@ -468,6 +469,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       explanation: parsed.explanation,
       applyInstructions: parsed.applyInstructions,
       prompt_version: promptVersion,
+      model: currentAdvisorModel,
     }
 
     advisorCache[cacheKey] = result
@@ -488,7 +490,8 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const workspacePath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || ''
     const cacheKey = ScoreCache.contentHash(inputPrompt + workspacePath)
     const optimizerCache = this.cache.readOptimizer()
-    if (optimizerCache[cacheKey]?.prompt_version === OPTIMIZER_PROMPT_VERSION) {
+    const currentOptimizerModel = getConfig<string>('optimizer.model')
+    if (optimizerCache[cacheKey]?.prompt_version === OPTIMIZER_PROMPT_VERSION && optimizerCache[cacheKey]?.model === currentOptimizerModel) {
       return optimizerCache[cacheKey]
     }
 
@@ -518,6 +521,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         input_behaviors: effectiveInputBehaviors,
         one_line_summary: optimizerResult.one_line_summary,
         prompt_version: OPTIMIZER_PROMPT_VERSION,
+        model: currentOptimizerModel,
       }
       optimizerCache[cacheKey] = response
       this.cache.writeOptimizer(optimizerCache)
@@ -547,6 +551,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       explanation: optimizerResult.explanation,
       one_line_summary: optimizerResult.one_line_summary,
       prompt_version: OPTIMIZER_PROMPT_VERSION,
+      model: currentOptimizerModel,
     }
 
     optimizerCache[cacheKey] = response
@@ -681,8 +686,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const hash = ScoreCache.contentHash(content)
     const configCache = this.cache.readConfig()
     const projectKey = workspacePath
+    const currentModel = getConfig<string>('scoring.model')
 
-    if (!forceRescore && configCache[projectKey]?.hash === hash && configCache[projectKey]?.prompt_version === CONFIG_SCORING_PROMPT_VERSION) {
+    if (!forceRescore && configCache[projectKey]?.hash === hash && configCache[projectKey]?.prompt_version === CONFIG_SCORING_PROMPT_VERSION && configCache[projectKey]?.model === currentModel) {
       return configCache[projectKey].fluency_behaviors
     }
 
@@ -691,6 +697,7 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
       configCache[projectKey] = {
         hash,
         prompt_version: CONFIG_SCORING_PROMPT_VERSION,
+        model: currentModel,
         fluency_behaviors: result.fluency_behaviors,
         one_line_summary: result.one_line_summary,
       }

@@ -116,7 +116,7 @@ Both interfaces support the same key settings with sensible defaults:
 
 | Setting | Default | What it controls |
 |---------|---------|-----------------|
-| Scoring model | `claude-sonnet-4-20250514` | Model used for fluency scoring |
+| Scoring model | `claude-sonnet-4-6` | Model used for fluency scoring |
 | Max prompts per conversation | `20` | How many prompts are sent for scoring |
 | Optimizer threshold | `90` | Score above which prompts are "already effective" |
 | Conversation gap | `60 min` | Inactivity gap that defines a conversation boundary (⚠️ changes all metrics) |
@@ -240,7 +240,7 @@ CodeFluent resolves this automatically via the system home directory. If your se
 
 1. **Parse** — JSONL session files from the session data path (`~/.claude/projects/` by default) are parsed to extract user prompts, assistant responses, and token usage metadata. System commands (`/clear`, `/compact`, etc.) are filtered out; custom commands and skills are tracked separately.
 2. **Assemble conversations** — All messages per project are pooled, sorted by timestamp, and split into conversations at inactivity gaps between user prompts (configurable via `conversation.inactivityGapMinutes`, default: 60 minutes). `/clear` commands force a conversation boundary. Each conversation is classified by task type (feature, bug fix, refactor, etc.) via heuristic analysis of branch names and prompt keywords.
-3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
+3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-6`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
 4. **Config scoring** — If a `CLAUDE.md` exists, it's scored against 3 config-eligible meta-interaction behaviors. Results are merged via `effective = conversation OR config`
 5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
 6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
@@ -292,7 +292,7 @@ uv run python ../shared/eval/run_eval.py                      # Full schema + ag
 uv run python ../shared/eval/run_eval.py --check consistency  # Self-consistency analysis
 ```
 
-Cost: ~$0.25 for a full 50-entry run, ~$0.15 for CI (33-entry subset). See [`shared/eval/README.md`](shared/eval/README.md) for full documentation.
+Cost: ~$0.30 for the full 84-entry golden set, ~$0.30 for CI (79-entry subset). See [`shared/eval/README.md`](shared/eval/README.md) for full documentation.
 
 ## Security
 
@@ -339,7 +339,7 @@ See [`SECURITY.md`](SECURITY.md) for the full policy: leak vector, defense archi
 - **VS Code extension:** TypeScript / VS Code WebviewViewProvider
 - **Web app:** Python / FastAPI / `uv`
 - **Frontend (both):** Vanilla HTML/CSS/JS + Chart.js (bundled locally)
-- **Scoring:** Anthropic API (`claude-sonnet-4-20250514`)
+- **Scoring:** Anthropic API (`claude-sonnet-4-6`)
 - **Usage data:** [ccusage](https://github.com/ryoppippi/ccusage) (reads Claude Code sessions)
 - **GitHub integration:** `gh` CLI
 - **Testing:** Jest + ts-jest (extension)
@@ -447,10 +447,10 @@ The project has **1653 automated tests** across both interfaces:
 
 ```bash
 cd vscode-extension
-npm test                   # 907 tests across 22 suites (Jest)
+npm test                   # 942 tests across 23 suites (Jest)
 
 cd webapp
-uv run pytest tests/ -v    # 746 tests across 12 suites (pytest)
+uv run pytest tests/ -v    # 799 tests across 12 suites (pytest)
 ```
 
 Test suites cover scoring, parsing, caching, analytics, pricing, agent metrics, task classification, anti-pattern detection, configuration scanning, enforcement gaps, XSS prevention, shell injection, path traversal, rate limiting, CORS, API surface, and scoring prompt regression testing. The eval framework (`shared/eval/`) validates scoring outputs against a [golden set of 50 curated entries](shared/eval/README.md). All tests must pass before merging to main.

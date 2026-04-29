@@ -27,6 +27,7 @@ export interface ScoreResult {
   suspicious_perfect_score?: boolean
   prompt_version?: string
   content_hash?: string
+  model?: string
 }
 
 export interface AggregateResult {
@@ -83,6 +84,7 @@ export interface OptimizeResponse {
   explanation?: string
   one_line_summary: string
   prompt_version: string
+  model?: string
 }
 
 const _scoringPrompt = loadScoringPrompt()
@@ -342,8 +344,10 @@ export async function scoreConversations(
       cacheEntry = cached[hashIndex[contentHash]]
     }
 
+    const currentModel = getConfig<string>('scoring.model')
     const hashMatch = !contentHash || (cacheEntry?.content_hash === contentHash)
-    if (cacheEntry && !forceRescore && cacheEntry.prompt_version === SCORING_PROMPT_VERSION && hashMatch) {
+    const modelMatch = cacheEntry?.model === currentModel
+    if (cacheEntry && !forceRescore && cacheEntry.prompt_version === SCORING_PROMPT_VERSION && hashMatch && modelMatch) {
       results[cid] = cacheEntry
       // Re-key under new ID if found via hash fallback
       if (!cached[cid]) {
@@ -387,6 +391,7 @@ export async function scoreConversations(
       }
       const score = validateScoreResult(JSON.parse(text), cid, conversation.user_prompts.length)
       score.prompt_version = SCORING_PROMPT_VERSION
+      score.model = currentModel
       if (contentHash) score.content_hash = contentHash
       results[cid] = score
       cached[cid] = score

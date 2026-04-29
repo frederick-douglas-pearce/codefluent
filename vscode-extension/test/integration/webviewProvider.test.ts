@@ -1103,6 +1103,7 @@ describe('CodeFluentViewProvider', () => {
             '/home/user/my-project': {
               hash: '# My Project\nAlways use TypeScript.' .slice(0, 100) + ':' + '# My Project\nAlways use TypeScript.'.length,
               prompt_version: CONFIG_SCORING_PROMPT_VERSION,
+              model: 'claude-sonnet-4-6',
               fluency_behaviors: { clarifying_goals: true },
               one_line_summary: 'Good config.',
             },

@@ -162,7 +162,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 907 tests)
+npm test                   # Jest (unit + integration, 942 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -292,8 +292,8 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (907 tests) in `vscode-extension/`, `pytest` (746 tests) in `webapp/`
-- **`eval.yml`** — Runs on PRs touching `shared/prompts/**`: scores golden set (33 entries) via Anthropic API, validates schema + agreement (~$0.15/run). Skipped for Dependabot.
+- **`ci.yml`** — Runs on every PR: `npm test` (942 tests) in `vscode-extension/`, `pytest` (799 tests) in `webapp/`
+- **`eval.yml`** — Runs on PRs touching `shared/prompts/**`, `shared/defaults.json`, or `shared/eval/scorer.py`: scores golden set (79 CI entries / 84 total) via Anthropic API, validates schema + agreement (~$0.30/run). Skipped for Dependabot.
 - **`security-review.yml`** — Claude-powered security review via `anthropics/claude-code-security-review`. Triggered by `needs-security-review` label on PR (not on every push, to control API costs). Skipped on docs-only PRs and Dependabot. Scans webview (`media/app.js`), webapp (`webapp/`), and project Claude config (`.claude/hooks/`, `.claude/settings.json`, `.claude/agents/`).
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
 - **`release-please.yml`** — Auto-creates release PRs with changelog + version bumps from conventional commits. When a release is created, chains into a `build-release` job that builds VSIX, publishes to Marketplace, uploads to GitHub Release, and marks the release as non-draft.
@@ -352,7 +352,7 @@ When implementing from a PM-produced spec or issue:
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 907 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 942 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
 
@@ -451,7 +451,7 @@ The parser MUST handle both.
 - Content of user prompts -> Behavioral analysis
 
 ## Anthropic API Usage
-- Model for scoring: `claude-sonnet-4-20250514` (fast, cheap, good for classification)
+- Model for scoring: `claude-sonnet-4-6` (fast, cheap, good for classification)
 - API key via: env var > `.env` > VS Code secrets > prompt
 - Keep prompts concise — send only user prompt text (up to 20 per conversation, max 2000 chars each)
 - Cache scoring results in `globalStorageUri/scores.json` to avoid re-scoring
@@ -594,7 +594,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 ## Testing
 ```bash
 cd vscode-extension
-npm test                   # Runs all 907 Jest tests (22 suites)
+npm test                   # Runs all 907 Jest tests (23 suites)
 
 # Test structure:
 # test/unit/config.test.ts                     — centralized config module (defaults, VS Code overrides, display config)
@@ -620,7 +620,7 @@ npm test                   # Runs all 907 Jest tests (22 suites)
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (746 tests, 12 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (799 tests, 12 suites)
 
 # Test structure:
 # tests/test_conversations.py    — conversation assembly, gap-based splitting, boundary detection

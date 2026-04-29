@@ -73,6 +73,18 @@ Each behavior label was determined by:
 
 Acceptable tolerance: individual behaviors should match exactly; overall scores may differ by ±9 (one behavior).
 
+## When the eval must run
+
+Treat the eval as a quality gate for any change that could move scoring outputs:
+
+- **Prompt template changes** — anything under `shared/prompts/**` (the workflow already triggers on this path).
+- **Model default changes** — flipping `scoring.model`, `optimizer.model`, or `quickwins.model` in `shared/defaults.json` (the workflow triggers on this path too). The eval CI catches accuracy regressions even when the model is being bumped at identical cost.
+- **Eval framework changes that affect scoring** — `shared/eval/scorer.py` (how the prompt is filled or the API is called).
+
+The eval framework intentionally tracks the project default model: `shared/eval/scorer.py` reads `scoring.model` from `shared/defaults.json` at import time. Override for ad-hoc comparison runs via `CODEFLUENT_SCORING_MODEL=<model-id>` in the environment. CI runs against whatever the project default is, so the eval never silently drifts from production behavior.
+
+When the eval gate fires, the PR cannot merge until all 11 fluency behaviors clear the agreement threshold (≥85%) and `task_type_agreement` clears Cohen's Kappa ≥0.7. If a model change regresses a behavior, decide between (a) tightening the behavior's definition in a follow-up prompt revision, or (b) holding the change. Don't ship known regressions.
+
 ## Eval Runner
 
 Automated regression checker that scores the golden set against the Anthropic API and validates outputs. Run from the `webapp/` directory using `uv`.

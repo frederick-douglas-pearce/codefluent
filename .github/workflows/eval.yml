@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'shared/prompts/**'
+      - 'shared/defaults.json'
+      - 'shared/eval/scorer.py'
 
 jobs:
   eval:

@@ -113,7 +113,7 @@ The webapp exposes `GET /health` returning server status, version, and dependenc
 
 1. **Parse** — JSONL session files from `~/.claude/projects/` are parsed to extract user prompts, assistant responses, and token usage metadata. System commands (`/clear`, `/compact`, etc.) are filtered out; custom commands and skills are tracked separately.
 2. **Assemble conversations** — All messages per project are pooled, sorted by timestamp, and split into conversations at inactivity gaps between user prompts (configurable via `conversation.inactivityGapMinutes`, default: 60 minutes). `/clear` commands force a conversation boundary. Each conversation is classified by task type (feature, bug fix, refactor, etc.) via heuristic analysis of branch names and prompt keywords.
-3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-20250514`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
+3. **Score** — User prompts (up to 20 per conversation, max 2000 chars each) are sent to the scoring model (`scoring.model`, default: `claude-sonnet-4-6`) with `temperature: 0` for deterministic fluency scoring against Anthropic's 11 behaviors and 6 coding interaction patterns
 4. **Config scoring** — If a `CLAUDE.md` exists, it's scored against 3 config-eligible meta-interaction behaviors. Results are merged via `effective = conversation OR config`
 5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
 6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
@@ -134,7 +134,7 @@ The webapp reads settings from three sources (highest priority first):
 
 | Setting | Env Variable | Default | Description |
 |---------|-------------|---------|-------------|
-| `scoring.model` | `CODEFLUENT_SCORING_MODEL` | `claude-sonnet-4-20250514` | Model ID for fluency scoring API calls |
+| `scoring.model` | `CODEFLUENT_SCORING_MODEL` | `claude-sonnet-4-6` | Model ID for fluency scoring API calls |
 | `scoring.maxPromptsPerConversation` | `CODEFLUENT_SCORING_MAXPROMPTSPERCONVERSATION` | `20` | Maximum prompts per conversation sent for scoring |
 | `optimizer.alreadyGoodThreshold` | `CODEFLUENT_OPTIMIZER_ALREADYGOODTHRESHOLD` | `90` | Score (0–100) at or above which prompts are considered already effective |
 | `conversation.inactivityGapMinutes` | `CODEFLUENT_CONVERSATION_INACTIVITYGAPMINUTES` | `60` | Minutes of inactivity that defines a conversation boundary |
@@ -145,7 +145,7 @@ Example `webapp/config.json`:
 
 ```json
 {
-  "scoring.model": "claude-sonnet-4-20250514",
+  "scoring.model": "claude-sonnet-4-6",
   "conversation.inactivityGapMinutes": 45
 }
 ```
@@ -168,7 +168,7 @@ CORS is restricted to localhost origins by default. The allowed origin is determ
 
 ## Testing
 
-The webapp has **746 tests** across 12 suites. Run with:
+The webapp has **799 tests** across 12 suites. Run with:
 
 ```bash
 cd webapp

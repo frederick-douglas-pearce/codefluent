@@ -23,7 +23,7 @@ def _reset():
 
 class TestGetConfig:
     def test_returns_defaults_with_no_overrides(self):
-        assert get_config("scoring.model") == "claude-sonnet-4-20250514"
+        assert get_config("scoring.model") == "claude-sonnet-4-6"
         assert get_config("scoring.maxPromptsPerConversation") == 20
         assert get_config("retry.maxAttempts") == 3
 
@@ -97,15 +97,15 @@ class TestDefaultsIntegrity:
             assert isinstance(value, (str, int, float, bool)), f"{key} has invalid type: {type(value)}"
 
     def test_default_values_match_previously_hardcoded(self):
-        assert defaults["scoring.model"] == "claude-sonnet-4-20250514"
+        assert defaults["scoring.model"] == "claude-sonnet-4-6"
         assert defaults["scoring.maxPromptsPerConversation"] == 20
         assert defaults["scoring.configTruncationChars"] == 4000
         assert defaults["scoring.maxTokens"] == 1024
         assert defaults["scoring.lowConfidenceThreshold"] == 3
-        assert defaults["optimizer.model"] == "claude-sonnet-4-20250514"
+        assert defaults["optimizer.model"] == "claude-sonnet-4-6"
         assert defaults["optimizer.maxTokens"] == 2048
         assert defaults["optimizer.alreadyGoodThreshold"] == 90
-        assert defaults["quickwins.model"] == "claude-sonnet-4-20250514"
+        assert defaults["quickwins.model"] == "claude-sonnet-4-6"
         assert defaults["quickwins.maxTokens"] == 2048
         assert defaults["quickwins.claudeMdTruncationChars"] == 2000
         assert defaults["retry.maxAttempts"] == 3

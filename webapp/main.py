@@ -497,7 +497,7 @@ async def get_conversation_analytics(
                 if fallback_key:
                     score_entry = cached_scores.get(fallback_key, {})
             overall_score = None
-            if "overall_score" in score_entry and score_entry.get("prompt_version") == SCORING_PROMPT_VERSION:
+            if "overall_score" in score_entry and score_entry.get("prompt_version") == SCORING_PROMPT_VERSION and score_entry.get("model") == get_config("scoring.model"):
                 # Compute effective score: session behavior OR config behavior
                 if config_behaviors and score_entry.get("fluency_behaviors"):
                     effective_count = sum(
@@ -800,8 +800,10 @@ async def score_conversations_endpoint(request: ScoreRequest):
         if not cache_entry and content_hash and content_hash in hash_index:
             cache_entry = cached[hash_index[content_hash]]
 
+        current_model = get_config("scoring.model")
         hash_match = not content_hash or (cache_entry is not None and cache_entry.get("content_hash") == content_hash)
-        if cache_entry and not force and cache_entry.get("prompt_version") == SCORING_PROMPT_VERSION and hash_match:
+        model_match = cache_entry is not None and cache_entry.get("model") == current_model
+        if cache_entry and not force and cache_entry.get("prompt_version") == SCORING_PROMPT_VERSION and hash_match and model_match:
             results[sid] = cache_entry
             # Re-key under new ID if found via hash fallback
             if sid not in cached:
@@ -839,6 +841,7 @@ async def score_conversations_endpoint(request: ScoreRequest):
                 json.loads(text), sid, len(session.get("user_prompts", []))
             )
             score["prompt_version"] = SCORING_PROMPT_VERSION
+            score["model"] = current_model
             if content_hash:
                 score["content_hash"] = content_hash
             results[sid] = score
@@ -876,13 +879,15 @@ async def score_conversations_endpoint(request: ScoreRequest):
             content = claude_md_path.read_text()
             content_hash = _config_content_hash(content)
             cache_key = project_dir
-            if not force and config_cache.get(cache_key, {}).get("hash") == content_hash and config_cache.get(cache_key, {}).get("prompt_version") == CONFIG_SCORING_PROMPT_VERSION:
+            current_model = get_config("scoring.model")
+            if not force and config_cache.get(cache_key, {}).get("hash") == content_hash and config_cache.get(cache_key, {}).get("prompt_version") == CONFIG_SCORING_PROMPT_VERSION and config_cache.get(cache_key, {}).get("model") == current_model:
                 config_behaviors = config_cache[cache_key]["fluency_behaviors"]
             else:
                 result = score_claude_md(content)
                 config_cache[cache_key] = {
                     "hash": content_hash,
                     "prompt_version": CONFIG_SCORING_PROMPT_VERSION,
+                    "model": current_model,
                     "fluency_behaviors": result["fluency_behaviors"],
                     "one_line_summary": result.get("one_line_summary", ""),
                 }
@@ -1017,8 +1022,10 @@ def _get_or_score_config_behaviors(project_encoded: str) -> dict:
         return entry.get("fluency_behaviors", {})
 
     content_hash = _config_content_hash(content)
+    current_model = get_config("scoring.model")
     if (entry.get("hash") == content_hash
-            and entry.get("prompt_version") == CONFIG_SCORING_PROMPT_VERSION):
+            and entry.get("prompt_version") == CONFIG_SCORING_PROMPT_VERSION
+            and entry.get("model") == current_model):
         return entry.get("fluency_behaviors", {})
 
     # Score and cache (benefits Fluency Score tab, Quick Wins, etc.)
@@ -1027,6 +1034,7 @@ def _get_or_score_config_behaviors(project_encoded: str) -> dict:
         config_cache[project_dir] = {
             "hash": content_hash,
             "prompt_version": CONFIG_SCORING_PROMPT_VERSION,
+            "model": current_model,
             "fluency_behaviors": result["fluency_behaviors"],
             "one_line_summary": result.get("one_line_summary", ""),
         }
@@ -1073,7 +1081,9 @@ async def optimize_prompt(request: OptimizeRequest):
     # Check cache (include project in cache key so different projects get different results)
     cache_key = _config_content_hash(input_prompt + request.project)
     opt_cache = _load_optimizer_cache()
-    if opt_cache.get(cache_key, {}).get("prompt_version") == OPTIMIZER_PROMPT_VERSION:
+    current_optimizer_model = get_config("optimizer.model")
+    if (opt_cache.get(cache_key, {}).get("prompt_version") == OPTIMIZER_PROMPT_VERSION
+            and opt_cache.get(cache_key, {}).get("model") == current_optimizer_model):
         return opt_cache[cache_key]
 
     # Call 1: Optimize (pass config behavior flags so it avoids redundant behaviors)
@@ -1109,6 +1119,7 @@ async def optimize_prompt(request: OptimizeRequest):
             "input_behaviors": effective_input,
             "one_line_summary": optimizer_result["one_line_summary"],
             "prompt_version": OPTIMIZER_PROMPT_VERSION,
+            "model": current_optimizer_model,
         }
         opt_cache[cache_key] = result
         _save_optimizer_cache(opt_cache)
@@ -1152,6 +1163,7 @@ async def optimize_prompt(request: OptimizeRequest):
         "explanation": optimizer_result["explanation"],
         "one_line_summary": optimizer_result["one_line_summary"],
         "prompt_version": OPTIMIZER_PROMPT_VERSION,
+        "model": current_optimizer_model,
     }
     opt_cache[cache_key] = result
     _save_optimizer_cache(opt_cache)
@@ -1202,7 +1214,9 @@ async def generate_hook_config(request: ConfigAdvisorRequest):
     # Check cache
     cache_key = _config_content_hash(statement + hook_event + matcher)
     advisor_cache = _load_config_advisor_cache()
-    if advisor_cache.get(cache_key, {}).get("prompt_version") == CONFIG_ADVISOR_PROMPT_VERSION:
+    current_advisor_model = get_config("optimizer.model")
+    if (advisor_cache.get(cache_key, {}).get("prompt_version") == CONFIG_ADVISOR_PROMPT_VERSION
+            and advisor_cache.get(cache_key, {}).get("model") == current_advisor_model):
         return advisor_cache[cache_key]
 
     # Read CLAUDE.md context if project is specified
@@ -1255,6 +1269,7 @@ async def generate_hook_config(request: ConfigAdvisorRequest):
             "explanation": parsed["explanation"],
             "applyInstructions": parsed["applyInstructions"],
             "prompt_version": CONFIG_ADVISOR_PROMPT_VERSION,
+            "model": current_advisor_model,
         }
 
         advisor_cache[cache_key] = result
