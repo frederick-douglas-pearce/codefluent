@@ -5,6 +5,33 @@ All notable changes to the CodeFluent project will be documented in this file. T
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.0](https://github.com/frederick-douglas-pearce/codefluent/compare/v1.1.0...v1.2.0) (2026-04-29)
+
+
+### Features
+
+* command/skill adoption rate metric card ([#218](https://github.com/frederick-douglas-pearce/codefluent/issues/218)) ([2b56521](https://github.com/frederick-douglas-pearce/codefluent/commit/2b565217a8660ea4a7ee6ab9108371b08d21bc26))
+* detect error recovery patterns in conversation flow ([#245](https://github.com/frederick-douglas-pearce/codefluent/issues/245)) ([#249](https://github.com/frederick-douglas-pearce/codefluent/issues/249)) ([47ce02a](https://github.com/frederick-douglas-pearce/codefluent/commit/47ce02a55aed25ad4a08ee9b97d45b38431df93e))
+* error recovery UI + webapp version sync ([#257](https://github.com/frederick-douglas-pearce/codefluent/issues/257), [#258](https://github.com/frederick-douglas-pearce/codefluent/issues/258)) ([cfc1f15](https://github.com/frederick-douglas-pearce/codefluent/commit/cfc1f15e563cb2e5bfa77d60b673fddba7a577e5))
+* expand golden set to 46 session entries with task_type coverage ([#243](https://github.com/frederick-douglas-pearce/codefluent/issues/243)) ([#268](https://github.com/frederick-douglas-pearce/codefluent/issues/268)) ([89c22d7](https://github.com/frederick-douglas-pearce/codefluent/commit/89c22d74c7261067c7945babcf2c72da20ae4ee0))
+* scoring prompt v2.0 with task_type and tightened definitions ([#242](https://github.com/frederick-douglas-pearce/codefluent/issues/242)) ([2b21e1a](https://github.com/frederick-douglas-pearce/codefluent/commit/2b21e1a078ee94aa17789be28eb8eda35ea9184b))
+* scoring prompt v2.1 with tightened definitions and label fixes ([#274](https://github.com/frederick-douglas-pearce/codefluent/issues/274)) ([#285](https://github.com/frederick-douglas-pearce/codefluent/issues/285)) ([3495ed2](https://github.com/frederick-douglas-pearce/codefluent/commit/3495ed20d996fb3c15974b9c904989e1d1c4a59c))
+* secret-handling hooks, SECURITY.md, and docs ([#270](https://github.com/frederick-douglas-pearce/codefluent/issues/270)) ([#272](https://github.com/frederick-douglas-pearce/codefluent/issues/272)) ([039d25c](https://github.com/frederick-douglas-pearce/codefluent/commit/039d25c66e48a1b725ad2d816a2fec15c25a023a))
+* task_type_agreement eval check with Cohen's Kappa ([#244](https://github.com/frederick-douglas-pearce/codefluent/issues/244)) ([#269](https://github.com/frederick-douglas-pearce/codefluent/issues/269)) ([c7a6d19](https://github.com/frederick-douglas-pearce/codefluent/commit/c7a6d19550bd1db00ff14ebabf4c21d3b635e7b0))
+
+
+### Bug Fixes
+
+* align engines.vscode with @types/vscode after Dependabot bump ([3cfb4b9](https://github.com/frederick-douglas-pearce/codefluent/commit/3cfb4b9b701636cc1cda8183a3bc5096dc5bb080))
+* deduplicate assistant messages per API turn in JSONL parser ([#253](https://github.com/frederick-douglas-pearce/codefluent/issues/253)) ([50abbe2](https://github.com/frederick-douglas-pearce/codefluent/commit/50abbe2e89f06c8b642d79b913e78489136cab7e))
+* eval CI per-behavior agreement threshold enforcement ([#266](https://github.com/frederick-douglas-pearce/codefluent/issues/266)) ([6f34851](https://github.com/frederick-douglas-pearce/codefluent/commit/6f34851a0a2fbe38321cf3b5a270627cdfb26245))
+* hook commands use $CLAUDE_PROJECT_DIR to survive cwd drift ([#273](https://github.com/frederick-douglas-pearce/codefluent/issues/273)) ([#279](https://github.com/frederick-douglas-pearce/codefluent/issues/279)) ([5154eac](https://github.com/frederick-douglas-pearce/codefluent/commit/5154eac6be14dfb55dee006777c6c20556cdd192))
+* include subagent token usage in conversation totals ([#254](https://github.com/frederick-douglas-pearce/codefluent/issues/254)) ([#259](https://github.com/frederick-douglas-pearce/codefluent/issues/259)) ([8a0c08c](https://github.com/frederick-douglas-pearce/codefluent/commit/8a0c08c0db2cd6bf43d3d7ad29abd38e7ae413e3))
+* invalidate cached scores when conversation content_hash changes ([7b910e3](https://github.com/frederick-douglas-pearce/codefluent/commit/7b910e3553e63903539f052a912db8eb964fd376))
+* invalidate cached scores when conversation content_hash changes ([#228](https://github.com/frederick-douglas-pearce/codefluent/issues/228)) ([5a1a53a](https://github.com/frederick-douglas-pearce/codefluent/commit/5a1a53afb445b8b500a87ba393e7fff8036687c5))
+* switch token dedup from signature-based to message-ID per Anthropic docs ([#261](https://github.com/frederick-douglas-pearce/codefluent/issues/261)) ([d85da95](https://github.com/frederick-douglas-pearce/codefluent/commit/d85da958a80b2c6aa5c3cd99ae141bb540f83b6a))
+* tighten hash validation — require matching hash for legacy cache entries ([9dd15cd](https://github.com/frederick-douglas-pearce/codefluent/commit/9dd15cd603f248e3f5e43f98ca5473e32a03c4fd))
+
 ## [1.1.0](https://github.com/frederick-douglas-pearce/codefluent/compare/v1.0.1...v1.1.0) (2026-04-10)
 
 
