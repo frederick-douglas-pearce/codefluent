@@ -95,3 +95,45 @@
 **Rationale:** All features previously thought to require Agent SDK (prompt-to-behavior correlation, detailed error analysis, internal reasoning analysis) are available from existing Claude Code subagent data. The remaining Agent SDK-only needs (programmatic prompt version management, CI/CD hooks, custom instrumentation) serve a different user persona than CodeFluent's interactive Claude Code users.
 
 **Impact:** No immediate product change. CodeFluent absorbs more agent analytics than originally planned (v1.3 subagent traces). AgentFluent becomes a product decision driven by market signal, not a technical necessity driven by data gaps. Bootstrap strategy updated in `docs/AGENT_ANALYTICS_RESEARCH.md`.
+
+## 2026-04-29: v1.2.0 Release Scope Cut
+
+**Context:** v1.2.0 release PR #230 is ready to merge. Six issues remain open on the v1.2 milestone: 4 stories (#248, #247, #246, #101) and 2 epic parents (#176, #174). None have implementation work started. The release already contains 9 features, 8 bug fixes, and substantial doc updates. Developer agent recommended deferring all 6 to v1.3; PM agent reviewed and concurred.
+
+### Decision 9: Defer remaining v1.2 Interaction Quality + Task Classification stories to v1.3
+
+**Options considered:**
+- A) Hold the release and implement remaining stories (est. 1-2 weeks additional)
+- B) Ship v1.2.0 as-is; move all 6 open issues to v1.3
+- C) Keep one small story (#101, behavior-token breakdown, est. 1-2 days) in v1.2
+
+**Decision:** Option B (Ship as-is, defer all 6)
+
+**What v1.2.0 ships (release narrative: "Scoring quality + model migration + observability infrastructure"):**
+- Scoring prompt v2.0 then v2.1 with task_type, tightened definitions (#242, #274, #285)
+- Sonnet 4.6 migration (#280, #286)
+- Error recovery detection + UI (#245, #249, #257, #258)
+- Command/skill adoption rate metric (#218)
+- Eval framework: golden set expansion to 46 entries (#243), task_type_agreement check with Cohen's Kappa (#244), per-behavior threshold enforcement (#266)
+- Secret-handling hooks + SECURITY.md (#270, #272)
+- 8 bug fixes (cache hash, conversation dedup, hook cwd drift, token dedup, etc.)
+- Doc updates bringing READMEs and CLAUDE.md to v1.2.0 accuracy (#289)
+
+**What moves to v1.3:**
+- #248 — Normalize metrics by task type (2-3 days, both interfaces)
+- #247 — Learning trajectory + behavior acquisition curve (3-4 days, marquee feature)
+- #246 — Verification behaviors via tool sequence analysis (2-3 days, new module)
+- #101 — Behavior-token breakdown table (1-2 days, has data-pipeline gap)
+- #176 — Epic 4: Interaction Quality Metrics (parent; v1.2 shipped #245 + #218, remaining 4 stories deferred)
+- #174 — Epic 2: Task Classification (parent; v1.2 shipped #242, #243, #244, #219, #217; only #248 remains)
+
+**Rationale:**
+1. v1.2.0 already delivers substantial user value — scoring quality improvement (v2.1 prompt + Sonnet 4.6), new metrics (error recovery, command adoption), and infrastructure hardening (eval framework, security hooks)
+2. The deferred stories total 9-12 days of implementation across both interfaces. Holding the release that long undermines cadence with no user-blocking reason.
+3. Option C was considered for #101 (smallest scope) but rejected: its data-pipeline gap (`joinSessionsWithScores` doesn't pass per-behavior flags) makes it larger than the 1-2 day estimate suggests, and implementing on release day is scope-creep.
+4. The deferred items cluster naturally with #251 (ccusage phase-out, also v1.3) — several touch the Usage tab analytics surface.
+5. No user-facing regression from deferring: all are net-new features, not fixes.
+
+**Epic milestone strategy:** Epics #176 and #174 follow their remaining stories to v1.3. The milestone field tracks "when will this close," not "when did planning start." Both epics had significant v1.2 work shipped (closed issues stay on v1.2 milestone).
+
+**Impact:** v1.2 milestone can be closed after PR #230 merges (0 open issues remaining). v1.3 gains 6 issues (now 23 open). v1.3 has a natural shape: interaction quality completion + ccusage phase-out + subagent analytics.
