@@ -98,13 +98,14 @@ codefluent/
 │   ├── pricing.json           # Token pricing by model (input/output/cache rates)
 │   ├── prompts/               # Versioned prompt templates
 │   │   ├── registry.json          # Active version pointers
-│   │   ├── scoring/v1.0.md        # Conversation scoring prompt
-│   │   ├── config/v1.0.md         # CLAUDE.md scoring prompt
+│   │   ├── scoring/v2.1.md        # Conversation scoring prompt (current)
+│   │   ├── config/v1.1.md         # CLAUDE.md scoring prompt (current)
 │   │   ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
-│   │   └── single_scoring/v1.0.md # Single-prompt verification scorer
+│   │   ├── single_scoring/v1.0.md # Single-prompt verification scorer
+│   │   └── config_advisor/v1.0.md # Hook config generation prompt
 │   └── eval/                  # Scoring regression testing framework
 │       ├── README.md              # Golden set + eval runner docs
-│       ├── golden_set.json        # 50 curated regression test cases
+│       ├── golden_set.json        # 84 curated regression test cases (79 in CI)
 │       ├── run_eval.py            # CLI entry point (argparse)
 │       ├── scorer.py              # Prompt loading, API calls, retry
 │       ├── checks.py              # 5 check implementations
@@ -492,19 +493,21 @@ Scoring prompts are extracted into standalone files under `shared/prompts/` with
 ```
 shared/prompts/
 ├── registry.json              # Points to active prompt file for each type
-├── scoring/v1.0.md            # Conversation scoring prompt template
+├── scoring/v2.1.md            # Conversation scoring prompt template (current)
 ├── config/v1.1.md             # CLAUDE.md scoring prompt (3 eligible behaviors only)
 ├── optimizer/v1.1.md          # Prompt optimizer template (config-aware)
-└── single_scoring/v1.0.md     # Single-prompt verification scorer
+├── single_scoring/v1.0.md     # Single-prompt verification scorer
+└── config_advisor/v1.0.md     # Hook config generation prompt
 ```
 
 ### Registry format (`registry.json`)
 ```json
 {
-  "scoring": { "version": "scoring-v1.0", "file": "scoring/v1.0.md" },
-  "config": { "version": "config-v1.0", "file": "config/v1.0.md" },
+  "scoring": { "version": "scoring-v2.1", "file": "scoring/v2.1.md" },
+  "config": { "version": "config-v1.1", "file": "config/v1.1.md" },
   "optimizer": { "version": "optimizer-v1.1", "file": "optimizer/v1.1.md" },
-  "single_scoring": { "version": "single_scoring-v1.0", "file": "single_scoring/v1.0.md" }
+  "single_scoring": { "version": "single_scoring-v1.0", "file": "single_scoring/v1.0.md" },
+  "config_advisor": { "version": "config_advisor-v1.0", "file": "config_advisor/v1.0.md" }
 }
 ```
 
