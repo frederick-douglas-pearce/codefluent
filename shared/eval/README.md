@@ -198,14 +198,14 @@ Results saved to: shared/eval/results/2026-03-19_183628_agreement_schema.json
 
 ### Cost
 
-- Full golden set (84 entries): ~$0.35-0.50
-- CI subset (79 entries, single + session + config): ~$0.30-0.50
-- Consistency (10 entries × 3 runs): ~$0.10
-- Regression (one section, 2 versions): ~$0.05-0.25
+- Full golden set (84 entries) on Sonnet 4.6: ~$0.65-0.80
+- CI subset (79 entries, single + session + config) on Sonnet 4.6: ~$0.65-0.75
+- Consistency (10 entries × 3 runs): ~$0.10-0.15
+- Regression (one section, 2 versions): ~$0.10-0.30
 
 ### CI Integration
 
-A GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement + task_type_agreement checks on PRs that modify `shared/prompts/**`. It uses the `single_scoring` + `session_scoring` + `config_scoring` subset (79 entries, ~$0.30-0.50/run) and requires the `ANTHROPIC_API_KEY` repo secret. Skipped for Dependabot PRs.
+A GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement + task_type_agreement checks on PRs that modify `shared/prompts/**`, `shared/defaults.json`, or `shared/eval/scorer.py`. It uses the `single_scoring` + `session_scoring` + `config_scoring` subset (79 entries, ~$0.65-0.75/run on Sonnet 4.6) and requires the `ANTHROPIC_API_KEY` repo secret. Skipped for Dependabot PRs.
 
 ### Tests
 

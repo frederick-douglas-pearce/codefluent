@@ -253,16 +253,16 @@ Everything runs locally. No data leaves your machine except the API calls to Ant
 
 CodeFluent uses an LLM-as-judge architecture — an LLM scores user prompts against 11 fluency behaviors. This creates a challenge: how do you ensure scoring quality doesn't degrade when you update prompt templates, switch models, or add new LLM providers?
 
-The eval framework (`shared/eval/`) solves this with a golden set of 50 human-labeled entries and an automated regression runner that validates scoring outputs before changes ship. As CodeFluent expands beyond Claude to support additional LLM providers, the eval framework provides the ground truth needed to validate that scoring remains accurate and consistent across models.
+The eval framework (`shared/eval/`) solves this with a golden set of 84 human-labeled entries and an automated regression runner that validates scoring outputs before changes ship. As CodeFluent expands beyond Claude to support additional LLM providers, the eval framework provides the ground truth needed to validate that scoring remains accurate and consistent across models.
 
 ### Golden Set
 
-50 curated entries across 4 scoring sections, each with human-verified expected behaviors and rationale:
+84 curated entries across 4 scoring sections, each with human-verified expected behaviors and rationale:
 
 | Section | Entries | What it validates |
 |---------|---------|-------------------|
 | Single-prompt scoring | 25 | Behavior classification across the full score range (0–100) |
-| Session scoring | 12 | Multi-prompt sessions with metadata signals (plan mode, tools, thinking) |
+| Session scoring | 46 | Multi-prompt sessions with task_type labels, metadata signals (plan mode, tools, thinking), and pattern classification |
 | Config scoring | 8 | CLAUDE.md files testing behavior credit boundaries |
 | Optimizer | 5 | Input scoring accuracy and config-aware skip logic |
 
@@ -270,19 +270,20 @@ Entries span web dev, data science, systems programming, mobile, infrastructure,
 
 ### Automated Checks
 
-The eval runner (`run_eval.py`) implements 5 checks:
+The eval runner (`run_eval.py`) implements 6 checks:
 
 | Check | What it measures | When to use |
 |-------|-----------------|-------------|
 | **Schema** | Response structure validity (keys, types, value ranges) | Every run |
-| **Agreement** | Behavior-level match rate vs. human labels (target: 85%+) | Every run |
+| **Agreement** | Per-behavior match rate vs. human labels (gate: every behavior ≥85%) | Every run |
+| **Task type agreement** | Cohen's Kappa for `task_type` label vs. human labels (gate: Kappa ≥0.7) | Every run |
 | **Consistency** | Self-agreement across repeated runs (measures model determinism) | Before model changes |
 | **Drift** | Activation rate shifts >15pp against a baseline | After model updates |
 | **Regression** | Side-by-side diff between two prompt versions | Before prompt bumps, cross-model validation |
 
 ### CI Integration
 
-A dedicated GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement checks on any PR that modifies prompt templates (`shared/prompts/**`). This catches scoring regressions before they reach production — no manual testing required.
+A dedicated GitHub Actions workflow (`eval.yml`) automatically runs schema + agreement + task-type-agreement checks on any PR that modifies prompt templates (`shared/prompts/**`), the model default (`shared/defaults.json`), or the eval scorer (`shared/eval/scorer.py`). This catches scoring regressions before they reach production — no manual testing required.
 
 ```bash
 # Run locally before a prompt change
@@ -292,7 +293,7 @@ uv run python ../shared/eval/run_eval.py                      # Full schema + ag
 uv run python ../shared/eval/run_eval.py --check consistency  # Self-consistency analysis
 ```
 
-Cost: ~$0.30 for the full 84-entry golden set, ~$0.30 for CI (79-entry subset). See [`shared/eval/README.md`](shared/eval/README.md) for full documentation.
+Cost: ~$0.65–0.75 per CI run on the 79-entry subset (Sonnet 4.6, includes single + session + config). See [`shared/eval/README.md`](shared/eval/README.md) for full documentation.
 
 ## Security
 
@@ -305,7 +306,7 @@ Cost: ~$0.30 for the full 84-entry golden set, ~$0.30 for CI (79-entry subset). 
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 1653 tests including security-focused suites | Regressions |
+| Automated testing | 1741 tests including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -397,13 +398,13 @@ codefluent/
 │   ├── pricing.json           # Token pricing by model
 │   ├── prompts/               # Versioned prompt templates
 │   │   ├── registry.json      # Active version pointers
-│   │   ├── scoring/v1.0.md        # Session scoring prompt
-│   │   ├── config/v1.0.md         # CLAUDE.md scoring prompt
+│   │   ├── scoring/v2.1.md        # Session scoring prompt
+│   │   ├── config/v1.1.md         # CLAUDE.md scoring prompt
 │   │   ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
 │   │   ├── single_scoring/v1.0.md # Single-prompt verification scorer
 │   │   └── config_advisor/v1.0.md # Hook config generation prompt
 │   └── eval/                  # Scoring regression testing
-│       ├── golden_set.json    # 50 curated test cases
+│       ├── golden_set.json    # 84 curated test cases
 │       ├── run_eval.py        # CLI runner (schema, agreement, drift, regression checks)
 │       └── README.md          # Eval framework docs
 ├── docs/                      # Design docs and specs
@@ -443,7 +444,7 @@ See [`webapp/README.md`](webapp/README.md) for configuration, CORS, and Windows 
 
 ### Testing
 
-The project has **1653 automated tests** across both interfaces:
+The project has **1741 automated tests** across both interfaces:
 
 ```bash
 cd vscode-extension
@@ -453,16 +454,16 @@ cd webapp
 uv run pytest tests/ -v    # 799 tests across 12 suites (pytest)
 ```
 
-Test suites cover scoring, parsing, caching, analytics, pricing, agent metrics, task classification, anti-pattern detection, configuration scanning, enforcement gaps, XSS prevention, shell injection, path traversal, rate limiting, CORS, API surface, and scoring prompt regression testing. The eval framework (`shared/eval/`) validates scoring outputs against a [golden set of 50 curated entries](shared/eval/README.md). All tests must pass before merging to main.
+Test suites cover scoring, parsing, caching, analytics, pricing, agent metrics, task classification, anti-pattern detection, configuration scanning, enforcement gaps, XSS prevention, shell injection, path traversal, rate limiting, CORS, API surface, and scoring prompt regression testing. The eval framework (`shared/eval/`) validates scoring outputs against a [golden set of 84 curated entries](shared/eval/README.md). All tests must pass before merging to main.
 
 ### CI/CD
 
-Five GitHub Actions workflows run automatically:
+Six GitHub Actions workflows run automatically:
 
-- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 1653 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
-- **Eval** (`eval.yml`) — Runs on PRs that modify `shared/prompts/**`: scores the golden set via the Anthropic API, validates schema + agreement against human-labeled ground truth. See [Eval Framework](#eval-framework) below.
-- **Claude Code Review** (`claude-review.yml`) — AI-powered PR review, responds to `@claude` mentions.
-- **Security Review** (`security-review.yml`) — Grep-based checks for security anti-patterns (inline onclick, string interpolation in shell commands, missing escapeHtml).
+- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 1741 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
+- **Eval** (`eval.yml`) — Runs on PRs that modify `shared/prompts/**`, `shared/defaults.json`, or `shared/eval/scorer.py`: scores the golden set via the Anthropic API, validates schema + agreement + task_type_agreement against human-labeled ground truth. See [Eval Framework](#eval-framework) below.
+- **Claude Code Review** (`claude-review.yml`) — AI-powered PR review on the `needs-review` label, also responds to `@claude` mentions.
+- **Security Review** (`security-review.yml`) — Claude-powered security review via [`anthropics/claude-code-security-review`](https://github.com/anthropics/claude-code-security-review), triggered by the `needs-security-review` label.
 - **Release** (`release.yml`) — Triggered by version tags (`v*`). Builds VSIX, publishes to VS Code Marketplace, uploads to GitHub Release.
 - **Release Please** (`release-please.yml`) — Auto-generates release PRs with changelog updates and version bumps from [Conventional Commits](https://www.conventionalcommits.org/).
 
@@ -480,15 +481,18 @@ Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for dev setu
 
 ## Roadmap
 
-**Coming in v1.2:**
-- **LLM-powered task classification** — upgrade heuristic classification with few-shot LLM classification and golden set validation
-- **Interaction quality metrics** — error recovery patterns, verification behavior, learning trajectory
-- **Task-type normalization** — per-task-type expected ranges for agent metrics
+**Recently shipped (v1.2):**
+- **Scoring prompt v2.1** — tightened behavior definitions with few-shot examples for borderline cases (iter, QR, providing_feedback, IMC), reaching 92.4%+ overall agreement on the eval golden set
+- **Sonnet 4.6 migration** — scoring/optimizer/quickwins now default to `claude-sonnet-4-6`
+- **LLM-powered task classification** — `task_type` field on every conversation with Cohen's Kappa ≥0.9 vs human labels (`task_type_agreement` eval check)
+- **Interaction quality metrics** — error recovery pattern detection in conversation flow
+- **Golden set expansion** — 84 entries (79 in CI), 46 session entries with task_type coverage
 
 **Planned (v1.3+):**
 - **CCA readiness radar** — 5-axis radar chart mapping your usage to Claude Certified Architect competency domains
-- **Scoring quality infrastructure** — confidence calibration, user feedback signals, cross-model agreement testing
+- **Scoring quality infrastructure** — confidence calibration, temperature-zero variance baseline (#287), user feedback signals, cross-model agreement testing
 - **Outcome metrics** — commit quality analysis, MCP integration assessment, CI/CD scoring
+- **Task-type normalization** — per-task-type expected ranges for agent metrics
 
 See the [Release Roadmap](docs/RELEASE_ROADMAP.md) for details, or browse [open milestones](https://github.com/frederick-douglas-pearce/codefluent/milestones) on GitHub.
 

@@ -170,13 +170,15 @@ The CodeFluent repository itself ships Claude Code hooks that block reads of `.e
 
 ## Roadmap
 
-**Coming in v1.2:**
-- **LLM-powered task classification** — upgrade heuristic classification with few-shot LLM classification and golden set validation
-- **Interaction quality metrics** — error recovery patterns, verification behavior, learning trajectory
+**Recently shipped (v1.2):**
+- **Scoring prompt v2.1** — tightened behavior definitions with few-shot examples for borderline cases (iter, QR, providing_feedback, IMC), reaching 92.4%+ overall agreement on the eval golden set
+- **Sonnet 4.6 migration** — scoring/optimizer/quickwins now default to `claude-sonnet-4-6`
+- **LLM task classification** — task_type field on every conversation with Cohen's Kappa ≥0.9 vs human labels
+- **Interaction quality metrics** — error recovery pattern detection in conversation flow
 
 **Planned (v1.3+):**
 - **CCA readiness radar** — 5-axis radar chart mapping your usage to Claude Certified Architect competency domains
-- **Scoring quality infrastructure** — confidence calibration, user feedback signals, cross-model agreement testing
+- **Scoring quality infrastructure** — confidence calibration, temperature-zero variance baseline, user feedback signals, cross-model agreement testing
 - **Outcome metrics** — commit quality analysis, MCP integration assessment
 
 See the [Release Roadmap](https://github.com/frederick-douglas-pearce/codefluent/blob/main/docs/RELEASE_ROADMAP.md) for details, or browse [open milestones](https://github.com/frederick-douglas-pearce/codefluent/milestones) on GitHub.
