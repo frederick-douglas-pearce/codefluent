@@ -5,6 +5,13 @@ All notable changes to the CodeFluent project will be documented in this file. T
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.1](https://github.com/frederick-douglas-pearce/codefluent/compare/v1.2.0...v1.2.1) (2026-04-30)
+
+
+### Bug Fixes
+
+* Daily Token Usage chart DOM-leak + Pattern A render audit ([#297](https://github.com/frederick-douglas-pearce/codefluent/issues/297)) ([#303](https://github.com/frederick-douglas-pearce/codefluent/issues/303)) ([9b613a1](https://github.com/frederick-douglas-pearce/codefluent/commit/9b613a12a09c430739e7105523d8db502f34762e))
+
 ## [1.2.0](https://github.com/frederick-douglas-pearce/codefluent/compare/v1.1.0...v1.2.0) (2026-04-29)
 
 
