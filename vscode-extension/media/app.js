@@ -621,10 +621,12 @@ document.addEventListener('click', (e) => {
 
 // --- Usage Dashboard ---
 function renderUsageDashboard() {
+  const canvas = document.getElementById('usage-chart')
+  clearEmptyState(canvas?.parentElement)
+
   const daily = state.usage?.daily?.daily || []
   if (!daily.length) {
     document.getElementById('usage-pace').innerHTML = ''
-    const canvas = document.getElementById('usage-chart')
     if (canvas) {
       destroyChart('usage')
       canvas.parentElement.querySelector('h3').insertAdjacentHTML('afterend',
