@@ -1793,6 +1793,10 @@ async function loadConversationsExplorer() {
     } catch (_e) { /* agent metrics are supplementary */ }
   } catch (e) {
     document.getElementById('conversations-loading').style.display = 'none'
+    document.getElementById('conversations-summary-cards').style.display = 'none'
+    document.getElementById('agent-metrics-section').style.display = 'none'
+    document.getElementById('conversations-charts-row').style.display = 'none'
+    document.getElementById('conversations-table-container').style.display = 'none'
     document.getElementById('conversations-empty').style.display = ''
   }
 }
