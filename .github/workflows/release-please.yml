@@ -23,6 +23,36 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # Release Please bumps webapp/pyproject.toml via the generic updater but
+      # has no concept of uv lockfiles. Without this, every release leaves
+      # webapp/uv.lock pinned to the previous version (see #295, #296). When a
+      # release-please PR is open or updated, regenerate the lockfile on its
+      # branch so the release ships with a consistent state.
+      - uses: astral-sh/setup-uv@v7
+        if: steps.release.outputs.prs_created == 'true'
+
+      - name: Sync webapp/uv.lock on release PR
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_JSON: ${{ steps.release.outputs.pr }}
+        run: |
+          set -euo pipefail
+          BRANCH=$(echo "$PR_JSON" | jq -r '.headBranchName')
+          git clone --branch "$BRANCH" --depth 2 --quiet \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" release-pr
+          cd release-pr
+          (cd webapp && uv lock)
+          if git diff --quiet webapp/uv.lock; then
+            echo "uv.lock already in sync — nothing to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add webapp/uv.lock
+          git commit -m "chore: regenerate webapp/uv.lock"
+          git push origin "$BRANCH"
+
   build-release:
     name: Build & Release
     needs: release-please

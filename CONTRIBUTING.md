@@ -194,6 +194,7 @@ Before submitting a pull request, verify:
 
 - [ ] `npm test` passes (942+ extension tests green)
 - [ ] `uv run pytest` passes (799+ webapp tests green)
+- [ ] `webapp/uv.lock` is in sync (`uv lock --check` — don't hand-edit; run `uv lock` after changing `pyproject.toml`)
 - [ ] No regressions in existing functionality
 - [ ] New features include test coverage
 - [ ] Both interfaces updated if the change affects shared functionality
