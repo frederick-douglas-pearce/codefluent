@@ -59,6 +59,10 @@ jobs:
 
       - uses: astral-sh/setup-uv@v7
 
+      - name: Verify uv.lock
+        working-directory: webapp
+        run: uv lock --check
+
       - name: Install dependencies
         working-directory: webapp
         run: uv sync --extra dev

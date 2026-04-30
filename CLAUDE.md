@@ -293,11 +293,11 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (942 tests) + `vsce package` (catches `engines.vscode` / `@types/vscode` mismatches and `.vscodeignore` misconfig pre-merge) in `vscode-extension/`, `pytest` (799 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (942 tests) + `vsce package` (catches `engines.vscode` / `@types/vscode` mismatches and `.vscodeignore` misconfig pre-merge) in `vscode-extension/`, `uv lock --check` + `pytest` (799 tests) in `webapp/` — `uv lock --check` fails the PR if `webapp/uv.lock` has drifted from `pyproject.toml`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`, `shared/defaults.json`, or `shared/eval/scorer.py`: scores golden set (79 CI entries / 84 total) via Anthropic API, validates schema + agreement (~$0.30/run). Skipped for Dependabot.
 - **`security-review.yml`** — Claude-powered security review via `anthropics/claude-code-security-review`. Triggered by `needs-security-review` label on PR (not on every push, to control API costs). Skipped on docs-only PRs and Dependabot. Scans webview (`media/app.js`), webapp (`webapp/`), and project Claude config (`.claude/hooks/`, `.claude/settings.json`, `.claude/agents/`).
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
-- **`release-please.yml`** — Auto-creates release PRs with changelog + version bumps from conventional commits. When a release is created, chains into a `build-release` job that builds VSIX, publishes to Marketplace, uploads to GitHub Release, and marks the release as non-draft.
+- **`release-please.yml`** — Auto-creates release PRs with changelog + version bumps from conventional commits. Auto-syncs `webapp/uv.lock` onto the release PR branch when one exists (Release Please's generic updater bumps `pyproject.toml` but not the lockfile). When a release is created, chains into a `build-release` job that builds VSIX, publishes to Marketplace, uploads to GitHub Release, and marks the release as non-draft.
 - **`release.yml`** — Manual fallback (`workflow_dispatch` only) for retrying failed releases or manual tag releases. Not triggered automatically.
 
 ## Product Development Workflow
