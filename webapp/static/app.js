@@ -369,8 +369,9 @@ async function loadData() {
     updateTimeScopeCounts()
   } catch (e) {
     console.error('Failed to load data:', e)
-    const pace = document.getElementById('usage-pace')
     const canvas = document.getElementById('usage-chart')
+    clearEmptyState(canvas?.parentElement)
+    const pace = document.getElementById('usage-pace')
     if (pace) pace.innerHTML = ''
     if (canvas) {
       canvas.style.display = 'none'
