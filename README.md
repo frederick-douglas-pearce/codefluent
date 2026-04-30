@@ -306,7 +306,7 @@ Cost: ~$0.65–0.75 per CI run on the 79-entry subset (Sonnet 4.6, includes sing
 | Input validation | Pydantic constraints, length limits, path checks | Oversized payloads, path traversal |
 | Rate limiting | 10 req/min sliding window (webapp) | API abuse |
 | CORS | Localhost-only default (webapp) | Unauthorized cross-origin access |
-| Automated testing | 1741 tests including security-focused suites | Regressions |
+| Automated testing | 1761 tests including security-focused suites | Regressions |
 | CI security review | Claude security review on PRs | New vulnerabilities |
 
 All user-controlled strings are escaped before rendering in HTML. Shell commands use argument arrays (`execFileSync`) instead of string interpolation. The webapp validates all inputs with Pydantic models and enforces rate limits. Security-focused test suites verify XSS and injection protections.
@@ -444,11 +444,11 @@ See [`webapp/README.md`](webapp/README.md) for configuration, CORS, and Windows 
 
 ### Testing
 
-The project has **1741 automated tests** across both interfaces:
+The project has **1761 automated tests** across both interfaces:
 
 ```bash
 cd vscode-extension
-npm test                   # 942 tests across 23 suites (Jest)
+npm test                   # 962 tests across 24 suites (Jest)
 
 cd webapp
 uv run pytest tests/ -v    # 799 tests across 12 suites (pytest)
@@ -460,7 +460,7 @@ Test suites cover scoring, parsing, caching, analytics, pricing, agent metrics, 
 
 Six GitHub Actions workflows run automatically:
 
-- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 1741 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
+- **CI** (`ci.yml`) — Runs on every PR: compiles TypeScript, runs all 1761 tests, plus `npm audit` and `pip-audit` for dependency vulnerabilities. Must pass to merge.
 - **Eval** (`eval.yml`) — Runs on PRs that modify `shared/prompts/**`, `shared/defaults.json`, or `shared/eval/scorer.py`: scores the golden set via the Anthropic API, validates schema + agreement + task_type_agreement against human-labeled ground truth. See [Eval Framework](#eval-framework) below.
 - **Claude Code Review** (`claude-review.yml`) — AI-powered PR review on the `needs-review` label, also responds to `@claude` mentions.
 - **Security Review** (`security-review.yml`) — Claude-powered security review via [`anthropics/claude-code-security-review`](https://github.com/anthropics/claude-code-security-review), triggered by the `needs-security-review` label.
