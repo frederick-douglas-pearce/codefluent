@@ -397,6 +397,15 @@ function destroyChart(name) {
   }
 }
 
+// Removes any state-dependent DOM injected by a prior render of this view
+// (empty/error/loading boxes) and restores any hidden canvases. Required
+// at the top of Pattern A render functions — see CONTRIBUTING.md.
+function clearEmptyState(container) {
+  if (!container) return
+  container.querySelectorAll('.empty-state-box').forEach(el => el.remove())
+  container.querySelectorAll('canvas').forEach(c => { c.style.display = '' })
+}
+
 function showLoader(tabId) {
   document.getElementById(tabId).innerHTML =
     '<div class="scoring-loader"><div class="spinner"></div><p>Analyzing conversations with Claude...</p></div>'
