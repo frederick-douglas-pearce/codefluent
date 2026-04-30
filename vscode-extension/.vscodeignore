@@ -4,3 +4,5 @@ tsconfig.json
 jest.config.js
 coverage/
 .vscode/
+node_modules/
+
