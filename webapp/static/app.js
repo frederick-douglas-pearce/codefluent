@@ -369,8 +369,9 @@ async function loadData() {
     updateTimeScopeCounts()
   } catch (e) {
     console.error('Failed to load data:', e)
-    const pace = document.getElementById('usage-pace')
     const canvas = document.getElementById('usage-chart')
+    clearEmptyState(canvas?.parentElement)
+    const pace = document.getElementById('usage-pace')
     if (pace) pace.innerHTML = ''
     if (canvas) {
       canvas.style.display = 'none'
@@ -422,6 +423,15 @@ function destroyChart(name) {
     charts[name].destroy()
     charts[name] = null
   }
+}
+
+// Removes any state-dependent DOM injected by a prior render of this view
+// (empty/error/loading boxes) and restores any hidden canvases. Required
+// at the top of Pattern A render functions — see CONTRIBUTING.md.
+function clearEmptyState(container) {
+  if (!container) return
+  container.querySelectorAll('.empty-state-box').forEach(el => el.remove())
+  container.querySelectorAll('canvas').forEach(c => { c.style.display = '' })
 }
 
 function showLoader(tabId) {
@@ -652,10 +662,12 @@ document.addEventListener('click', (e) => {
 
 // --- Usage Dashboard ---
 function renderUsageDashboard() {
+  const canvas = document.getElementById('usage-chart')
+  clearEmptyState(canvas?.parentElement)
+
   const daily = state.usage?.daily?.daily || []
   if (!daily.length) {
     document.getElementById('usage-pace').innerHTML = ''
-    const canvas = document.getElementById('usage-chart')
     if (canvas) {
       destroyChart('usage')
       canvas.parentElement.querySelector('h3').insertAdjacentHTML('afterend',
@@ -1876,6 +1888,10 @@ async function loadConversationsExplorer() {
     } catch (_e) { /* agent metrics are supplementary */ }
   } catch (e) {
     document.getElementById('conversations-loading').style.display = 'none'
+    document.getElementById('conversations-summary-cards').style.display = 'none'
+    document.getElementById('agent-metrics-section').style.display = 'none'
+    document.getElementById('conversations-charts-row').style.display = 'none'
+    document.getElementById('conversations-table-container').style.display = 'none'
     document.getElementById('conversations-empty').style.display = ''
   }
 }

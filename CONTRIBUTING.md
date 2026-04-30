@@ -38,9 +38,9 @@ Then open `http://localhost:8000`. See [`webapp/README.md`](webapp/README.md) fo
 
 ## Running Tests
 
-The project has **1741 automated tests** across both interfaces. All must pass before merging.
+The project has **1761 automated tests** across both interfaces. All must pass before merging.
 
-### VS Code Extension (942 tests, 23 suites)
+### VS Code Extension (962 tests, 24 suites)
 
 ```bash
 cd vscode-extension
@@ -71,6 +71,7 @@ npx jest test/unit/scoring      # Run a specific test file
 | `configScanner.test.ts` | .claude/ directory scanning, maturity scoring |
 | `extension.test.ts` | Activation, status bar, commands |
 | `webviewProvider.test.ts` | Message handling, HTML generation, injection tests, config advisor |
+| `renderUsageDashboard.test.ts` | Pattern A render-function idempotency: `clearEmptyState` helper + call-site audits in both interfaces |
 
 ### Web App (799 tests, 12 suites)
 
@@ -133,6 +134,16 @@ Example: `feat: add session token analytics to Usage tab (#89)`
 - ES6+, no semicolons, async/await
 - **No inline `onclick` handlers** — the webview uses nonce-based CSP that blocks them. Use event delegation on `document` instead.
 
+### Rendering pattern (`media/app.js`, `webapp/static/app.js`)
+
+Render functions fall into three patterns. Each new render function must use one of them:
+
+- **Pattern A** — `insertAdjacentHTML` of an `.empty-state-box` (or `.error-state-box`) plus `canvas.style.display = 'none'` for empty/error states. **Must call `clearEmptyState(container)` at the top of the function** to clear DOM mutations from prior renders. Without that call, transitioning from empty → data leaves the prior empty-state DOM stacked on top of the freshly-rendered chart (#297).
+- **Pattern B** — toggle `display` on pre-existing DOM elements via a `load*` wrapper that resets all states at the top. Catch paths must explicitly hide every section that a successful render could have shown — otherwise an in-flight `*Updated` event can re-show sections during the await, leaving stale data behind the empty-state.
+- **Pattern C** — full `container.innerHTML = ...` replacement. Inherently idempotent; no cleanup needed.
+
+Audit and rationale: [architect review on #298](https://github.com/frederick-douglas-pearce/codefluent/issues/298#issuecomment-4348482446).
+
 ### Python (webapp — `webapp/`)
 
 - Python 3.12+, type hints encouraged
@@ -192,7 +203,7 @@ CodeFluent ships **two production interfaces**: the VS Code extension and the we
 
 Before submitting a pull request, verify:
 
-- [ ] `npm test` passes (942+ extension tests green)
+- [ ] `npm test` passes (962+ extension tests green)
 - [ ] `uv run pytest` passes (799+ webapp tests green)
 - [ ] `webapp/uv.lock` is in sync (`uv lock --check` — don't hand-edit; run `uv lock` after changing `pyproject.toml`)
 - [ ] No regressions in existing functionality
