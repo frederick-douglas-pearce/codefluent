@@ -293,7 +293,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (942 tests) in `vscode-extension/`, `pytest` (799 tests) in `webapp/`
+- **`ci.yml`** — Runs on every PR: `npm test` (942 tests) + `vsce package` (catches `engines.vscode` / `@types/vscode` mismatches and `.vscodeignore` misconfig pre-merge) in `vscode-extension/`, `pytest` (799 tests) in `webapp/`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`, `shared/defaults.json`, or `shared/eval/scorer.py`: scores golden set (79 CI entries / 84 total) via Anthropic API, validates schema + agreement (~$0.30/run). Skipped for Dependabot.
 - **`security-review.yml`** — Claude-powered security review via `anthropics/claude-code-security-review`. Triggered by `needs-security-review` label on PR (not on every push, to control API costs). Skipped on docs-only PRs and Dependabot. Scans webview (`media/app.js`), webapp (`webapp/`), and project Claude config (`.claude/hooks/`, `.claude/settings.json`, `.claude/agents/`).
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
