@@ -32,6 +32,21 @@ jobs:
         working-directory: vscode-extension
         run: npm test
 
+      - name: Package VSIX
+        working-directory: vscode-extension
+        run: npx @vscode/vsce package --allow-missing-repository
+
+      - name: Verify VSIX size
+        working-directory: vscode-extension
+        run: |
+          VSIX=$(ls *.vsix)
+          SIZE=$(stat --format=%s "$VSIX")
+          echo "VSIX: $VSIX ($SIZE bytes)"
+          if [ "$SIZE" -lt 500000 ]; then
+            echo "ERROR: VSIX is too small (<500KB) — node_modules likely excluded"
+            exit 1
+          fi
+
       - name: Audit dependencies
         working-directory: vscode-extension
         run: npm audit --audit-level=high
