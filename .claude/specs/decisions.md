@@ -137,3 +137,77 @@
 **Epic milestone strategy:** Epics #176 and #174 follow their remaining stories to v1.3. The milestone field tracks "when will this close," not "when did planning start." Both epics had significant v1.2 work shipped (closed issues stay on v1.2 milestone).
 
 **Impact:** v1.2 milestone can be closed after PR #230 merges (0 open issues remaining). v1.3 gains 6 issues (now 23 open). v1.3 has a natural shape: interaction quality completion + ccusage phase-out + subagent analytics.
+
+## 2026-04-30: v1.3 Scope Decisions
+
+**Context:** PM agent scoped v1.3 "Mastery" release. 27 issues on the milestone, no PRD. Solo maintainer; target ~6 weeks of work (matching v1.2 cadence).
+
+### Decision 10: Epic 5 scoped to 5a only (radar + aggregation)
+
+**Options considered:**
+- A) Full Epic 5 (XL) — radar, agentic patterns, context efficiency, cost insights, CCA recommendations, parser enhancement
+- B) Epic 5a only (L) — radar chart + aggregation + CCA-aligned recommendations + parser enhancement (#160)
+- C) Skip Epic 5 entirely, focus on completing deferred v1.2 stories + agent analytics
+
+**Decision:** Option B (5a only)
+
+**Rationale:** Full Epic 5 is XL and would consume the entire release budget. 5a delivers the marquee feature (CCA radar) by aggregating data already computed by Epics 1-4. Deeper detection (agentic patterns, context efficiency) and cost insights are deferred to v2.0 as part of 5b. The parser enhancement (#160) is pulled in because it feeds data to the radar (compact_count, hook execution stats).
+
+**Impact:** v1.3 includes CCA radar chart, CCA-aligned recommendations, and parser enhancement (#160). Deeper Epic 5 features (token bloat detection, cost ROI, advanced agentic patterns) move to v2.0.
+
+### Decision 11: Epic 6 partial — only #115 and #116
+
+**Options considered:**
+- A) Full Epic 6 (all 5 stories: #112-#116)
+- B) #115 (confidence) + #116 (user feedback) only
+- C) Defer all of Epic 6
+
+**Decision:** Option B (#115 + #116 only)
+
+**Rationale:** #112 (multi-provider eval), #113 (human review loop), and #114 (cross-model agreement) all depend on having a second LLM provider integrated, which doesn't exist. Building infrastructure without a consumer is speculative engineering. #115 and #116 deliver standalone value: confidence calibration improves scoring transparency, user feedback enables golden set growth from real users.
+
+**Impact:** Three stories (#112, #113, #114) defer to v2.0. Epic 6 tracking issue (#178) stays open — it closes when all 5 stories ship. v1.3 ships two scoring quality improvements that are immediately useful.
+
+### Decision 12: Defer #209 (rules generation) and #298 (frontend hardening)
+
+**Context:** Both are on v1.3 milestone but don't belong to any v1.3 epic. #209 is a new LLM-powered feature; #298 is a pattern-level refactor prompted by a v1.2.1 bug fix.
+
+**Decision:** #209 to v2.0; #298 to backlog.
+
+**Rationale:** #209 (rules generation) is scope-creep — it's an LLM-powered config generation feature unrelated to the v1.3 themes (CCA radar, interaction quality, agent analytics). It also depends on #199 (multi-level tabs) for UI placement. #298 (frontend rendering hardening) is good hygiene but the targeted fix already shipped in v1.2.1; the structural rewrite can happen incrementally as render functions are added or modified.
+
+**Impact:** v1.3 milestone shrinks by 2 issues. Both remain tracked for future work.
+
+### Decision 13: #256 (subagent error recovery) is a stretch goal
+
+**Context:** #256 depends on #255 (subagent parser), which is itself a Large story. If #255 completes late in the release, #256 may not fit.
+
+**Decision:** Mark #256 as stretch. If #255 completes by Week 6, implement #256. Otherwise defer to v1.3.x or v2.0.
+
+**Rationale:** #256 reuses the error recovery algorithm from #245 — the implementation is modest. But its dependency (#255) is the risk. Declaring it stretch up front prevents pressure to rush #255 and lets the team ship without it if needed.
+
+**Impact:** No issue changes. PRD documents the stretch designation. #256 is the first thing cut if velocity slips.
+
+### Decision 14: Close Epic 2 (#174)
+
+**Context:** Epic 2 (Task Classification) had two phases. Phase A (heuristic) shipped v1.1. Phase B (LLM) shipped v1.2. The only remaining child issue is #248 (task-type normalization), which is labeled `epic:task-classification` + `epic:interaction-quality` and is functionally an Epic 4 completion story.
+
+**Decision:** Close #174. #248's primary value is normalizing interaction quality metrics — it belongs to Epic 4.
+
+**Rationale:** Keeping #174 open for a single cross-labeled story creates tracking confusion. The epic's deliverables (heuristic classification, LLM classification, golden set expansion, eval check) are all complete.
+
+**Impact:** #174 closed 2026-04-30. #248 tracked solely under Epic 4 (#176). Retains `epic:task-classification` label for traceability.
+
+### Decision 15: v1.3 PRD finalized (2026-04-30)
+
+**Context:** Human answered 5 open questions from the draft PRD. All resolutions applied.
+
+**Resolutions:**
+
+- **Q1 (Epic 2 closure):** #174 closed. All children shipped; #248 reassigned to Epic 4.
+- **Q2 (#255/#256 placement):** #255 placed in Epic 4 (subagent parsing is a dependency for Epic 4 agent analytics stories #239, #240). #256 moved to Epic 5b / v2.0 (feeds Agentic Architecture radar axis; stretch goal risk eliminated by deferring).
+- **Q3 (#199 multi-level tabs):** Deferred. Human: "functionality over UI/UX." Revisit if 8+ tabs becomes a real UX problem.
+- **Q4 (Epic 5 split):** Epic 5a (#306) created for v1.3: radar chart + aggregation + recommendations + parser #160. #177 narrowed to Epic 5b for v2.0: deeper detection + cost insights + #256. No Epic 5c needed.
+- **Q5 (#251 ccusage removal):** Full removal committed. JSONL token data is more accurate. Prior research exists. Marquee technical improvement for v1.3.
+
+**Impact:** PRD status changed from Draft to Approved. Epic 5a tracking issue #306 created. #177 scope narrowed via comment. #256 deferred from v1.3 stretch to v2.0/Epic 5b.
