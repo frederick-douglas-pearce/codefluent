@@ -7,6 +7,22 @@ on:
     branches: [main]
 
 jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      webapp: ${{ steps.filter.outputs.webapp }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            webapp:
+              - 'webapp/**'
+              - 'shared/**'
+              - '.github/workflows/ci.yml'
+
   test:
     name: Run Tests
     runs-on: ubuntu-latest
@@ -74,3 +90,26 @@ jobs:
       - name: Audit dependencies
         working-directory: webapp
         run: uv export --no-hashes > /tmp/requirements.txt && uvx pip-audit -r /tmp/requirements.txt
+
+  e2e:
+    name: Run E2E Tests
+    needs: changes
+    if: needs.changes.outputs.webapp == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        working-directory: webapp
+        run: uv sync --extra dev
+
+      - name: Install Playwright browser
+        working-directory: webapp
+        run: uv run playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: webapp
+        run: uv run pytest tests/e2e/ -m e2e -v
