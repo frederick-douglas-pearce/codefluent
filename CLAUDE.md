@@ -355,7 +355,7 @@ When implementing from a PM-produced spec or issue:
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
 - **No regressions:** `npm test` must pass (currently 962 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
-- **E2E testing:** Every PR test plan must include manual Playwright MCP smoke testing of the webapp before merging. See the E2E Smoke Test Checklist below.
+- **E2E testing:** Webapp PRs must keep `webapp/tests/e2e/` green. CI runs the suite automatically on PRs touching `webapp/` or `shared/`. Manual Playwright MCP testing is reserved as a fallback for exploratory verification of new surfaces not yet automated. See the E2E Smoke Test Checklist below.
 
 ## Secrets handling
 
@@ -643,9 +643,16 @@ uv run pytest tests/ -v    # Runs all webapp tests (799 tests, 12 suites)
 # tests/conftest.py              — shared fixtures (TestClient, mock Anthropic, mock sessions)
 ```
 
-### E2E Smoke Test Checklist (Playwright MCP)
+### E2E Smoke Test Checklist
 
-Run before merging PRs that touch webapp UI or API. Start the server with `uv run uvicorn main:app --port 8001`, then verify:
+The 10 items below are automated under `webapp/tests/e2e/` (one Playwright file per item). CI runs the suite on PRs touching `webapp/` or `shared/`. Run locally with:
+
+```bash
+cd webapp
+uv run pytest tests/e2e/ -m e2e -v
+```
+
+Manual Playwright MCP testing remains as a fallback for exploratory verification of new surfaces not yet covered by automation. The checklist below describes the contract each automated test enforces:
 
 1. **Tab navigation** — all 7 tabs switch correctly, correct panel is visible
 2. **Settings bar visibility** — data path input shows only on Fluency Score; project dropdown shows on Fluency Score, Conversations, Config, Optimizer, Quick Wins, Usage; settings bar hidden on Recommendations
