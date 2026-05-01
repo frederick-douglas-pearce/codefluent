@@ -3,21 +3,20 @@
 End-to-end Playwright tests that automate the manual smoke checklist from
 `CLAUDE.md`. Each test corresponds to one item in the 10-item checklist.
 
-**Status:** Phase A — infrastructure + 3 of 10 items implemented (#312).
-Remaining 7 items land in Phase B.
+**Status:** Complete — all 10 checklist items automated (#312).
 
-| # | Checklist item | File | Status |
-|---|---|---|---|
-| 1 | Tab navigation (7 tabs) | `test_tab_navigation.py` | ✅ Phase A |
-| 2 | Settings bar visibility per tab | `test_settings_bar.py` | ✅ Phase A |
-| 3 | Project dropdown populates | `test_project_dropdown.py` | ✅ Phase A |
-| 4 | Fluency scoring | `test_fluency_scoring.py` | Phase B |
-| 5 | Conversations tab | `test_conversations.py` | Phase B |
-| 6 | Config tab | `test_config.py` | Phase B |
-| 7 | Prompt Optimizer | `test_optimizer.py` | Phase B |
-| 8 | Quick Wins | `test_quickwins.py` | Phase B |
-| 9 | Usage tab | `test_usage.py` | Phase B |
-| 10 | Health endpoint | `test_health.py` | Phase B |
+| # | Checklist item | File |
+|---|---|---|
+| 1 | Tab navigation (7 tabs) | `test_tab_navigation.py` |
+| 2 | Settings bar visibility per tab | `test_settings_bar.py` |
+| 3 | Project dropdown populates | `test_project_dropdown.py` |
+| 4 | Fluency scoring | `test_fluency_scoring.py` |
+| 5 | Conversations tab | `test_conversations.py` |
+| 6 | Config tab | `test_config.py` |
+| 7 | Prompt Optimizer | `test_optimizer.py` |
+| 8 | Quick Wins | `test_quickwins.py` |
+| 9 | Usage tab | `test_usage.py` |
+| 10 | Health endpoint | `test_health.py` |
 
 ## Running locally
 
@@ -65,17 +64,17 @@ The encoded project path is built from `$HOME` so server-side path validation
 | `/api/quickwins` | Yes | Seeded data + error-path on API call |
 | `/api/optimize` | N/A (no data lookup) | Error-path on API call |
 | `/api/conversation-analytics` | Yes | Seeded data |
-| `/api/usage` | **No — uses hardcoded `DATA_DIR`** | Empty-state assertion in Phase B |
-| `/api/config-maturity` | **No — scans real `~/.claude/`** | Empty-state assertion in Phase B |
-| `/health` | N/A | Direct HTTP assertion in Phase B |
+| `/api/usage` | **No — uses hardcoded `DATA_DIR`** | Empty-state assertion |
+| `/api/config-maturity` | **No — scans real `~/.claude/`** | DOM-presence assertion (renderer always emits the score-ring + checklist) |
+| `/health` | N/A | Direct HTTP assertion |
 
-Phase B will treat empty-state rendering as itself a regression target — a
-graceful empty-state for `/api/config-maturity` and `/api/usage` is valuable
-coverage in its own right.
+Empty-state rendering is itself a regression target — a graceful empty-state
+for `/api/config-maturity` and `/api/usage` is valuable coverage in its own
+right.
 
 ## Mocking the Anthropic API
 
-**Strategy: error-path testing only (Phase B).** Tests that trigger API calls
+**Strategy: error-path testing only.** Tests that trigger API calls
 (items 4, 7, 8) run with a fake key (`sk-test-e2e-fake-key`) set by the
 server fixture. The Anthropic client constructor doesn't validate the key,
 but the API call fails. Tests assert the UI shows an error state (e.g., the
