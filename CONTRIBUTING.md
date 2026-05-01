@@ -129,6 +129,16 @@ Example: `feat: add session token analytics to Usage tab (#89)`
 - **ES2020 target**, CommonJS output
 - Keep files under ~300 lines; split when they grow beyond that
 
+### VS Code API compatibility (`@types/vscode` and `engines.vscode`)
+
+`vsce package` enforces `@types/vscode` ≤ `engines.vscode`. The two must stay aligned, but only one is an npm dependency — Dependabot can bump `@types/vscode` and has no awareness of `engines.vscode`. To prevent silent drift (which previously blocked the v1.2.0 release):
+
+- `@types/vscode` is **exact-pinned** in `vscode-extension/package.json` (no caret, no tilde)
+- Dependabot **ignores** `@types/vscode` via `.github/dependabot.yml`
+- The pre-merge `vsce package` step in `ci.yml` is the safety net
+
+**When raising the VS Code floor** (the only legitimate reason to bump either field), update both `engines.vscode` and `@types/vscode` to the same version in the **same commit**. Never bump one without the other.
+
 ### JavaScript (webview — `media/app.js`, `webapp/static/app.js`)
 
 - ES6+, no semicolons, async/await
