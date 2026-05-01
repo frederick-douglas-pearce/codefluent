@@ -78,6 +78,9 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: webapp/uv.lock
 
       - name: Verify uv.lock
         working-directory: webapp
@@ -105,14 +108,27 @@ jobs:
       - uses: actions/checkout@v6
 
       - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: webapp/uv.lock
 
       - name: Install dependencies
         working-directory: webapp
         run: uv sync --extra dev
 
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('webapp/uv.lock') }}
+
+      - name: Install Playwright system dependencies
+        working-directory: webapp
+        run: uv run playwright install-deps chromium
+
       - name: Install Playwright browser
         working-directory: webapp
-        run: uv run playwright install --with-deps chromium
+        run: uv run playwright install chromium
 
       - name: Run E2E tests
         working-directory: webapp
