@@ -52,15 +52,15 @@
 
 ### Decision 5: Agent invocation tracking (#239) should capture metadata block
 
-**Context:** Analysis of PM agent JSONL data (April 14) revealed that subagent `tool_result` blocks include a metadata section with `total_tokens`, `tool_uses`, `duration_ms`, and `agentId`. This was not predicted in the original research — the "Observable vs Hidden" table initially listed token usage as hidden.
+**Context:** Analysis of PM agent JSONL data (April 14) revealed that subagent `tool_result` blocks include a metadata section with `total_tokens`, `tool_uses`, `duration_ms`, and `agentId`. This was not predicted in the original research -- the "Observable vs Hidden" table initially listed token usage as hidden.
 
 **Decision:** Expand #239 scope to capture the metadata block, enabling per-invocation cost and efficiency metrics.
 
 **Rationale:** The metadata provides enough data for meaningful agent analytics without needing Agent SDK internal traces: cost per invocation, efficiency (tokens per tool use), duration trends, and agent continuity tracking. This is low incremental effort (regex parse of a known format) with high analytical value.
 
-**Impact:** #239 scope grows slightly (metadata parsing), but delivers significantly richer agent metrics. No dependency changes — still v1.3 milestone alongside #238.
+**Impact:** #239 scope grows slightly (metadata parsing), but delivers significantly richer agent metrics. No dependency changes -- still v1.3 milestone alongside #238.
 
-## 2026-04-15: Subagent JSONL Trace Discovery — Roadmap Impact
+## 2026-04-15: Subagent JSONL Trace Discovery -- Roadmap Impact
 
 **Context:** Full subagent session traces discovered at `~/.claude/projects/<project>/<session-uuid>/subagents/agent-<id>.jsonl` (350 files, all with `isSidechain: true`). Previously believed to be hidden/inaccessible. Contains complete tool_use/tool_result sequences with `is_error` flags, per-step token usage, and internal reasoning.
 
@@ -90,7 +90,7 @@
 
 **Context:** The AgentFluent bootstrap strategy previously assumed data availability (hidden internal traces) was the trigger for a separate product. Full subagent traces eliminate this barrier.
 
-**Decision:** The trigger for AgentFluent as a separate product is now **audience divergence** — when CodeFluent needs to serve Agent SDK/production users with fundamentally different workflows (CI/CD integration, programmatic prompt versioning, batch analysis) that don't fit the interactive focus.
+**Decision:** The trigger for AgentFluent as a separate product is now **audience divergence** -- when CodeFluent needs to serve Agent SDK/production users with fundamentally different workflows (CI/CD integration, programmatic prompt versioning, batch analysis) that don't fit the interactive focus.
 
 **Rationale:** All features previously thought to require Agent SDK (prompt-to-behavior correlation, detailed error analysis, internal reasoning analysis) are available from existing Claude Code subagent data. The remaining Agent SDK-only needs (programmatic prompt version management, CI/CD hooks, custom instrumentation) serve a different user persona than CodeFluent's interactive Claude Code users.
 
@@ -120,18 +120,18 @@
 - Doc updates bringing READMEs and CLAUDE.md to v1.2.0 accuracy (#289)
 
 **What moves to v1.3:**
-- #248 — Normalize metrics by task type (2-3 days, both interfaces)
-- #247 — Learning trajectory + behavior acquisition curve (3-4 days, marquee feature)
-- #246 — Verification behaviors via tool sequence analysis (2-3 days, new module)
-- #101 — Behavior-token breakdown table (1-2 days, has data-pipeline gap)
-- #176 — Epic 4: Interaction Quality Metrics (parent; v1.2 shipped #245 + #218, remaining 4 stories deferred)
-- #174 — Epic 2: Task Classification (parent; v1.2 shipped #242, #243, #244, #219, #217; only #248 remains)
+- #248 -- Normalize metrics by task type (2-3 days, both interfaces)
+- #247 -- Learning trajectory + behavior acquisition curve (3-4 days, marquee feature)
+- #246 -- Verification behaviors via tool sequence analysis (2-3 days, new module)
+- #101 -- Behavior-token breakdown table (1-2 days, has data-pipeline gap)
+- #176 -- Epic 4: Interaction Quality Metrics (parent; v1.2 shipped #245 + #218, remaining 4 stories deferred)
+- #174 -- Epic 2: Task Classification (parent; v1.2 shipped #242, #243, #244, #219, #217; only #248 remains)
 
 **Rationale:**
-1. v1.2.0 already delivers substantial user value — scoring quality improvement (v2.1 prompt + Sonnet 4.6), new metrics (error recovery, command adoption), and infrastructure hardening (eval framework, security hooks)
+1. v1.2.0 already delivers substantial user value -- scoring quality improvement (v2.1 prompt + Sonnet 4.6), new metrics (error recovery, command adoption), and infrastructure hardening (eval framework, security hooks)
 2. The deferred stories total 9-12 days of implementation across both interfaces. Holding the release that long undermines cadence with no user-blocking reason.
 3. Option C was considered for #101 (smallest scope) but rejected: its data-pipeline gap (`joinSessionsWithScores` doesn't pass per-behavior flags) makes it larger than the 1-2 day estimate suggests, and implementing on release day is scope-creep.
-4. The deferred items cluster naturally with #251 (ccusage phase-out, also v1.3) — several touch the Usage tab analytics surface.
+4. The deferred items cluster naturally with #251 (ccusage phase-out, also v1.3) -- several touch the Usage tab analytics surface.
 5. No user-facing regression from deferring: all are net-new features, not fixes.
 
 **Epic milestone strategy:** Epics #176 and #174 follow their remaining stories to v1.3. The milestone field tracks "when will this close," not "when did planning start." Both epics had significant v1.2 work shipped (closed issues stay on v1.2 milestone).
@@ -145,8 +145,8 @@
 ### Decision 10: Epic 5 scoped to 5a only (radar + aggregation)
 
 **Options considered:**
-- A) Full Epic 5 (XL) — radar, agentic patterns, context efficiency, cost insights, CCA recommendations, parser enhancement
-- B) Epic 5a only (L) — radar chart + aggregation + CCA-aligned recommendations + parser enhancement (#160)
+- A) Full Epic 5 (XL) -- radar, agentic patterns, context efficiency, cost insights, CCA recommendations, parser enhancement
+- B) Epic 5a only (L) -- radar chart + aggregation + CCA-aligned recommendations + parser enhancement (#160)
 - C) Skip Epic 5 entirely, focus on completing deferred v1.2 stories + agent analytics
 
 **Decision:** Option B (5a only)
@@ -155,7 +155,7 @@
 
 **Impact:** v1.3 includes CCA radar chart, CCA-aligned recommendations, and parser enhancement (#160). Deeper Epic 5 features (token bloat detection, cost ROI, advanced agentic patterns) move to v2.0.
 
-### Decision 11: Epic 6 partial — only #115 and #116
+### Decision 11: Epic 6 partial -- only #115 and #116
 
 **Options considered:**
 - A) Full Epic 6 (all 5 stories: #112-#116)
@@ -166,7 +166,7 @@
 
 **Rationale:** #112 (multi-provider eval), #113 (human review loop), and #114 (cross-model agreement) all depend on having a second LLM provider integrated, which doesn't exist. Building infrastructure without a consumer is speculative engineering. #115 and #116 deliver standalone value: confidence calibration improves scoring transparency, user feedback enables golden set growth from real users.
 
-**Impact:** Three stories (#112, #113, #114) defer to v2.0. Epic 6 tracking issue (#178) stays open — it closes when all 5 stories ship. v1.3 ships two scoring quality improvements that are immediately useful.
+**Impact:** Three stories (#112, #113, #114) defer to v2.0. Epic 6 tracking issue (#178) stays open -- it closes when all 5 stories ship. v1.3 ships two scoring quality improvements that are immediately useful.
 
 ### Decision 12: Defer #209 (rules generation) and #298 (frontend hardening)
 
@@ -174,7 +174,7 @@
 
 **Decision:** #209 to v2.0; #298 to backlog.
 
-**Rationale:** #209 (rules generation) is scope-creep — it's an LLM-powered config generation feature unrelated to the v1.3 themes (CCA radar, interaction quality, agent analytics). It also depends on #199 (multi-level tabs) for UI placement. #298 (frontend rendering hardening) is good hygiene but the targeted fix already shipped in v1.2.1; the structural rewrite can happen incrementally as render functions are added or modified.
+**Rationale:** #209 (rules generation) is scope-creep -- it's an LLM-powered config generation feature unrelated to the v1.3 themes (CCA radar, interaction quality, agent analytics). It also depends on #199 (multi-level tabs) for UI placement. #298 (frontend rendering hardening) is good hygiene but the targeted fix already shipped in v1.2.1; the structural rewrite can happen incrementally as render functions are added or modified.
 
 **Impact:** v1.3 milestone shrinks by 2 issues. Both remain tracked for future work.
 
@@ -184,7 +184,7 @@
 
 **Decision:** Mark #256 as stretch. If #255 completes by Week 6, implement #256. Otherwise defer to v1.3.x or v2.0.
 
-**Rationale:** #256 reuses the error recovery algorithm from #245 — the implementation is modest. But its dependency (#255) is the risk. Declaring it stretch up front prevents pressure to rush #255 and lets the team ship without it if needed.
+**Rationale:** #256 reuses the error recovery algorithm from #245 -- the implementation is modest. But its dependency (#255) is the risk. Declaring it stretch up front prevents pressure to rush #255 and lets the team ship without it if needed.
 
 **Impact:** No issue changes. PRD documents the stretch designation. #256 is the first thing cut if velocity slips.
 
@@ -192,7 +192,7 @@
 
 **Context:** Epic 2 (Task Classification) had two phases. Phase A (heuristic) shipped v1.1. Phase B (LLM) shipped v1.2. The only remaining child issue is #248 (task-type normalization), which is labeled `epic:task-classification` + `epic:interaction-quality` and is functionally an Epic 4 completion story.
 
-**Decision:** Close #174. #248's primary value is normalizing interaction quality metrics — it belongs to Epic 4.
+**Decision:** Close #174. #248's primary value is normalizing interaction quality metrics -- it belongs to Epic 4.
 
 **Rationale:** Keeping #174 open for a single cross-labeled story creates tracking confusion. The epic's deliverables (heuristic classification, LLM classification, golden set expansion, eval check) are all complete.
 
@@ -211,3 +211,31 @@
 - **Q5 (#251 ccusage removal):** Full removal committed. JSONL token data is more accurate. Prior research exists. Marquee technical improvement for v1.3.
 
 **Impact:** PRD status changed from Draft to Approved. Epic 5a tracking issue #306 created. #177 scope narrowed via comment. #256 deferred from v1.3 stretch to v2.0/Epic 5b.
+
+## 2026-05-01: v1.3 Expanded -- E2E Automation
+
+### Decision 16: Add E2E smoke test automation (#312) to v1.3
+
+**Context:** Three doc-drift fixes in two releases (#294, plus two prior mismatches post-v1.2.0) exposed that the manual Playwright MCP checklist is fragile. Human explicitly approved v1.3 inclusion, citing it as "a constant pain point" that "would help streamline our workflow" and "may have caught a number of issues earlier."
+
+**Options considered:**
+- A) Add to v1.3 Phase 1 and cut something to compensate
+- B) Add to v1.3 Phase 1 and accept the overload (no cuts)
+- C) Mark as stretch goal (cut first if velocity slips)
+- D) Defer to v1.4 or backlog
+
+**Decision:** Option B (Add to Phase 1, accept overload, no cuts)
+
+**Rationale:**
+1. **Value-to-cost ratio is high.** M-sized work (1-2 days) that eliminates a per-PR manual testing bottleneck across the remaining 6+ weeks of v1.3 development. The time saved on manual smoke testing during Phases 2-4 likely exceeds the upfront investment.
+2. **Early placement maximizes ROI.** Phase 1 placement means automated regression catch is active before the riskiest UI changes land (#251 ccusage removal in Phase 2, CCA radar in Phase 3). This is the whole point -- catching regressions in the changes that follow.
+3. **No cuts needed.** The existing stretch goal (#101) and aggressive Phase 4 buffer already provide velocity slack. #312 at M-size fits within Phase 1 alongside the existing S-sized quick wins and M-sized #246. Phase 1 grows from ~1.5 weeks to ~2 weeks, which stays within the "Week 1-2" window.
+4. **Standalone story, no epic.** This is quality infrastructure, not scoring quality (#178/Epic 6). It has no epic parent and doesn't need one -- it's a self-contained CI improvement comparable to #293 (Dependabot drift) and #305 (release-please PAT) in the Bug Fixes & Hardening section.
+
+**Sequencing:** Phase 1, after #294 (doc fix that refreshes the checklist being automated) and alongside #246 (verification behaviors). No dependency on any other v1.3 work. No items on the critical path.
+
+**Scope-risk assessment:** v1.3 already carries 20+ issues with an "overload" risk flag. Adding one M-sized story to Phase 1 increases the total by ~5%. The overload risk mitigation remains unchanged: #101 is stretch, #256 is deferred, P2 items can slip to patches. The key difference from a generic scope add is that #312 *reduces* per-PR overhead for the remainder of the release, partially offsetting its own cost.
+
+**Coordination with #298:** Both touch webapp test infrastructure. #312 (E2E via Playwright) and #298 (frontend unit tests via JSDOM or Playwright) are complementary, not overlapping. #312 should land first -- it's smaller and unblocked. If #298 later chooses Playwright for its webapp test infra, the server fixture and dependency from #312 can be reused.
+
+**Impact:** New "Quality Infrastructure" section added to PRD scope tables. Phase 1 updated to include #312. Risk table updated to note the M-sized addition and its time-saving payback. Success criteria updated to include E2E automation.

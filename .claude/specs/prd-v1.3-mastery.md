@@ -34,6 +34,7 @@ CodeFluent v1.2 shipped scoring prompt v2.1, error recovery detection, command a
 | User feedback mechanism | Flag button on behavior scores, local storage, export capability |
 | ccusage dependency removed | Usage data sourced entirely from JSONL files; ccusage no longer called |
 | Usage tab scoped | Pace cards and chart scoped to selected project |
+| E2E smoke tests automated | All 10 CLAUDE.md checklist items run as Playwright tests in CI |
 | Both interfaces | All features in VS Code extension AND webapp |
 
 ## Scope
@@ -72,6 +73,12 @@ CodeFluent v1.2 shipped scoring prompt v2.1, error recovery detection, command a
 |-------|-------|----------|------|-------|
 | #115 | Confidence calibration | P1 | M | Scoring prompt change, eval regression test |
 | #116 | User feedback signal | P1 | M | UI + local storage + export. Both interfaces. |
+
+### Quality Infrastructure
+
+| Issue | Title | Priority | Size | Notes |
+|-------|-------|----------|------|-------|
+| #312 | Automate E2E smoke checklist via Playwright | P1 | M | Replaces manual MCP workflow. Playwright Python tests for all 10 checklist items. CI job with path filtering. Lands early to catch regressions in Phase 2-3 UI work. |
 
 ### Bug Fixes & Hardening
 
@@ -131,6 +138,7 @@ Phase 1 -- Quick wins (Week 1-2)
   #294, #293, #305, #290          (doc + CI fixes, unblock future releases)
   #238                             (agent config scanning, S, unblocks #239)
   #246                             (verification behaviors, independent)
+  #312                             (E2E automation, M, no dependencies, high early value)
 
 Phase 2 -- Core analytics (Week 3-5)
   #251                             (ccusage removal, unblocks scoped usage)
@@ -161,6 +169,8 @@ Phase 4 -- Stretch (Week 7-8, if velocity allows)
 #255 ----------> (enriches #239, #240; #256 deferred to v2.0)
 ```
 
+**#312 (E2E automation) has no dependencies and is not on any critical path.** It provides value from the moment it lands by catching UI regressions in all subsequent PRs.
+
 ## Risks
 
 | Risk | Impact | Mitigation |
@@ -169,7 +179,7 @@ Phase 4 -- Stretch (Week 7-8, if velocity allows)
 | #255 (subagent parser) is complex | Delays agent analytics enrichment | #239 captures metadata from parent session tool_results without needing #255. Ship #239 first; #255 is P1 and enriches but doesn't block. |
 | Scoring prompt change for #115 | Eval regression risk | Run full eval suite. Keep v2.1 prompt as rollback. Confidence field is additive (doesn't change behavior scoring). |
 | #251 ccusage removal is marquee technical change | Data gaps, regression in usage metrics | Research already done — see PR #261 comparison table: ccusage's input-token overcounting and output-token undercounting (first-wins bug) are documented; JSONL message-ID dedup is the canonical approach per Anthropic docs. Build aggregation functions with unit tests pinning expected category-level totals. |
-| 20+ issues for solo maintainer | Overload | Aggressive stretch goal cuts. P2 items can slip to v1.3.x patches. #101 is stretch, #256 is deferred. |
+| 20+ issues for solo maintainer | Overload | Aggressive stretch goal cuts. P2 items can slip to v1.3.x patches. #101 is stretch, #256 is deferred. #312 (E2E) is M-sized but pays back immediately by reducing per-PR manual testing overhead — net time-saver over the release. Accepted as a deliberate human decision (2026-05-01). |
 
 ## Resolved Questions
 
@@ -182,3 +192,5 @@ Phase 4 -- Stretch (Week 7-8, if velocity allows)
 **Q4 -- Epic 5 split.** Split into Epic 5a (#306, v1.3: radar + aggregation + recommendations + parser #160) and Epic 5b (#177 narrowed, v2.0: deeper detection + cost insights + #256). No Epic 5c needed -- agent trace stories stay under Epic 4.
 
 **Q5 -- #251 ccusage scope.** Full removal committed. JSONL files contain native token data that is more accurate than ccusage. Prior research confirms data availability. This is a selling point for v1.3: "more accurate token usage tracking."
+
+**Q6 -- E2E automation added to v1.3 (2026-05-01).** Explicit human decision. #312 added to Phase 1 as Quality Infrastructure. No scope cuts required -- the M-sized cost is justified by three doc-drift fixes in two releases and the need for automated regression protection before v1.3's riskier UI changes (#251, CCA radar). #312 pays back its own cost by eliminating the per-PR manual smoke test overhead across Phases 2-4. See Decision 16 in `.claude/specs/decisions.md`.
