@@ -647,11 +647,13 @@ uv run pytest tests/ -v    # Runs all webapp tests (799 tests, 12 suites)
 
 Run before merging PRs that touch webapp UI or API. Start the server with `uv run uvicorn main:app --port 8001`, then verify:
 
-1. **Tab navigation** — all 6 tabs switch correctly, correct panel is visible
-2. **Settings bar visibility** — data path input shows only on Fluency Score; project dropdown shows on Fluency Score, Optimizer, Quick Wins, Usage, Conversations; settings bar hidden on Recommendations
+1. **Tab navigation** — all 7 tabs switch correctly, correct panel is visible
+2. **Settings bar visibility** — data path input shows only on Fluency Score; project dropdown shows on Fluency Score, Conversations, Config, Optimizer, Quick Wins, Usage; settings bar hidden on Recommendations
 3. **Project dropdown** — populates from session data when data path is set
-4. **Fluency scoring** — Run Scoring button triggers analysis, results display with score ring and behavior bars
-5. **Prompt Optimizer** — paste prompt, click Optimize, input/output scores and optimized prompt appear
-6. **Quick Wins** — Generate button works; project-scoped mode uses selected project
-7. **Usage tab** — data renders with pace cards and chart (if ccusage data exists); conversation analytics section shows efficiency cards, cost-efficiency scatter charts, and sortable conversation details table; project dropdown filters conversation data
-8. **Health endpoint** — `GET /health` returns status, version, and dependency checks
+4. **Fluency scoring** — Run Analysis button triggers analysis, results display with score ring and behavior bars
+5. **Conversations tab** — summary cards, agent metrics cards (tool diversity, plan mode, cache hit, etc.), task-type pie chart, conversations-per-week chart, length/duration/gap distributions, sortable conversation list
+6. **Config tab** — configuration maturity score and breakdown render for the selected project
+7. **Prompt Optimizer** — paste prompt, click Optimize, input/output scores and optimized prompt appear
+8. **Quick Wins** — Generate button works; project-scoped mode uses selected project
+9. **Usage tab** — pace cards and Daily Token Usage chart render (if ccusage data exists); conversation analytics section shows efficiency cards, cost-efficiency scatter charts, and sortable conversation details table; project dropdown filters conversation data
+10. **Health endpoint** — `GET /health` returns status, version, and dependency checks
