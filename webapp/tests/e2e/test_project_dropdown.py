@@ -41,7 +41,5 @@ def test_project_dropdown_has_more_than_placeholder(page: Page):
     silently and leaving only the placeholder.
     """
     page.goto("/")
-    options = page.locator("#project-filter option")
-    # Wait for at least 2 options (placeholder + seeded project)
-    expect(options).not_to_have_count(1)
-    expect(options).not_to_have_count(0)
+    # Wait for the second option to attach (placeholder is index 0, real project is index 1+).
+    expect(page.locator("#project-filter option").nth(1)).to_be_attached()

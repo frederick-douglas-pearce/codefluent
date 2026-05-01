@@ -9,12 +9,11 @@ Design notes:
 - Dynamic port (avoids collisions with dev server / other CI jobs)
 - /health polling with backoff (avoids race on startup)
 - Stderr captured to a temp file; printed on test failure for debuggability
-- atexit cleanup (safety net for KeyboardInterrupt or pytest crash)
+- try/finally ensures cleanup even if the test session crashes mid-run
 """
 
 from __future__ import annotations
 
-import atexit
 import json
 import os
 import socket
@@ -30,6 +29,7 @@ import requests
 E2E_API_KEY = "sk-test-e2e-fake-key"  # noqa: S105 — fake key, never used for a real call
 HEALTH_TIMEOUT_SECONDS = 15
 HEALTH_POLL_INTERVAL = 0.2
+TERMINATE_TIMEOUT_SECONDS = 5
 
 ServerInfo = namedtuple("ServerInfo", ["base_url", "data_dir", "project_name"])
 
@@ -51,7 +51,8 @@ def _seed_data_dir(root: Path) -> str:
 
     Mirrors the structure of `~/.claude/projects/` so the parser sees a real-looking
     project. The encoded project name uses `$HOME` so server-side path validation
-    (which requires data dir to be within $HOME) passes.
+    (which requires data dir to be within $HOME) passes. Encoding scheme matches
+    `_decode_project_path` in webapp/main.py.
     """
     home = str(Path.home())
     project_encoded = home.replace("/", "-") + "-e2e-test-project"
@@ -139,50 +140,43 @@ def e2e_server(tmp_path_factory) -> ServerInfo:
         stderr=stderr_fp,
     )
 
-    # atexit safety net — fires on KeyboardInterrupt, sys.exit, or normal pytest
-    # teardown. Idempotent: terminate() on an already-dead process is a no-op.
-    def _cleanup():
-        if proc.poll() is None:
-            proc.terminate()
+    try:
+        # Poll /health with backoff
+        deadline = time.monotonic() + HEALTH_TIMEOUT_SECONDS
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                stderr_fp.flush()
+                stderr = stderr_log.read_text(errors="replace")
+                pytest.fail(
+                    f"uvicorn exited before /health was ready (returncode={proc.returncode}).\n"
+                    f"stderr:\n{stderr}"
+                )
             try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-        stderr_fp.close()
-
-    atexit.register(_cleanup)
-
-    # Poll /health with backoff
-    deadline = time.monotonic() + HEALTH_TIMEOUT_SECONDS
-    last_error: Exception | None = None
-    while time.monotonic() < deadline:
-        if proc.poll() is not None:
+                r = requests.get(f"{base_url}/health", timeout=1)
+                if r.status_code in (200, 503):
+                    # 503 is "degraded" (e.g., missing API key) — server is up regardless
+                    break
+            except requests.RequestException as e:
+                last_error = e
+            time.sleep(HEALTH_POLL_INTERVAL)
+        else:
             stderr_fp.flush()
             stderr = stderr_log.read_text(errors="replace")
             pytest.fail(
-                f"uvicorn exited before /health was ready (returncode={proc.returncode}).\n"
-                f"stderr:\n{stderr}"
+                f"uvicorn /health did not become ready within {HEALTH_TIMEOUT_SECONDS}s "
+                f"(last error: {last_error}).\nstderr:\n{stderr}"
             )
-        try:
-            r = requests.get(f"{base_url}/health", timeout=1)
-            if r.status_code in (200, 503):
-                # 503 is "degraded" (e.g., missing API key) — server is up regardless
-                break
-        except requests.RequestException as e:
-            last_error = e
-        time.sleep(HEALTH_POLL_INTERVAL)
-    else:
-        stderr_fp.flush()
-        stderr = stderr_log.read_text(errors="replace")
-        _cleanup()
-        pytest.fail(
-            f"uvicorn /health did not become ready within {HEALTH_TIMEOUT_SECONDS}s "
-            f"(last error: {last_error}).\nstderr:\n{stderr}"
-        )
 
-    yield ServerInfo(base_url=base_url, data_dir=data_dir, project_name=project_name)
-
-    _cleanup()
+        yield ServerInfo(base_url=base_url, data_dir=data_dir, project_name=project_name)
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=TERMINATE_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        stderr_fp.close()
 
 
 @pytest.fixture(scope="session")
