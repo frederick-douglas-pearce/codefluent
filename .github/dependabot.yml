@@ -8,6 +8,11 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
+    ignore:
+      # @types/vscode must stay aligned with engines.vscode (vsce package
+      # enforces @types/vscode <= engines.vscode). Bump both together by hand
+      # when raising the VS Code floor — see CONTRIBUTING.md.
+      - dependency-name: "@types/vscode"
     groups:
       npm-patch-minor:
         update-types:

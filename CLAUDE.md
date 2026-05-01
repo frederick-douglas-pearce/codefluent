@@ -584,6 +584,7 @@ Fixed brand colors (semantic meaning, don't change with theme):
 4. **No authentication** — Runs locally, no login
 5. **node_modules must be in VSIX** — `.vscodeignore` must NOT exclude `node_modules/` (the Anthropic SDK is a runtime dependency)
 6. **`onView:` activation event required** — Without it in `package.json`, the extension won't activate when the sidebar opens
+7. **`@types/vscode` and `engines.vscode` must move together** — `vsce package` enforces `@types/vscode` ≤ `engines.vscode`. `@types/vscode` is exact-pinned and Dependabot-ignored; bump both fields in the same commit when raising the VS Code floor (see CONTRIBUTING.md)
 
 ## When Stuck
 - If extension doesn't activate, check `activationEvents` in `package.json` includes `onView:codefluent.dashboard`
