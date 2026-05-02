@@ -102,7 +102,10 @@ jobs:
     name: Run E2E Tests
     needs: changes
     if: needs.changes.outputs.webapp == 'true'
-    runs-on: ubuntu-latest
+    # Pinned (rather than ubuntu-latest) so a future runner-image bump that
+    # drops a library Chromium needs becomes an explicit, reviewable change
+    # instead of silent CI breakage. See #319.
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v6
@@ -124,10 +127,17 @@ jobs:
           restore-keys: |
             playwright-${{ runner.os }}-
 
-      - name: Install Playwright system dependencies
-        working-directory: webapp
-        run: uv run playwright install-deps chromium
-
+      # `playwright install-deps` is intentionally omitted: ubuntu-24.04
+      # already ships the runtime libs Chromium needs (libnss3, libgtk-3-0,
+      # libasound2, libgbm1, libxkbcommon0, libxcomposite1, libxdamage1,
+      # libxfixes3, libcups2, libpango-1.0-0). The packages it would otherwise
+      # apt-install are mostly Asian/Cyrillic font sets (fonts-ipafont-gothic,
+      # fonts-wqy-zenhei, xfonts-cyrillic, etc.) that Latin-only test fixtures
+      # never exercise. A 17-minute apt stall + failure on PR #318 (issue
+      # #319) was caused by exactly that mirror flaking. If a missing-lib
+      # error ever surfaces, add a single
+      # `apt-get install -y --no-install-recommends <lib>` step rather than
+      # reinstating the full font bundle.
       - name: Install Playwright browser
         working-directory: webapp
         run: uv run playwright install chromium
