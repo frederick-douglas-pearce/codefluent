@@ -1,8 +1,6 @@
-"""E2E item 10: Health endpoint returns status, version, and dependency checks.
+"""E2E item 10: /health returns status, version, and dependency checks.
 
-Direct HTTP test (no browser needed) — asserts the contract documented in
-`webapp/main.py:health()`. The fixture seeds an `ANTHROPIC_API_KEY`, so we
-expect status "ok" rather than "degraded".
+Direct HTTP — the fixture seeds `ANTHROPIC_API_KEY`, so status is "ok".
 """
 
 from __future__ import annotations
@@ -19,10 +17,9 @@ def test_health_returns_status_and_version(e2e_server):
     assert r.status_code == 200
 
     body = r.json()
-    assert body["status"] == "ok"  # fixture sets ANTHROPIC_API_KEY
+    assert body["status"] == "ok"
     assert isinstance(body["version"], str) and body["version"]
-    # Sanity-check the version string looks like a real version. Allows
-    # semver, semver+suffix, or "unknown" — but rejects empty/typo'd values.
+    # Reject empty / typo'd version strings; allow semver, semver+suffix, or "unknown".
     assert re.match(r"^(\d+\.\d+\.\d+|unknown)", body["version"])
 
 
@@ -34,6 +31,5 @@ def test_health_reports_dependency_checks(e2e_server):
     checks = body.get("checks")
     assert isinstance(checks, dict)
     assert checks["anthropic_api_key"] == "configured"
-    # data_directory may be "accessible" or "not_found" depending on host;
-    # we only assert the key is present and reports a known state.
+    # data_directory is host-dependent — assert only that a known state is reported.
     assert checks["data_directory"] in ("accessible", "not_found")
