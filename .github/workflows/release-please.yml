@@ -22,6 +22,9 @@ jobs:
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+          # PAT (not GITHUB_TOKEN) so PR `opened`/`synchronize` events trigger
+          # downstream workflows like ci.yml. See #305.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
 
       # Release Please bumps webapp/pyproject.toml via the generic updater but
       # has no concept of uv lockfiles. Without this, every release leaves
@@ -34,7 +37,9 @@ jobs:
       - name: Sync webapp/uv.lock on release PR
         if: steps.release.outputs.prs_created == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same PAT as the release-please step so this push triggers CI on
+          # the release PR (GITHUB_TOKEN-pushed commits do not). See #305.
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           PR_JSON: ${{ steps.release.outputs.pr }}
         run: |
           set -euo pipefail
