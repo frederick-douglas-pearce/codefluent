@@ -121,6 +121,28 @@ Example: `feat: add session token analytics to Usage tab (#89)`
 
 [Release Please](https://github.com/googleapis/release-please) uses these prefixes to auto-generate changelogs and determine version bumps. Only `feat` and `fix` commits appear in the changelog by default.
 
+## Release Secrets
+
+The release automation requires two repository secrets:
+
+| Secret | Used by | Purpose |
+|--------|---------|---------|
+| `RELEASE_PLEASE_TOKEN` | `release-please.yml` | Fine-grained PAT so release-please PRs and the `uv.lock` auto-sync commit trigger `ci.yml`. The default `GITHUB_TOKEN` cannot do this — by [GitHub's loop-prevention rule](https://docs.github.com/en/actions/security-guides/automatic-token-authentication#using-the-github_token-in-a-workflow), workflows triggered by `GITHUB_TOKEN` do not trigger downstream workflows, so without this PAT branch protection (`Run Tests` is required) silently blocks the release PR merge. |
+| `VSCE_PAT` | `release-please.yml` (build-release job) | VS Code Marketplace publish token. |
+
+### Rotating `RELEASE_PLEASE_TOKEN`
+
+GitHub caps fine-grained PAT lifetimes (max 1 year). Set a calendar reminder before expiration. To rotate:
+
+1. At https://github.com/settings/personal-access-tokens, generate a new fine-grained PAT scoped to **only** the `codefluent` repo with these repository permissions:
+   - **Contents:** Read and write
+   - **Pull requests:** Read and write
+   - **Workflows:** Read and write (release-please may touch `.github/workflows/` paths, e.g. `x-release-please-version` markers)
+2. `gh secret set RELEASE_PLEASE_TOKEN --repo frederick-douglas-pearce/codefluent`
+3. Revoke the old PAT in GitHub settings.
+
+If the PAT expires before rotation, the next `release-please.yml` run will fail with an auth error — rotate the secret and re-run.
+
 ## Code Conventions
 
 ### TypeScript (extension — `vscode-extension/src/`)
