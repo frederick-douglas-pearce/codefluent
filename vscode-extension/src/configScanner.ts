@@ -12,6 +12,12 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 
+export interface AgentDefinition {
+  name: string
+  model?: string
+  hasToolRestrictions: boolean
+}
+
 export interface ConfigurationMaturity {
   hooks: { configured: boolean; count: number; events: string[]; handlerTypes: string[]; matchers: string[]; hookCommands: string[] }
   rules: { count: number; hasPathScoping: boolean }
@@ -20,6 +26,14 @@ export interface ConfigurationMaturity {
   mcp: { configured: boolean; serverCount: number }
   claudeMd: { present: boolean; locations: string[]; hasImports: boolean }
   permissions: { configured: boolean }
+  agents: {
+    count: number
+    projectCount: number
+    userCount: number
+    hasToolRestrictions: boolean
+    hasModelRouting: boolean
+    definitions: AgentDefinition[]
+  }
 }
 
 /**
@@ -28,6 +42,11 @@ export interface ConfigurationMaturity {
  * Checks if content starts with `---\n`, finds the closing `---\n`,
  * and extracts simple `key: value` pairs. Returns null if no
  * frontmatter is found.
+ *
+ * Limitation: array values stay as their raw bracketed string —
+ * `tools: [Read, Grep]` becomes `"[Read, Grep]"`, not `["Read","Grep"]`.
+ * Sufficient for presence checks; callers needing parsed lists must
+ * split on their own.
  */
 export function parseFrontmatter(content: string): Record<string, string> | null {
   const normalized = content.replace(/\r\n/g, '\n')
@@ -276,6 +295,40 @@ function scanClaudeMd(projectRoot: string | undefined, homeDir: string): Configu
   return result
 }
 
+function scanAgentsDir(dirPath: string): AgentDefinition[] {
+  const definitions: AgentDefinition[] = []
+  const files = readdirSafe(dirPath).filter(f => f.endsWith('.md'))
+  for (const file of files) {
+    const content = readFileSafe(path.join(dirPath, file))
+    if (!content) continue
+    const fm = parseFrontmatter(content)
+    if (!fm) continue
+    const name = fm.name || file.replace(/\.md$/, '')
+    const model = fm.model && fm.model.length > 0 ? fm.model : undefined
+    const hasToolRestrictions =
+      (typeof fm.tools === 'string' && fm.tools.length > 0) ||
+      (typeof fm.disallowedTools === 'string' && fm.disallowedTools.length > 0)
+    definitions.push({ name, model, hasToolRestrictions })
+  }
+  return definitions
+}
+
+function scanAgents(projectRoot: string | undefined, homeDir: string): ConfigurationMaturity['agents'] {
+  const projectDefs = projectRoot
+    ? scanAgentsDir(path.join(projectRoot, '.claude', 'agents'))
+    : []
+  const userDefs = scanAgentsDir(path.join(homeDir, '.claude', 'agents'))
+  const definitions = [...projectDefs, ...userDefs]
+  return {
+    count: definitions.length,
+    projectCount: projectDefs.length,
+    userCount: userDefs.length,
+    hasToolRestrictions: definitions.some(d => d.hasToolRestrictions),
+    hasModelRouting: definitions.some(d => !!d.model),
+    definitions,
+  }
+}
+
 function scanPermissions(projectRoot: string | undefined): ConfigurationMaturity['permissions'] {
   if (!projectRoot) return { configured: false }
   const data = readJsonSafe(path.join(projectRoot, '.claude', 'settings.local.json'))
@@ -302,5 +355,6 @@ export function scanConfigurationMaturity(
     mcp: scanMcp(projectRoot, home),
     claudeMd: scanClaudeMd(projectRoot, home),
     permissions: scanPermissions(projectRoot),
+    agents: scanAgents(projectRoot, home),
   }
 }

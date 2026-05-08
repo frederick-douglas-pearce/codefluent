@@ -539,6 +539,155 @@ class TestScanPermissions:
         assert result["permissions"]["configured"] is False
 
 
+# ---- Agents ----
+
+
+class TestScanAgents:
+    def test_returns_defaults_when_no_agents_dir(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        project.mkdir()
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"] == {
+            "count": 0,
+            "projectCount": 0,
+            "userCount": 0,
+            "hasToolRestrictions": False,
+            "hasModelRouting": False,
+            "definitions": [],
+        }
+
+    def test_counts_project_level_agents(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        agents_dir = project / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "reviewer.md").write_text(
+            "---\nname: reviewer\ndescription: code reviewer\n---\nBody"
+        )
+        (agents_dir / "planner.md").write_text(
+            "---\nname: planner\ndescription: planning agent\n---\nBody"
+        )
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["count"] == 2
+        assert result["agents"]["projectCount"] == 2
+        assert result["agents"]["userCount"] == 0
+        assert sorted(d["name"] for d in result["agents"]["definitions"]) == ["planner", "reviewer"]
+
+    def test_counts_user_level_agents(self, tmp_path):
+        home = tmp_path / "home"
+        agents_dir = home / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "helper.md").write_text(
+            "---\nname: helper\ndescription: personal helper\n---\nBody"
+        )
+        project = tmp_path / "project"
+        project.mkdir()
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["count"] == 1
+        assert result["agents"]["projectCount"] == 0
+        assert result["agents"]["userCount"] == 1
+
+    def test_aggregates_project_and_user(self, tmp_path):
+        home = tmp_path / "home"
+        user_agents = home / ".claude" / "agents"
+        user_agents.mkdir(parents=True)
+        (user_agents / "user.md").write_text("---\nname: user-agent\n---\nBody")
+
+        project = tmp_path / "project"
+        project_agents = project / ".claude" / "agents"
+        project_agents.mkdir(parents=True)
+        (project_agents / "proj.md").write_text("---\nname: project-agent\n---\nBody")
+
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["count"] == 2
+        assert result["agents"]["projectCount"] == 1
+        assert result["agents"]["userCount"] == 1
+
+    def test_detects_tool_restrictions_via_tools(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        agents_dir = project / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "restricted.md").write_text(
+            "---\nname: restricted\ntools: [Read, Grep]\n---\nBody"
+        )
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["hasToolRestrictions"] is True
+        assert result["agents"]["definitions"][0]["hasToolRestrictions"] is True
+
+    def test_detects_tool_restrictions_via_disallowed_tools(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        agents_dir = project / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "safe.md").write_text(
+            "---\nname: safe\ndisallowedTools: [Bash]\n---\nBody"
+        )
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["hasToolRestrictions"] is True
+
+    def test_detects_model_routing(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        agents_dir = project / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "cheap.md").write_text("---\nname: cheap\nmodel: haiku\n---\nBody")
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["hasModelRouting"] is True
+        assert result["agents"]["definitions"][0]["model"] == "haiku"
+
+    def test_no_quality_signals_when_plain(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        agents_dir = project / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "plain.md").write_text(
+            "---\nname: plain\ndescription: just a name\n---\nBody"
+        )
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["count"] == 1
+        assert result["agents"]["hasToolRestrictions"] is False
+        assert result["agents"]["hasModelRouting"] is False
+
+    def test_falls_back_to_filename_without_name_field(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        agents_dir = project / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "fallback.md").write_text("---\ndescription: nameless\n---\nBody")
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["definitions"][0]["name"] == "fallback"
+
+    def test_skips_files_without_frontmatter(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        agents_dir = project / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "plain.md").write_text("# No frontmatter here")
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["count"] == 0
+
+    def test_ignores_non_markdown_files(self, tmp_path):
+        home = tmp_path / "home"
+        home.mkdir()
+        project = tmp_path / "project"
+        agents_dir = project / ".claude" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "notes.txt").write_text("ignored")
+        (agents_dir / "real.md").write_text("---\nname: real\n---\nBody")
+        result = scan_configuration_maturity(str(project), str(home))
+        assert result["agents"]["count"] == 1
+
+
 # ---- Error resilience ----
 
 
@@ -551,6 +700,14 @@ class TestErrorResilience:
         assert result["commands"] == {"count": 0}
         assert result["skills"] == {"count": 0, "hasFrontmatter": False}
         assert result["permissions"] == {"configured": False}
+        assert result["agents"] == {
+            "count": 0,
+            "projectCount": 0,
+            "userCount": 0,
+            "hasToolRestrictions": False,
+            "hasModelRouting": False,
+            "definitions": [],
+        }
 
     def test_never_throws_for_nonexistent_path(self, tmp_path):
         home = tmp_path / "home"
@@ -563,7 +720,7 @@ class TestErrorResilience:
         home = tmp_path / "home"
         home.mkdir()
         result = scan_configuration_maturity(None, str(home))
-        expected_keys = {"hooks", "rules", "commands", "skills", "mcp", "claudeMd", "permissions"}
+        expected_keys = {"hooks", "rules", "commands", "skills", "mcp", "claudeMd", "permissions", "agents"}
         assert set(result.keys()) == expected_keys
 
 
@@ -613,6 +770,13 @@ class TestFullScan:
             "permissions": {"allow": ["Bash"]},
         }))
 
+        # Agents
+        agents_dir = claude_dir / "agents"
+        agents_dir.mkdir()
+        (agents_dir / "reviewer.md").write_text(
+            "---\nname: reviewer\nmodel: haiku\ntools: [Read, Grep]\n---\nBody"
+        )
+
         result = scan_configuration_maturity(str(project), str(home))
 
         assert result["hooks"]["configured"] is True
@@ -627,6 +791,9 @@ class TestFullScan:
         assert result["claudeMd"]["present"] is True
         assert result["claudeMd"]["hasImports"] is True
         assert result["permissions"]["configured"] is True
+        assert result["agents"]["count"] == 1
+        assert result["agents"]["hasToolRestrictions"] is True
+        assert result["agents"]["hasModelRouting"] is True
 
 
 # ---- API endpoint tests ----

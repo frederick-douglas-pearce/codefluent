@@ -2,7 +2,7 @@
 
 `/api/config-maturity` runs against the host's `~/.claude/` (the endpoint
 does not respect `CLAUDE_DATA_DIR`), but `computeMaturityScore` always
-emits all 8 breakdown categories regardless of the host's state, so this
+emits all 9 breakdown categories regardless of the host's state, so this
 test is environment-independent.
 """
 
@@ -13,7 +13,7 @@ from playwright.sync_api import Page, expect
 
 from ._helpers import go_to_tab
 
-EXPECTED_CATEGORY_COUNT = 8  # CLAUDE.md, Hooks, Rules, Commands, MCP, Skills, Permissions, Enforcement
+EXPECTED_CATEGORY_COUNT = 9  # CLAUDE.md, Hooks, Rules, Commands, MCP, Skills, Agents, Permissions, Enforcement
 
 
 @pytest.mark.e2e
