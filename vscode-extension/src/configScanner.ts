@@ -304,10 +304,8 @@ function scanAgentsDir(dirPath: string): AgentDefinition[] {
     const fm = parseFrontmatter(content)
     if (!fm) continue
     const name = fm.name || file.replace(/\.md$/, '')
-    const model = fm.model && fm.model.length > 0 ? fm.model : undefined
-    const hasToolRestrictions =
-      (typeof fm.tools === 'string' && fm.tools.length > 0) ||
-      (typeof fm.disallowedTools === 'string' && fm.disallowedTools.length > 0)
+    const model = fm.model || undefined
+    const hasToolRestrictions = !!fm.tools || !!fm.disallowedTools
     definitions.push({ name, model, hasToolRestrictions })
   }
   return definitions

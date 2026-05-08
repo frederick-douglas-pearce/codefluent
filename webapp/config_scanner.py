@@ -265,13 +265,10 @@ def _scan_agents_dir(dir_path: Path) -> list[dict]:
         if not fm:
             continue
         name = fm.get("name") or file_name[:-3]
-        model_value = fm.get("model")
-        model = model_value if model_value else None
-        tools_value = fm.get("tools") or ""
-        disallowed_value = fm.get("disallowedTools") or ""
-        has_tool_restrictions = bool(tools_value) or bool(disallowed_value)
+        model = fm.get("model") or None
+        has_tool_restrictions = bool(fm.get("tools")) or bool(fm.get("disallowedTools"))
         entry: dict = {"name": name, "hasToolRestrictions": has_tool_restrictions}
-        if model is not None:
+        if model:
             entry["model"] = model
         definitions.append(entry)
     return definitions
