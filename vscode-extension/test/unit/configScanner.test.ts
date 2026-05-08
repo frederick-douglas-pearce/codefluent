@@ -516,6 +516,161 @@ describe('scanConfigurationMaturity', () => {
     })
   })
 
+  // ---- Agents ----
+
+  describe('agents', () => {
+    it('returns defaults when no agents directory exists', () => {
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents).toEqual({
+        count: 0,
+        projectCount: 0,
+        userCount: 0,
+        hasToolRestrictions: false,
+        hasModelRouting: false,
+        definitions: [],
+      })
+    })
+
+    it('counts project-level agents', () => {
+      const agentsDir = path.join(projectRoot, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(agentsDir, 'reviewer.md'),
+        '---\nname: reviewer\ndescription: code reviewer\n---\nBody',
+      )
+      fs.writeFileSync(
+        path.join(agentsDir, 'planner.md'),
+        '---\nname: planner\ndescription: planning agent\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.count).toBe(2)
+      expect(result.agents.projectCount).toBe(2)
+      expect(result.agents.userCount).toBe(0)
+      expect(result.agents.definitions.map(d => d.name).sort()).toEqual(['planner', 'reviewer'])
+    })
+
+    it('counts user-level agents', () => {
+      const agentsDir = path.join(homeDir, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(agentsDir, 'helper.md'),
+        '---\nname: helper\ndescription: personal helper\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.count).toBe(1)
+      expect(result.agents.projectCount).toBe(0)
+      expect(result.agents.userCount).toBe(1)
+    })
+
+    it('aggregates project + user agents', () => {
+      const projectAgents = path.join(projectRoot, '.claude', 'agents')
+      const userAgents = path.join(homeDir, '.claude', 'agents')
+      fs.mkdirSync(projectAgents, { recursive: true })
+      fs.mkdirSync(userAgents, { recursive: true })
+      fs.writeFileSync(
+        path.join(projectAgents, 'a.md'),
+        '---\nname: project-a\n---\nBody',
+      )
+      fs.writeFileSync(
+        path.join(userAgents, 'b.md'),
+        '---\nname: user-b\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.count).toBe(2)
+      expect(result.agents.projectCount).toBe(1)
+      expect(result.agents.userCount).toBe(1)
+    })
+
+    it('detects tool restrictions via tools field', () => {
+      const agentsDir = path.join(projectRoot, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(agentsDir, 'restricted.md'),
+        '---\nname: restricted\ntools: [Read, Grep]\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.hasToolRestrictions).toBe(true)
+      expect(result.agents.definitions[0].hasToolRestrictions).toBe(true)
+    })
+
+    it('detects tool restrictions via disallowedTools field', () => {
+      const agentsDir = path.join(projectRoot, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(agentsDir, 'safe.md'),
+        '---\nname: safe\ndisallowedTools: [Bash]\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.hasToolRestrictions).toBe(true)
+    })
+
+    it('detects model routing', () => {
+      const agentsDir = path.join(projectRoot, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(agentsDir, 'cheap.md'),
+        '---\nname: cheap\nmodel: haiku\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.hasModelRouting).toBe(true)
+      expect(result.agents.definitions[0].model).toBe('haiku')
+    })
+
+    it('reports false flags when no quality signals present', () => {
+      const agentsDir = path.join(projectRoot, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(agentsDir, 'plain.md'),
+        '---\nname: plain\ndescription: just a name\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.count).toBe(1)
+      expect(result.agents.hasToolRestrictions).toBe(false)
+      expect(result.agents.hasModelRouting).toBe(false)
+    })
+
+    it('falls back to filename when frontmatter has no name', () => {
+      const agentsDir = path.join(projectRoot, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(agentsDir, 'fallback.md'),
+        '---\ndescription: nameless\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.definitions[0].name).toBe('fallback')
+    })
+
+    it('skips files without valid frontmatter', () => {
+      const agentsDir = path.join(projectRoot, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(path.join(agentsDir, 'plain.md'), '# No frontmatter here')
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.count).toBe(0)
+    })
+
+    it('ignores non-markdown files', () => {
+      const agentsDir = path.join(projectRoot, '.claude', 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(path.join(agentsDir, 'notes.txt'), 'ignored')
+      fs.writeFileSync(
+        path.join(agentsDir, 'real.md'),
+        '---\nname: real\n---\nBody',
+      )
+
+      const result = scanConfigurationMaturity(projectRoot, homeDir)
+      expect(result.agents.count).toBe(1)
+    })
+  })
+
   // ---- Error resilience ----
 
   describe('error resilience', () => {
@@ -528,6 +683,14 @@ describe('scanConfigurationMaturity', () => {
       expect(result.mcp).toBeDefined()
       expect(result.claudeMd).toBeDefined()
       expect(result.permissions).toEqual({ configured: false })
+      expect(result.agents).toEqual({
+        count: 0,
+        projectCount: 0,
+        userCount: 0,
+        hasToolRestrictions: false,
+        hasModelRouting: false,
+        definitions: [],
+      })
     })
 
     it('never throws even when projectRoot does not exist', () => {
@@ -539,7 +702,7 @@ describe('scanConfigurationMaturity', () => {
     it('returns a complete ConfigurationMaturity object always', () => {
       const result = scanConfigurationMaturity(undefined, homeDir)
       const keys: Array<keyof ConfigurationMaturity> = [
-        'hooks', 'rules', 'commands', 'skills', 'mcp', 'claudeMd', 'permissions',
+        'hooks', 'rules', 'commands', 'skills', 'mcp', 'claudeMd', 'permissions', 'agents',
       ]
       for (const key of keys) {
         expect(result[key]).toBeDefined()
@@ -605,6 +768,14 @@ describe('scanConfigurationMaturity', () => {
         permissions: { allow: ['Bash'] },
       }))
 
+      // Agents
+      const agentsDir = path.join(projectClaudeDir, 'agents')
+      fs.mkdirSync(agentsDir, { recursive: true })
+      fs.writeFileSync(
+        path.join(agentsDir, 'reviewer.md'),
+        '---\nname: reviewer\nmodel: haiku\ntools: [Read, Grep]\n---\nBody',
+      )
+
       const result = scanConfigurationMaturity(projectRoot, homeDir)
 
       expect(result.hooks.configured).toBe(true)
@@ -619,6 +790,9 @@ describe('scanConfigurationMaturity', () => {
       expect(result.claudeMd.present).toBe(true)
       expect(result.claudeMd.hasImports).toBe(true)
       expect(result.permissions.configured).toBe(true)
+      expect(result.agents.count).toBe(1)
+      expect(result.agents.hasToolRestrictions).toBe(true)
+      expect(result.agents.hasModelRouting).toBe(true)
     })
   })
 })

@@ -2599,7 +2599,7 @@ document.getElementById('apply-path-btn').addEventListener('click', async () => 
 function computeMaturityScore(maturity, gaps) {
   const breakdown = []
 
-  // CLAUDE.md (20 pts)
+  // CLAUDE.md (15 pts)
   const claudeMd = maturity?.claudeMd || {}
   const claudeItems = []
   const claudePresent = claudeMd.present || false
@@ -2608,10 +2608,10 @@ function computeMaturityScore(maturity, gaps) {
   claudeItems.push({ label: 'Multiple locations', status: claudeMultiple ? 'done' : 'missing', detail: claudeMultiple ? `${claudeMd.locations.length} locations found` : 'Add CLAUDE.md at multiple directory levels' })
   const claudeImports = claudeMd.hasImports || false
   claudeItems.push({ label: 'Uses @imports', status: claudeImports ? 'done' : 'missing', detail: claudeImports ? 'Modular configuration via imports' : 'Use @import to split config into modules' })
-  const claudeEarned = (claudePresent ? 10 : 0) + (claudeMultiple ? 5 : 0) + (claudeImports ? 5 : 0)
-  breakdown.push({ category: 'CLAUDE.md', earned: claudeEarned, max: 20, items: claudeItems })
+  const claudeEarned = (claudePresent ? 8 : 0) + (claudeMultiple ? 4 : 0) + (claudeImports ? 3 : 0)
+  breakdown.push({ category: 'CLAUDE.md', earned: claudeEarned, max: 15, items: claudeItems })
 
-  // Hooks (20 pts)
+  // Hooks (15 pts)
   const hooks = maturity?.hooks || {}
   const hookItems = []
   const hooksConfigured = hooks.configured || false
@@ -2621,18 +2621,18 @@ function computeMaturityScore(maturity, gaps) {
   hookItems.push({ label: '2+ hook events', status: hookMultiEvent ? 'done' : hookEvents.length === 1 ? 'partial' : 'missing', detail: hookMultiEvent ? `${hookEvents.length} events: ${hookEvents.join(', ')}` : hookEvents.length === 1 ? `1 event: ${hookEvents[0]}` : 'Add hooks for multiple events' })
   const hookMatchers = hooks.matchers && hooks.matchers.length > 0
   hookItems.push({ label: 'File matchers', status: hookMatchers ? 'done' : 'missing', detail: hookMatchers ? 'Hooks use file pattern matching' : 'Add file matchers to scope hooks' })
-  const hooksEarned = (hooksConfigured ? 10 : 0) + (hookMultiEvent ? 5 : hookEvents.length === 1 ? 2 : 0) + (hookMatchers ? 5 : 0)
-  breakdown.push({ category: 'Hooks', earned: hooksEarned, max: 20, items: hookItems })
+  const hooksEarned = (hooksConfigured ? 8 : 0) + (hookMultiEvent ? 4 : hookEvents.length === 1 ? 2 : 0) + (hookMatchers ? 3 : 0)
+  breakdown.push({ category: 'Hooks', earned: hooksEarned, max: 15, items: hookItems })
 
-  // Rules (15 pts)
+  // Rules (10 pts)
   const rules = maturity?.rules || {}
   const ruleItems = []
   const ruleCount = rules.count || 0
   ruleItems.push({ label: 'Rules defined', status: ruleCount > 0 ? 'done' : 'missing', detail: ruleCount > 0 ? `${ruleCount} rule${ruleCount !== 1 ? 's' : ''} found` : 'Add .mdc rule files to .claude/rules/' })
   const ruleScoping = rules.hasPathScoping || false
   ruleItems.push({ label: 'Path scoping', status: ruleScoping ? 'done' : 'missing', detail: ruleScoping ? 'Rules use path-based scoping' : 'Scope rules to specific file patterns' })
-  const rulesEarned = (ruleCount > 0 ? 10 : 0) + (ruleScoping ? 5 : 0)
-  breakdown.push({ category: 'Rules', earned: rulesEarned, max: 15, items: ruleItems })
+  const rulesEarned = (ruleCount > 0 ? 7 : 0) + (ruleScoping ? 3 : 0)
+  breakdown.push({ category: 'Rules', earned: rulesEarned, max: 10, items: ruleItems })
 
   // Commands (10 pts)
   const commands = maturity?.commands || {}
@@ -2664,6 +2664,20 @@ function computeMaturityScore(maturity, gaps) {
   skillItems.push({ label: 'Frontmatter metadata', status: skillFrontmatter ? 'done' : 'missing', detail: skillFrontmatter ? 'Skills use structured frontmatter' : 'Add frontmatter to skill files for better discovery' })
   const skillsEarned = (skillCount > 0 ? 5 : 0) + (skillFrontmatter ? 5 : 0)
   breakdown.push({ category: 'Skills', earned: skillsEarned, max: 10, items: skillItems })
+
+  // Agents (15 pts)
+  const agents = maturity?.agents || {}
+  const agentItems = []
+  const agentCount = agents.count || 0
+  agentItems.push({ label: 'Subagents defined', status: agentCount > 0 ? 'done' : 'missing', detail: agentCount > 0 ? `${agentCount} agent${agentCount !== 1 ? 's' : ''} defined` : 'Add agent files to .claude/agents/' })
+  const agentMultiple = agentCount >= 2
+  agentItems.push({ label: '2+ agents', status: agentMultiple ? 'done' : agentCount === 1 ? 'partial' : 'missing', detail: agentMultiple ? `${agentCount} agents enable task decomposition` : agentCount === 1 ? '1 agent defined; add more for richer delegation' : 'Add multiple agents for task decomposition' })
+  const agentToolRestricted = agents.hasToolRestrictions || false
+  agentItems.push({ label: 'Tool restrictions', status: agentToolRestricted ? 'done' : 'missing', detail: agentToolRestricted ? 'At least one agent uses tools or disallowedTools' : 'Restrict agent tools for principle of least privilege' })
+  const agentModelRouted = agents.hasModelRouting || false
+  agentItems.push({ label: 'Model routing', status: agentModelRouted ? 'done' : 'missing', detail: agentModelRouted ? 'At least one agent specifies a model' : 'Set model on agents (e.g., haiku for cheap tasks)' })
+  const agentsEarned = (agentCount > 0 ? 5 : 0) + (agentMultiple ? 5 : agentCount === 1 ? 2 : 0) + (agentToolRestricted ? 3 : 0) + (agentModelRouted ? 2 : 0)
+  breakdown.push({ category: 'Agents', earned: agentsEarned, max: 15, items: agentItems })
 
   // Permissions (5 pts)
   const permissions = maturity?.permissions || {}

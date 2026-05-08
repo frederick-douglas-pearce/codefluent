@@ -17,6 +17,11 @@ def parse_frontmatter(content: str) -> dict[str, str] | None:
     Checks if content starts with ``---\\n``, finds the closing ``---\\n``,
     and extracts simple ``key: value`` pairs. Returns None if no
     frontmatter is found.
+
+    Limitation: array values stay as their raw bracketed string —
+    ``tools: [Read, Grep]`` becomes ``"[Read, Grep]"``, not
+    ``["Read", "Grep"]``. Sufficient for presence checks; callers needing
+    parsed lists must split on their own.
     """
     normalized = content.replace("\r\n", "\n")
     if not normalized.startswith("---\n"):
@@ -248,6 +253,44 @@ def _scan_claude_md(project_root: Path | None, home_dir: Path) -> dict:
     return result
 
 
+def _scan_agents_dir(dir_path: Path) -> list[dict]:
+    """Scan a single agents directory for *.md files with frontmatter."""
+    definitions: list[dict] = []
+    files = [f for f in _listdir_safe(dir_path) if f.endswith(".md")]
+    for file_name in files:
+        content = _read_file_safe(dir_path / file_name)
+        if not content:
+            continue
+        fm = parse_frontmatter(content)
+        if not fm:
+            continue
+        name = fm.get("name") or file_name[:-3]
+        model = fm.get("model") or None
+        has_tool_restrictions = bool(fm.get("tools")) or bool(fm.get("disallowedTools"))
+        entry: dict = {"name": name, "hasToolRestrictions": has_tool_restrictions}
+        if model:
+            entry["model"] = model
+        definitions.append(entry)
+    return definitions
+
+
+def _scan_agents(project_root: Path | None, home_dir: Path) -> dict:
+    """Scan for custom subagent definitions in .claude/agents/ directories."""
+    project_defs = (
+        _scan_agents_dir(project_root / ".claude" / "agents") if project_root else []
+    )
+    user_defs = _scan_agents_dir(home_dir / ".claude" / "agents")
+    definitions = project_defs + user_defs
+    return {
+        "count": len(definitions),
+        "projectCount": len(project_defs),
+        "userCount": len(user_defs),
+        "hasToolRestrictions": any(d["hasToolRestrictions"] for d in definitions),
+        "hasModelRouting": any("model" in d for d in definitions),
+        "definitions": definitions,
+    }
+
+
 def _scan_permissions(project_root: Path | None) -> dict:
     """Scan for permission settings in settings.local.json."""
     if not project_root:
@@ -281,4 +324,5 @@ def scan_configuration_maturity(
         "mcp": _scan_mcp(root, home),
         "claudeMd": _scan_claude_md(root, home),
         "permissions": _scan_permissions(root),
+        "agents": _scan_agents(root, home),
     }
