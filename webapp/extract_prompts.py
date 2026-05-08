@@ -129,6 +129,7 @@ def parse_session_messages(filepath: Path) -> dict | None:
     is_sidechain = False
 
     messages = []
+    system_events: list[dict] = []
 
     # Deduplication: buffer assistant messages by message.id, emit when ID changes.
     seen_assistant_ids: dict[str, dict] = {}
@@ -144,6 +145,37 @@ def parse_session_messages(filepath: Path) -> dict | None:
 
     for i, msg in enumerate(lines):
         msg_type = msg.get("type", "")
+
+        # Extract `system` subtypes for context/efficiency metrics. Must run
+        # before SKIP_TYPES gate and before metadata defaults so a system row
+        # can't overwrite the canonical sessionId/version/etc. (See #160.)
+        if msg_type == "system":
+            if msg.get("isSidechain") is True:
+                is_sidechain = True
+            subtype = msg.get("subtype")
+            if subtype == "compact_boundary":
+                raw_trigger = (msg.get("compactMetadata") or {}).get("trigger")
+                system_events.append({
+                    "subtype": "compact_boundary",
+                    "timestamp": msg.get("timestamp"),
+                    "trigger": raw_trigger if isinstance(raw_trigger, str) else None,
+                })
+            elif subtype == "turn_duration":
+                duration = msg.get("durationMs")
+                system_events.append({
+                    "subtype": "turn_duration",
+                    "timestamp": msg.get("timestamp"),
+                    "duration_ms": duration if isinstance(duration, (int, float)) else 0,
+                })
+            elif subtype == "local_command":
+                # Pair-emitted with stdout/stderr companion entries; only count invocations.
+                content = msg.get("content")
+                if isinstance(content, str) and "<command-name>" in content:
+                    system_events.append({
+                        "subtype": "local_command",
+                        "timestamp": msg.get("timestamp"),
+                    })
+            continue
 
         if msg_type in SKIP_TYPES:
             continue
@@ -335,6 +367,7 @@ def parse_session_messages(filepath: Path) -> dict | None:
 
     return {
         "messages": messages,
+        "system_events": system_events,
         "session_id": session_id,
         "project": project_name,
         "project_path_encoded": _get_project_path_encoded(filepath),

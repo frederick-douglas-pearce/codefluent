@@ -165,7 +165,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 997 tests)
+npm test                   # Jest (unit + integration, 1019 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -295,7 +295,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (997 tests) + `vsce package` (catches `engines.vscode` / `@types/vscode` mismatches and `.vscodeignore` misconfig pre-merge) in `vscode-extension/`, `uv lock --check` + `pytest` (831 tests) in `webapp/` — `uv lock --check` fails the PR if `webapp/uv.lock` has drifted from `pyproject.toml`
+- **`ci.yml`** — Runs on every PR: `npm test` (1019 tests) + `vsce package` (catches `engines.vscode` / `@types/vscode` mismatches and `.vscodeignore` misconfig pre-merge) in `vscode-extension/`, `uv lock --check` + `pytest` (853 tests) in `webapp/` — `uv lock --check` fails the PR if `webapp/uv.lock` has drifted from `pyproject.toml`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`, `shared/defaults.json`, or `shared/eval/scorer.py`: scores golden set (79 CI entries / 84 total) via Anthropic API, validates schema + agreement (~$0.30/run). Skipped for Dependabot.
 - **`security-review.yml`** — Claude-powered security review via `anthropics/claude-code-security-review`. Triggered by `needs-security-review` label on PR (not on every push, to control API costs). Skipped on docs-only PRs and Dependabot. Scans webview (`media/app.js`), webapp (`webapp/`), and project Claude config (`.claude/hooks/`, `.claude/settings.json`, `.claude/agents/`).
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
@@ -355,7 +355,7 @@ When implementing from a PM-produced spec or issue:
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 997 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 1019 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Webapp PRs must keep `webapp/tests/e2e/` green. CI runs the suite automatically on PRs touching `webapp/` or `shared/`. Manual Playwright MCP testing is reserved as a fallback for exploratory verification of new surfaces not yet automated. See the E2E Smoke Test Checklist below.
 
@@ -627,7 +627,7 @@ npm test                   # Runs all 907 Jest tests (23 suites)
 # test/__mocks__/vscode.ts                     — VS Code API mock for Jest
 
 cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (831 tests, 12 suites)
+uv run pytest tests/ -v    # Runs all webapp tests (853 tests, 12 suites)
 
 # Test structure:
 # tests/test_conversations.py    — conversation assembly, gap-based splitting, boundary detection

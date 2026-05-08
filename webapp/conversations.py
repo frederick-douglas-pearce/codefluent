@@ -185,6 +185,13 @@ def build_conversations(
             "total_tokens": total_tokens,
             "tokens_per_prompt": tokens_per_prompt,
             "cache_hit_rate": cache_hit_rate,
+            "compact_count": 0,
+            "compact_trigger_manual": 0,
+            "compact_trigger_auto": 0,
+            "turn_count": 0,
+            "total_turn_duration_ms": 0,
+            "avg_turn_duration_ms": None,
+            "local_command_count": 0,
         })
 
     # Assign deterministic IDs
@@ -193,6 +200,56 @@ def build_conversations(
         conv["id"] = f"{project_path_encoded}:conv:{str(i).zfill(pad_width)}"
 
     return conversations
+
+
+def attribute_system_events(
+    conversations: list[dict],
+    system_events: list[dict],
+) -> None:
+    """Attribute timestamped system events to the conversation whose time range
+    contains the event, or — if the event falls between conversations — to the
+    nearest preceding conversation. Events with no preceding conversation are
+    dropped. Mutates conversations in place.
+    """
+    if not conversations or not system_events:
+        return
+
+    sorted_convs = sorted(
+        (c for c in conversations if c.get("started_at")),
+        key=lambda c: c["started_at"],
+    )
+
+    for event in system_events:
+        ts = event.get("timestamp")
+        if not ts:
+            continue
+        target = None
+        for conv in sorted_convs:
+            if conv["started_at"] <= ts:
+                target = conv
+            else:
+                break
+        if target is None:
+            continue
+
+        subtype = event.get("subtype")
+        if subtype == "compact_boundary":
+            target["compact_count"] += 1
+            if event.get("trigger") == "manual":
+                target["compact_trigger_manual"] += 1
+            else:
+                target["compact_trigger_auto"] += 1
+        elif subtype == "turn_duration":
+            target["turn_count"] += 1
+            target["total_turn_duration_ms"] += event.get("duration_ms") or 0
+        elif subtype == "local_command":
+            target["local_command_count"] += 1
+
+    for conv in conversations:
+        if conv["turn_count"] > 0:
+            conv["avg_turn_duration_ms"] = conv["total_turn_duration_ms"] / conv["turn_count"]
+        else:
+            conv["avg_turn_duration_ms"] = None
 
 
 def get_all_conversations(
@@ -251,13 +308,15 @@ def get_all_conversations(
     for result in parsed:
         key = result["project_path_encoded"]
         if key not in by_project:
-            by_project[key] = {"project": result["project"], "encoded": key, "messages": []}
+            by_project[key] = {"project": result["project"], "encoded": key, "messages": [], "system_events": []}
         by_project[key]["messages"].extend(result["messages"])
+        by_project[key]["system_events"].extend(result.get("system_events", []))
 
-    # Build conversations per project
+    # Build conversations per project, then attribute system events
     all_conversations = []
     for info in by_project.values():
         convs = build_conversations(info["messages"], info["project"], info["encoded"], gap_minutes)
+        attribute_system_events(convs, info["system_events"])
         all_conversations.extend(convs)
 
     # Add subagent token usage to conversations.

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from extract_prompts import parse_session_messages
-from conversations import build_conversations, get_all_conversations
+from conversations import build_conversations, get_all_conversations, attribute_system_events
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────
@@ -927,3 +927,263 @@ class TestBuildConversationsCommandsUsed:
         ]
         convs = build_conversations(messages, "test", "-test", 60)
         assert convs[0]["commands_used"] == []
+
+
+# ─── parse_session_messages — system event extraction ────────────────
+
+
+def _system_msg(subtype, **kwargs):
+    return {
+        "type": "system", "subtype": subtype,
+        "timestamp": kwargs.pop("timestamp", "2026-03-01T10:00:30.000Z"),
+        "sessionId": "sid-1", "cwd": "/home/user/project",
+        "isSidechain": kwargs.pop("isSidechain", False),
+        **kwargs,
+    }
+
+
+class TestParseSessionMessagesSystemEvents:
+    def test_extracts_compact_boundary_with_manual_trigger(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _system_msg("compact_boundary", compactMetadata={"trigger": "manual", "preTokens": 100000, "postTokens": 5000}),
+            _assistant_msg(),
+        ])
+        result = parse_session_messages(f)
+        assert result is not None
+        assert len(result["system_events"]) == 1
+        assert result["system_events"][0] == {
+            "subtype": "compact_boundary",
+            "timestamp": "2026-03-01T10:00:30.000Z",
+            "trigger": "manual",
+        }
+
+    def test_preserves_raw_trigger_string(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _system_msg("compact_boundary", compactMetadata={"trigger": "auto-threshold"}),
+        ])
+        result = parse_session_messages(f)
+        assert result["system_events"][0]["trigger"] == "auto-threshold"
+
+    def test_handles_missing_compact_metadata(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _system_msg("compact_boundary"),
+        ])
+        result = parse_session_messages(f)
+        assert result["system_events"][0] == {
+            "subtype": "compact_boundary",
+            "timestamp": "2026-03-01T10:00:30.000Z",
+            "trigger": None,
+        }
+
+    def test_extracts_turn_duration_with_duration_ms(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _system_msg("turn_duration", durationMs=12345, messageCount=8),
+        ])
+        result = parse_session_messages(f)
+        assert result["system_events"][0] == {
+            "subtype": "turn_duration",
+            "timestamp": "2026-03-01T10:00:30.000Z",
+            "duration_ms": 12345,
+        }
+
+    def test_defaults_turn_duration_to_zero_when_missing(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _system_msg("turn_duration"),
+        ])
+        result = parse_session_messages(f)
+        assert result["system_events"][0]["duration_ms"] == 0
+
+    def test_extracts_local_command_invocations_only(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _system_msg("local_command", content="<command-name>/mcp</command-name>"),
+            _system_msg("local_command", content="<local-command-stdout>output</local-command-stdout>", timestamp="2026-03-01T10:00:31.000Z"),
+            _system_msg("local_command", content="<local-command-stderr>err</local-command-stderr>", timestamp="2026-03-01T10:00:32.000Z"),
+            _system_msg("local_command", content="<command-name>/init</command-name>", timestamp="2026-03-01T10:00:33.000Z"),
+        ])
+        result = parse_session_messages(f)
+        assert len(result["system_events"]) == 2
+        assert all(e["subtype"] == "local_command" for e in result["system_events"])
+
+    def test_skips_out_of_scope_subtypes(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _system_msg("api_error", content="rate limited"),
+            _system_msg("away_summary"),
+            _system_msg("informational"),
+            _system_msg("scheduled_task_fire"),
+            _system_msg("stop_hook_summary"),
+        ])
+        result = parse_session_messages(f)
+        assert result["system_events"] == []
+
+    def test_keeps_system_events_out_of_messages_array(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _system_msg("compact_boundary", compactMetadata={"trigger": "manual"}),
+            _system_msg("turn_duration", durationMs=1000),
+            _assistant_msg(),
+        ])
+        result = parse_session_messages(f)
+        assert not any(m.get("type") == "system" for m in result["messages"])
+        assert len(result["system_events"]) == 2
+
+    def test_returns_none_for_sidechain_with_system_messages(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello", isSidechain=True),
+            _system_msg("compact_boundary", isSidechain=True, compactMetadata={"trigger": "manual"}),
+        ])
+        assert parse_session_messages(f) is None
+
+    def test_detects_sidechain_from_system_message_alone(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _system_msg("compact_boundary", isSidechain=True, compactMetadata={"trigger": "manual"}),
+            _assistant_msg(isSidechain=True),
+        ])
+        assert parse_session_messages(f) is None
+
+    def test_returns_empty_system_events_when_none_present(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _user_msg("Hello"),
+            _assistant_msg(),
+        ])
+        result = parse_session_messages(f)
+        assert result["system_events"] == []
+
+    def test_does_not_overwrite_session_metadata(self, tmp_path):
+        f = tmp_path / "s.jsonl"
+        _write_jsonl(f, [
+            _system_msg("compact_boundary", cwd="/wrong/path", version="wrong",
+                        compactMetadata={"trigger": "manual"}),
+            _user_msg("Hello", cwd="/right/project", version="2.1.100"),
+        ])
+        result = parse_session_messages(f)
+        assert result["project"] == "project"
+        user_message = next(m for m in result["messages"] if m["type"] == "user")
+        assert user_message["claude_code_version"] == "2.1.100"
+
+
+# ─── attribute_system_events ─────────────────────────────────────────
+
+
+def _make_conv(cid, started_at, ended_at):
+    return {
+        "id": cid, "content_hash": "hash", "project": "proj", "project_path_encoded": "-proj",
+        "session_ids": ["s"], "started_at": started_at, "ended_at": ended_at,
+        "user_prompts": ["p"], "prompt_timestamps": [started_at], "prompt_count": 1,
+        "user_message_count": 1, "assistant_message_count": 1, "tool_use_count": 0,
+        "tools_used": [], "commands_used": [], "thinking_count": 0, "used_plan_mode": False,
+        "model": None, "claude_code_version": None, "git_branch": None,
+        "compact_count": 0, "compact_trigger_manual": 0, "compact_trigger_auto": 0,
+        "turn_count": 0, "total_turn_duration_ms": 0, "avg_turn_duration_ms": None,
+        "local_command_count": 0,
+    }
+
+
+class TestAttributeSystemEvents:
+    def test_attributes_compact_to_containing_conversation(self):
+        convs = [_make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z")]
+        events = [{"subtype": "compact_boundary", "timestamp": "2026-03-01T10:15:00Z", "trigger": "manual"}]
+        attribute_system_events(convs, events)
+        assert convs[0]["compact_count"] == 1
+        assert convs[0]["compact_trigger_manual"] == 1
+        assert convs[0]["compact_trigger_auto"] == 0
+
+    def test_buckets_non_manual_as_auto(self):
+        convs = [_make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z")]
+        events = [
+            {"subtype": "compact_boundary", "timestamp": "2026-03-01T10:15:00Z", "trigger": "auto-threshold"},
+            {"subtype": "compact_boundary", "timestamp": "2026-03-01T10:20:00Z", "trigger": None},
+        ]
+        attribute_system_events(convs, events)
+        assert convs[0]["compact_count"] == 2
+        assert convs[0]["compact_trigger_manual"] == 0
+        assert convs[0]["compact_trigger_auto"] == 2
+
+    def test_aggregates_turn_duration_and_computes_avg(self):
+        convs = [_make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z")]
+        events = [
+            {"subtype": "turn_duration", "timestamp": "2026-03-01T10:05:00Z", "duration_ms": 10000},
+            {"subtype": "turn_duration", "timestamp": "2026-03-01T10:10:00Z", "duration_ms": 20000},
+            {"subtype": "turn_duration", "timestamp": "2026-03-01T10:15:00Z", "duration_ms": 30000},
+        ]
+        attribute_system_events(convs, events)
+        assert convs[0]["turn_count"] == 3
+        assert convs[0]["total_turn_duration_ms"] == 60000
+        assert convs[0]["avg_turn_duration_ms"] == 20000
+
+    def test_avg_turn_duration_null_when_no_turn_events(self):
+        convs = [_make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z")]
+        events = [{"subtype": "compact_boundary", "timestamp": "2026-03-01T10:15:00Z", "trigger": "manual"}]
+        attribute_system_events(convs, events)
+        assert convs[0]["avg_turn_duration_ms"] is None
+
+    def test_counts_local_command_events(self):
+        convs = [_make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z")]
+        events = [
+            {"subtype": "local_command", "timestamp": "2026-03-01T10:05:00Z"},
+            {"subtype": "local_command", "timestamp": "2026-03-01T10:10:00Z"},
+        ]
+        attribute_system_events(convs, events)
+        assert convs[0]["local_command_count"] == 2
+
+    def test_attributes_between_conversations_to_nearest_preceding(self):
+        convs = [
+            _make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z"),
+            _make_conv("c1", "2026-03-01T12:00:00Z", "2026-03-01T12:30:00Z"),
+        ]
+        events = [{"subtype": "compact_boundary", "timestamp": "2026-03-01T11:00:00Z", "trigger": "manual"}]
+        attribute_system_events(convs, events)
+        assert convs[0]["compact_count"] == 1
+        assert convs[1]["compact_count"] == 0
+
+    def test_drops_events_with_no_preceding_conversation(self):
+        convs = [_make_conv("c0", "2026-03-01T12:00:00Z", "2026-03-01T12:30:00Z")]
+        events = [{"subtype": "compact_boundary", "timestamp": "2026-03-01T10:00:00Z", "trigger": "manual"}]
+        attribute_system_events(convs, events)
+        assert convs[0]["compact_count"] == 0
+
+    def test_drops_events_with_no_timestamp(self):
+        convs = [_make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z")]
+        events = [{"subtype": "compact_boundary", "timestamp": None, "trigger": "manual"}]
+        attribute_system_events(convs, events)
+        assert convs[0]["compact_count"] == 0
+
+    def test_no_op_for_empty_inputs(self):
+        attribute_system_events([], [])  # should not raise
+        convs = [_make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z")]
+        attribute_system_events(convs, [])
+        assert convs[0]["compact_count"] == 0
+        assert convs[0]["avg_turn_duration_ms"] is None
+
+    def test_places_events_correctly_across_adjacent_ranges(self):
+        convs = [
+            _make_conv("c0", "2026-03-01T10:00:00Z", "2026-03-01T10:30:00Z"),
+            _make_conv("c1", "2026-03-01T11:00:00Z", "2026-03-01T11:30:00Z"),
+            _make_conv("c2", "2026-03-01T12:00:00Z", "2026-03-01T12:30:00Z"),
+        ]
+        events = [
+            {"subtype": "turn_duration", "timestamp": "2026-03-01T10:15:00Z", "duration_ms": 1000},
+            {"subtype": "turn_duration", "timestamp": "2026-03-01T11:15:00Z", "duration_ms": 2000},
+            {"subtype": "turn_duration", "timestamp": "2026-03-01T12:15:00Z", "duration_ms": 3000},
+        ]
+        attribute_system_events(convs, events)
+        assert convs[0]["total_turn_duration_ms"] == 1000
+        assert convs[1]["total_turn_duration_ms"] == 2000
+        assert convs[2]["total_turn_duration_ms"] == 3000
