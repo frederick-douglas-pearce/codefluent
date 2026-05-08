@@ -44,6 +44,13 @@ function makeConversation(overrides: Partial<ParsedConversation> = {}): ParsedCo
     total_tokens: 2500,
     tokens_per_prompt: 1250,
     cache_hit_rate: 0.4,
+    compact_count: 0,
+    compact_trigger_manual: 0,
+    compact_trigger_auto: 0,
+    turn_count: 0,
+    total_turn_duration_ms: 0,
+    avg_turn_duration_ms: null,
+    local_command_count: 0,
     ...overrides,
   }
 }

@@ -64,8 +64,16 @@ export interface TimestampedMessage {
   git_branch?: string
 }
 
+export interface SessionSystemEvent {
+  subtype: 'compact_boundary' | 'turn_duration' | 'local_command'
+  timestamp: string | null
+  trigger?: string | null   // compact_boundary only; raw value preserved (e.g. 'manual')
+  duration_ms?: number      // turn_duration only
+}
+
 export interface SessionMessagesResult {
   messages: TimestampedMessage[]
+  system_events: SessionSystemEvent[]
   session_id: string
   project: string
   project_path_encoded: string
@@ -356,6 +364,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
   let gitBranch: string | null = null
 
   const messages: TimestampedMessage[] = []
+  const systemEvents: SessionSystemEvent[] = []
 
   // Deduplication: Claude Code emits multiple assistant messages per API call
   // (streaming snapshots). Per Anthropic docs, deduplicate by message.id and
@@ -375,6 +384,38 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
   for (let i = 0; i < lines.length; i++) {
     const msg = lines[i]
     const msgType = msg.type || ''
+
+    // Extract `system` subtypes for context/efficiency metrics. Must run
+    // before SKIP_TYPES gate and before metadata defaults so a system row
+    // can't overwrite the canonical sessionId/version/etc. (See #160.)
+    if (msgType === 'system') {
+      if (msg.isSidechain === true) isSidechain = true
+      const subtype = msg.subtype
+      if (subtype === 'compact_boundary') {
+        const rawTrigger = msg.compactMetadata?.trigger
+        systemEvents.push({
+          subtype: 'compact_boundary',
+          timestamp: msg.timestamp || null,
+          trigger: typeof rawTrigger === 'string' ? rawTrigger : null,
+        })
+      } else if (subtype === 'turn_duration') {
+        systemEvents.push({
+          subtype: 'turn_duration',
+          timestamp: msg.timestamp || null,
+          duration_ms: typeof msg.durationMs === 'number' ? msg.durationMs : 0,
+        })
+      } else if (subtype === 'local_command') {
+        // Pair-emitted with stdout/stderr companion entries; only count invocations.
+        const content = typeof msg.content === 'string' ? msg.content : ''
+        if (content.includes('<command-name>')) {
+          systemEvents.push({
+            subtype: 'local_command',
+            timestamp: msg.timestamp || null,
+          })
+        }
+      }
+      continue
+    }
 
     if (SKIP_TYPES.has(msgType)) continue
 
@@ -581,6 +622,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
 
   return {
     messages,
+    system_events: systemEvents,
     session_id: sessionId,
     project: projectName,
     project_path_encoded: projectPathEncoded,

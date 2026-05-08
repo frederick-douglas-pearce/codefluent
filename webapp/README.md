@@ -168,7 +168,7 @@ CORS is restricted to localhost origins by default. The allowed origin is determ
 
 ## Testing
 
-The webapp has **831 tests** across 13 suites. Run with:
+The webapp has **853 tests** across 13 suites. Run with:
 
 ```bash
 cd webapp

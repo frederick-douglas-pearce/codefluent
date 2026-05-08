@@ -5,7 +5,8 @@ import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
 import { parseSessionMessages, TimestampedMessage } from '../../src/parser'
-import { buildConversations, getAllConversations, ParsedConversation, computeContentHash } from '../../src/conversation'
+import { buildConversations, getAllConversations, ParsedConversation, computeContentHash, attributeSystemEvents } from '../../src/conversation'
+import { SessionSystemEvent } from '../../src/parser'
 
 const mockFs = fs as jest.Mocked<typeof fs>
 const mockOs = os as jest.Mocked<typeof os>
@@ -1252,5 +1253,293 @@ describe('buildConversations commands_used', () => {
     ]
     const convs = buildConversations(messages, 'test', '-test', 60)
     expect(convs[0].commands_used).toEqual([])
+  })
+})
+
+// ─── parseSessionMessages — system event extraction ──────────────────
+
+describe('parseSessionMessages system event extraction', () => {
+  beforeEach(() => { jest.clearAllMocks() })
+
+  function systemMsg(subtype: string, extra: Record<string, any> = {}): any {
+    return {
+      type: 'system', subtype, timestamp: '2026-03-01T10:00:30.000Z',
+      sessionId: 'sess-1', cwd: '/project', isSidechain: false, ...extra,
+    }
+  }
+
+  it('extracts compact_boundary with manual trigger', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      systemMsg('compact_boundary', { compactMetadata: { trigger: 'manual', preTokens: 100000, postTokens: 5000 } }),
+      assistantMsg(),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result).not.toBeNull()
+    expect(result!.system_events).toHaveLength(1)
+    expect(result!.system_events[0]).toEqual({
+      subtype: 'compact_boundary',
+      timestamp: '2026-03-01T10:00:30.000Z',
+      trigger: 'manual',
+    })
+  })
+
+  it('preserves raw trigger string for non-manual compacts', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      systemMsg('compact_boundary', { compactMetadata: { trigger: 'auto-threshold' } }),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.system_events[0].trigger).toBe('auto-threshold')
+  })
+
+  it('handles compact_boundary with missing compactMetadata', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      systemMsg('compact_boundary'),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.system_events[0]).toEqual({
+      subtype: 'compact_boundary',
+      timestamp: '2026-03-01T10:00:30.000Z',
+      trigger: null,
+    })
+  })
+
+  it('extracts turn_duration with durationMs', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      systemMsg('turn_duration', { durationMs: 12345, messageCount: 8 }),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.system_events[0]).toEqual({
+      subtype: 'turn_duration',
+      timestamp: '2026-03-01T10:00:30.000Z',
+      duration_ms: 12345,
+    })
+  })
+
+  it('defaults turn_duration to 0 when durationMs missing', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      systemMsg('turn_duration'),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.system_events[0].duration_ms).toBe(0)
+  })
+
+  it('extracts local_command invocations only, filtering stdout companions', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      systemMsg('local_command', { content: '<command-name>/mcp</command-name>' }),
+      systemMsg('local_command', { content: '<local-command-stdout>output here</local-command-stdout>', timestamp: '2026-03-01T10:00:31.000Z' }),
+      systemMsg('local_command', { content: '<local-command-stderr>err</local-command-stderr>', timestamp: '2026-03-01T10:00:32.000Z' }),
+      systemMsg('local_command', { content: '<command-name>/init</command-name>', timestamp: '2026-03-01T10:00:33.000Z' }),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.system_events).toHaveLength(2)
+    expect(result!.system_events.every(e => e.subtype === 'local_command')).toBe(true)
+  })
+
+  it('skips out-of-scope system subtypes', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      systemMsg('api_error', { content: 'rate limited' }),
+      systemMsg('away_summary'),
+      systemMsg('informational'),
+      systemMsg('scheduled_task_fire'),
+      systemMsg('stop_hook_summary'),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.system_events).toHaveLength(0)
+  })
+
+  it('keeps system events out of the messages array', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      systemMsg('compact_boundary', { compactMetadata: { trigger: 'manual' } }),
+      systemMsg('turn_duration', { durationMs: 1000 }),
+      assistantMsg(),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.messages.some(m => m.type === 'system')).toBe(false)
+    expect(result!.system_events).toHaveLength(2)
+  })
+
+  it('returns null for sidechain even when system messages present', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello', { isSidechain: true }),
+      systemMsg('compact_boundary', { isSidechain: true, compactMetadata: { trigger: 'manual' } }),
+    ))
+    expect(parseSessionMessages('/fake/project/session.jsonl')).toBeNull()
+  })
+
+  it('detects sidechain from system message alone', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      systemMsg('compact_boundary', { isSidechain: true, compactMetadata: { trigger: 'manual' } }),
+      assistantMsg({ isSidechain: true }),
+    ))
+    expect(parseSessionMessages('/fake/project/session.jsonl')).toBeNull()
+  })
+
+  it('returns empty system_events array when no system messages present', () => {
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      userMsg('Hello'),
+      assistantMsg(),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.system_events).toEqual([])
+  })
+
+  it('does not let system messages overwrite session metadata', () => {
+    // System message arrives first with different cwd/version; canonical values
+    // should come from the first non-system message.
+    mockFs.readFileSync.mockReturnValue(jsonl(
+      systemMsg('compact_boundary', { cwd: '/wrong/path', version: 'wrong', compactMetadata: { trigger: 'manual' } }),
+      userMsg('Hello', { cwd: '/right/project', version: '2.1.100' }),
+    ))
+    const result = parseSessionMessages('/fake/project/session.jsonl')
+    expect(result!.project).toBe('project')  // path.basename('/right/project')
+    const userMessage = result!.messages.find(m => m.type === 'user')
+    expect(userMessage!.claude_code_version).toBe('2.1.100')
+  })
+})
+
+// ─── attributeSystemEvents ──────────────────────────────────────────
+
+describe('attributeSystemEvents', () => {
+  function makeConv(id: string, startedAt: string, endedAt: string): ParsedConversation {
+    return {
+      id, content_hash: 'hash', project: 'proj', project_path_encoded: '-proj',
+      session_ids: ['s'], started_at: startedAt, ended_at: endedAt,
+      user_prompts: ['p'], prompt_timestamps: [startedAt], prompt_count: 1,
+      user_message_count: 1, assistant_message_count: 1, tool_use_count: 0,
+      tools_used: [], commands_used: [], thinking_count: 0, used_plan_mode: false,
+      model: null, claude_code_version: null, git_branch: null,
+      heuristic_task_type: null, has_structured_output_antipattern: false,
+      structured_output_antipattern_count: 0, error_count: 0, recovery_count: 0,
+      avg_failure_to_resolution_turns: null, recovery_strategy_diversity: 0,
+      error_tools: [], edits_count: 0, reviewed_edits: 0, commits_count: 0,
+      tested_commits: 0, review_before_accept_rate: 0, test_before_commit_rate: 0,
+      total_input_tokens: 0, total_output_tokens: 0, total_cache_creation_tokens: 0,
+      total_cache_read_tokens: 0, total_tokens: 0, tokens_per_prompt: 0, cache_hit_rate: 0,
+      compact_count: 0, compact_trigger_manual: 0, compact_trigger_auto: 0,
+      turn_count: 0, total_turn_duration_ms: 0, avg_turn_duration_ms: null,
+      local_command_count: 0,
+    }
+  }
+
+  it('attributes a compact event to the conversation containing its timestamp', () => {
+    const convs = [makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z')]
+    const events: SessionSystemEvent[] = [
+      { subtype: 'compact_boundary', timestamp: '2026-03-01T10:15:00Z', trigger: 'manual' },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].compact_count).toBe(1)
+    expect(convs[0].compact_trigger_manual).toBe(1)
+    expect(convs[0].compact_trigger_auto).toBe(0)
+  })
+
+  it('buckets non-manual triggers as auto', () => {
+    const convs = [makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z')]
+    const events: SessionSystemEvent[] = [
+      { subtype: 'compact_boundary', timestamp: '2026-03-01T10:15:00Z', trigger: 'auto-threshold' },
+      { subtype: 'compact_boundary', timestamp: '2026-03-01T10:20:00Z', trigger: null },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].compact_count).toBe(2)
+    expect(convs[0].compact_trigger_manual).toBe(0)
+    expect(convs[0].compact_trigger_auto).toBe(2)
+  })
+
+  it('aggregates turn_duration and computes average', () => {
+    const convs = [makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z')]
+    const events: SessionSystemEvent[] = [
+      { subtype: 'turn_duration', timestamp: '2026-03-01T10:05:00Z', duration_ms: 10000 },
+      { subtype: 'turn_duration', timestamp: '2026-03-01T10:10:00Z', duration_ms: 20000 },
+      { subtype: 'turn_duration', timestamp: '2026-03-01T10:15:00Z', duration_ms: 30000 },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].turn_count).toBe(3)
+    expect(convs[0].total_turn_duration_ms).toBe(60000)
+    expect(convs[0].avg_turn_duration_ms).toBe(20000)
+  })
+
+  it('keeps avg_turn_duration_ms null when no turn events', () => {
+    const convs = [makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z')]
+    const events: SessionSystemEvent[] = [
+      { subtype: 'compact_boundary', timestamp: '2026-03-01T10:15:00Z', trigger: 'manual' },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].avg_turn_duration_ms).toBeNull()
+  })
+
+  it('counts local_command events', () => {
+    const convs = [makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z')]
+    const events: SessionSystemEvent[] = [
+      { subtype: 'local_command', timestamp: '2026-03-01T10:05:00Z' },
+      { subtype: 'local_command', timestamp: '2026-03-01T10:10:00Z' },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].local_command_count).toBe(2)
+  })
+
+  it('attributes events between conversations to the nearest preceding', () => {
+    const convs = [
+      makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z'),
+      makeConv('c1', '2026-03-01T12:00:00Z', '2026-03-01T12:30:00Z'),
+    ]
+    // Event at 11:00 falls between convs — attributed to c0 (preceding)
+    const events: SessionSystemEvent[] = [
+      { subtype: 'compact_boundary', timestamp: '2026-03-01T11:00:00Z', trigger: 'manual' },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].compact_count).toBe(1)
+    expect(convs[1].compact_count).toBe(0)
+  })
+
+  it('drops events with no preceding conversation', () => {
+    const convs = [makeConv('c0', '2026-03-01T12:00:00Z', '2026-03-01T12:30:00Z')]
+    const events: SessionSystemEvent[] = [
+      { subtype: 'compact_boundary', timestamp: '2026-03-01T10:00:00Z', trigger: 'manual' },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].compact_count).toBe(0)
+  })
+
+  it('drops events with no timestamp', () => {
+    const convs = [makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z')]
+    const events: SessionSystemEvent[] = [
+      { subtype: 'compact_boundary', timestamp: null, trigger: 'manual' },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].compact_count).toBe(0)
+  })
+
+  it('is a no-op for empty inputs', () => {
+    const convs: ParsedConversation[] = []
+    expect(() => attributeSystemEvents(convs, [])).not.toThrow()
+
+    const oneConv = [makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z')]
+    attributeSystemEvents(oneConv, [])
+    expect(oneConv[0].compact_count).toBe(0)
+    expect(oneConv[0].avg_turn_duration_ms).toBeNull()
+  })
+
+  it('places events on the correct conversation when ranges are adjacent', () => {
+    const convs = [
+      makeConv('c0', '2026-03-01T10:00:00Z', '2026-03-01T10:30:00Z'),
+      makeConv('c1', '2026-03-01T11:00:00Z', '2026-03-01T11:30:00Z'),
+      makeConv('c2', '2026-03-01T12:00:00Z', '2026-03-01T12:30:00Z'),
+    ]
+    const events: SessionSystemEvent[] = [
+      { subtype: 'turn_duration', timestamp: '2026-03-01T10:15:00Z', duration_ms: 1000 },
+      { subtype: 'turn_duration', timestamp: '2026-03-01T11:15:00Z', duration_ms: 2000 },
+      { subtype: 'turn_duration', timestamp: '2026-03-01T12:15:00Z', duration_ms: 3000 },
+    ]
+    attributeSystemEvents(convs, events)
+    expect(convs[0].total_turn_duration_ms).toBe(1000)
+    expect(convs[1].total_turn_duration_ms).toBe(2000)
+    expect(convs[2].total_turn_duration_ms).toBe(3000)
   })
 })

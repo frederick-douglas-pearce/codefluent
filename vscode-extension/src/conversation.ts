@@ -1,7 +1,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { TimestampedMessage, SessionMessagesResult, parseSessionMessages, scanSubagentTokens } from './parser'
+import { TimestampedMessage, SessionMessagesResult, SessionSystemEvent, parseSessionMessages, scanSubagentTokens } from './parser'
 import { classifyTask } from './taskClassification'
 import { detectStructuredOutputAntiPattern } from './antiPatterns'
 import { computeConversationErrorRecovery } from './errorRecovery'
@@ -49,6 +49,13 @@ export interface ParsedConversation {
   total_tokens: number
   tokens_per_prompt: number
   cache_hit_rate: number
+  compact_count: number
+  compact_trigger_manual: number
+  compact_trigger_auto: number
+  turn_count: number
+  total_turn_duration_ms: number
+  avg_turn_duration_ms: number | null
+  local_command_count: number
 }
 
 export interface ConversationsResult {
@@ -234,6 +241,13 @@ export function buildConversations(
       total_tokens: totalTokens,
       tokens_per_prompt: tokensPerPrompt,
       cache_hit_rate: cacheHitRate,
+      compact_count: 0,
+      compact_trigger_manual: 0,
+      compact_trigger_auto: 0,
+      turn_count: 0,
+      total_turn_duration_ms: 0,
+      avg_turn_duration_ms: null,
+      local_command_count: 0,
     })
   }
 
@@ -244,6 +258,56 @@ export function buildConversations(
   }
 
   return conversations
+}
+
+/**
+ * Attribute timestamped system events to the conversation whose time range
+ * contains the event, or — if the event falls between conversations — to the
+ * nearest preceding conversation. Events with no preceding conversation are
+ * dropped. Mutates the conversations in place.
+ */
+export function attributeSystemEvents(
+  conversations: ParsedConversation[],
+  systemEvents: SessionSystemEvent[],
+): void {
+  if (conversations.length === 0 || systemEvents.length === 0) return
+
+  const sorted = [...conversations]
+    .filter(c => c.started_at)
+    .sort((a, b) => (a.started_at as string).localeCompare(b.started_at as string))
+
+  for (const event of systemEvents) {
+    if (!event.timestamp) continue
+    let target: ParsedConversation | null = null
+    for (const conv of sorted) {
+      if ((conv.started_at as string).localeCompare(event.timestamp) <= 0) {
+        target = conv
+      } else {
+        break
+      }
+    }
+    if (!target) continue
+
+    if (event.subtype === 'compact_boundary') {
+      target.compact_count++
+      if (event.trigger === 'manual') {
+        target.compact_trigger_manual++
+      } else {
+        target.compact_trigger_auto++
+      }
+    } else if (event.subtype === 'turn_duration') {
+      target.turn_count++
+      target.total_turn_duration_ms += event.duration_ms || 0
+    } else if (event.subtype === 'local_command') {
+      target.local_command_count++
+    }
+  }
+
+  for (const conv of conversations) {
+    conv.avg_turn_duration_ms = conv.turn_count > 0
+      ? conv.total_turn_duration_ms / conv.turn_count
+      : null
+  }
 }
 
 export function getAllConversations(
@@ -312,19 +376,22 @@ export function getAllConversations(
   }
 
   // Group messages by project_path_encoded
-  const byProject = new Map<string, { project: string; encoded: string; messages: TimestampedMessage[] }>()
+  const byProject = new Map<string, { project: string; encoded: string; messages: TimestampedMessage[]; systemEvents: SessionSystemEvent[] }>()
   for (const result of parsed) {
     const key = result.project_path_encoded
     if (!byProject.has(key)) {
-      byProject.set(key, { project: result.project, encoded: key, messages: [] })
+      byProject.set(key, { project: result.project, encoded: key, messages: [], systemEvents: [] })
     }
-    byProject.get(key)!.messages.push(...result.messages)
+    const bucket = byProject.get(key)!
+    bucket.messages.push(...result.messages)
+    bucket.systemEvents.push(...result.system_events)
   }
 
-  // Build conversations per project
+  // Build conversations per project, then attribute system events
   let allConversations: ParsedConversation[] = []
-  for (const { project: proj, encoded, messages } of byProject.values()) {
+  for (const { project: proj, encoded, messages, systemEvents } of byProject.values()) {
     const convs = buildConversations(messages, proj, encoded, gap)
+    attributeSystemEvents(convs, systemEvents)
     allConversations.push(...convs)
   }
 
