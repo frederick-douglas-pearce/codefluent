@@ -8,6 +8,7 @@ from config import get_config
 from task_classification import classify_task
 from anti_patterns import detect_structured_output_anti_pattern
 from error_recovery import compute_conversation_error_recovery
+from verification_behaviors import compute_conversation_verification
 
 CLAUDE_DATA_DIR = Path.home() / ".claude" / "projects"
 
@@ -176,6 +177,7 @@ def build_conversations(
             **{k: v for k, v in detect_structured_output_anti_pattern(user_prompts).items()
                if k != "structured_output_antipattern_indices"},
             **compute_conversation_error_recovery(bucket),
+            **compute_conversation_verification(bucket),
             "total_input_tokens": total_input_tokens,
             "total_output_tokens": total_output_tokens,
             "total_cache_creation_tokens": total_cache_creation_tokens,

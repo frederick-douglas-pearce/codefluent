@@ -448,10 +448,10 @@ The project has **1761 automated tests** across both interfaces:
 
 ```bash
 cd vscode-extension
-npm test                   # 962 tests across 24 suites (Jest)
+npm test                   # 997 tests across 25 suites (Jest)
 
 cd webapp
-uv run pytest tests/ -v    # 799 tests across 12 suites (pytest)
+uv run pytest tests/ -v    # 831 tests across 13 suites (pytest)
 ```
 
 Test suites cover scoring, parsing, caching, analytics, pricing, agent metrics, task classification, anti-pattern detection, configuration scanning, enforcement gaps, XSS prevention, shell injection, path traversal, rate limiting, CORS, API surface, and scoring prompt regression testing. The eval framework (`shared/eval/`) validates scoring outputs against a [golden set of 84 curated entries](shared/eval/README.md). All tests must pass before merging to main.
