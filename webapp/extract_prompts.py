@@ -213,12 +213,17 @@ def parse_session_messages(filepath: Path) -> dict | None:
         elif msg_type == "assistant":
             tool_names = []
             tool_use_ids = []
+            bash_commands = []
             content = msg.get("message", {}).get("content", [])
             if isinstance(content, list):
                 for block in content:
                     if isinstance(block, dict) and block.get("type") == "tool_use":
                         if block.get("name"):
                             tool_names.append(block["name"])
+                            cmd = ""
+                            if block["name"] == "Bash":
+                                cmd = str(block.get("input", {}).get("command") or "")[:200]
+                            bash_commands.append(cmd)
                         if block.get("id"):
                             tool_use_ids.append(block["id"])
             usage = msg.get("message", {}).get("usage", {})
@@ -230,6 +235,7 @@ def parse_session_messages(filepath: Path) -> dict | None:
                 "model": msg.get("message", {}).get("model"),
                 "tool_names": tool_names if tool_names else None,
                 "tool_use_ids": tool_use_ids if tool_use_ids else None,
+                "bash_commands": bash_commands if any(bash_commands) else None,
             }
             message_id = msg.get("message", {}).get("id")
             if usage and message_id:
@@ -250,6 +256,9 @@ def parse_session_messages(filepath: Path) -> dict | None:
                     if extracted.get("tool_use_ids"):
                         prev = existing.get("tool_use_ids") or []
                         existing["tool_use_ids"] = prev + extracted["tool_use_ids"]
+                    if extracted.get("bash_commands"):
+                        prev = existing.get("bash_commands") or []
+                        existing["bash_commands"] = prev + extracted["bash_commands"]
                     existing["timestamp"] = extracted["timestamp"]
                     existing["file_position"] = extracted["file_position"]
                     if extracted.get("model"):
@@ -275,19 +284,26 @@ def parse_session_messages(filepath: Path) -> dict | None:
         elif msg_type == "tool_use":
             flush_pending_assistant()
             name = msg.get("name") or msg.get("message", {}).get("name")
+            bash_command = ""
             if not name:
                 content = msg.get("message", {}).get("content", [])
                 if isinstance(content, list):
                     for block in content:
                         if isinstance(block, dict) and block.get("type") == "tool_use":
                             name = block.get("name")
+                            if name == "Bash":
+                                bash_command = str(block.get("input", {}).get("command") or "")[:200]
                             break
+            elif name == "Bash":
+                cmd = msg.get("input", {}).get("command") or msg.get("message", {}).get("input", {}).get("command")
+                bash_command = str(cmd or "")[:200]
             messages.append({
                 "type": "tool_use",
                 "timestamp": msg.get("timestamp"),
                 "session_id": "",
                 "file_position": i,
                 "tool_names": [name] if name else None,
+                "bash_commands": [bash_command] if name and bash_command else None,
             })
 
         elif msg_type == "thinking":

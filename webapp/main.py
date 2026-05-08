@@ -26,6 +26,7 @@ from conversations import get_all_conversations
 from task_classification import TASK_TYPES
 from agent_metrics import compute_agent_metrics, compute_weekly_agent_metrics
 from error_recovery import compute_error_recovery_metrics, compute_weekly_error_recovery
+from verification_behaviors import compute_verification_metrics, compute_weekly_verification
 from config_scanner import scan_configuration_maturity
 from enforcement_gaps import detect_enforcement_gaps
 
@@ -603,6 +604,8 @@ async def get_agent_metrics(
         result["weekly"] = compute_weekly_agent_metrics(conversations)
         result["error_recovery"] = compute_error_recovery_metrics(conversations)
         result["error_recovery_weekly"] = compute_weekly_error_recovery(conversations)
+        result["verification"] = compute_verification_metrics(conversations)
+        result["verification_weekly"] = compute_weekly_verification(conversations)
         return result
     except HTTPException:
         raise

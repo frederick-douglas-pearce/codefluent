@@ -1947,6 +1947,33 @@ function renderAgentMetrics(metrics) {
     })
   }
 
+  // Add verification behavior cards
+  const vf = metrics.verification
+  if (vf && vf.total_edit_clusters > 0) {
+    const caveat = vf.insufficient_edits ? ' *' : ''
+    items.push({
+      title: 'Review Before Accept',
+      value: vf.review_before_accept_rate,
+      detail: vf.total_reviewed_edits + '/' + vf.total_edit_clusters + ' edit clusters reviewed' + caveat,
+      key: 'review_before_accept_rate',
+      color: '#0891B2',
+      format: 'percent',
+      weeklyData: metrics.verification_weekly
+    })
+  }
+  if (vf && vf.total_commits > 0) {
+    const caveat = vf.insufficient_commits ? ' *' : ''
+    items.push({
+      title: 'Test Before Commit',
+      value: vf.test_before_commit_rate,
+      detail: vf.total_tested_commits + '/' + vf.total_commits + ' commits tested' + caveat,
+      key: 'test_before_commit_rate',
+      color: '#7C3AED',
+      format: 'percent',
+      weeklyData: metrics.verification_weekly
+    })
+  }
+
   // Destroy previous sparkline charts
   for (let i = 0; i < items.length; i++) {
     destroyChart('agentSparkline' + i)
@@ -1971,6 +1998,15 @@ function renderAgentMetrics(metrics) {
   if (er && er.insufficient_data && er.total_error_count > 0) {
     container.insertAdjacentHTML('beforeend',
       '<div class="agent-metrics-footnote" style="width:100%; font-size:11px; opacity:0.7; margin-top:4px">* Low sample size (' + er.conversations_with_errors + ' conversations with errors)</div>')
+  }
+  if (vf) {
+    const parts = []
+    if (vf.insufficient_edits && vf.total_edit_clusters > 0) parts.push(vf.conversations_with_edits + ' conversations with edits')
+    if (vf.insufficient_commits && vf.total_commits > 0) parts.push(vf.conversations_with_commits + ' conversations with commits')
+    if (parts.length > 0) {
+      container.insertAdjacentHTML('beforeend',
+        '<div class="agent-metrics-footnote" style="width:100%; font-size:11px; opacity:0.7; margin-top:4px">* Low sample size (' + parts.join(', ') + ')</div>')
+    }
   }
 
   // Sparklines — each item resolves its own weekly data source

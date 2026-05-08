@@ -12,6 +12,7 @@ import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand }
 import { buildConversationAnalytics } from './analytics'
 import { computeAgentMetrics, computeWeeklyAgentMetrics, AgentMetrics, WeeklyAgentMetrics } from './agentMetrics'
 import { computeErrorRecoveryMetrics, computeWeeklyErrorRecovery, AggregateErrorRecovery, WeeklyErrorRecovery } from './errorRecovery'
+import { computeVerificationMetrics, computeWeeklyVerification, AggregateVerification, WeeklyVerification } from './verificationBehaviors'
 import { getConfig, getDisplayConfig } from './config'
 import { scanConfigurationMaturity } from './configScanner'
 import { detectEnforcementGaps } from './enforcementGaps'
@@ -560,7 +561,13 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleGetAgentMetrics(payload?: { project?: string }): Promise<
-    AgentMetrics & { weekly: WeeklyAgentMetrics[]; error_recovery: AggregateErrorRecovery; error_recovery_weekly: WeeklyErrorRecovery[] }
+    AgentMetrics & {
+      weekly: WeeklyAgentMetrics[]
+      error_recovery: AggregateErrorRecovery
+      error_recovery_weekly: WeeklyErrorRecovery[]
+      verification: AggregateVerification
+      verification_weekly: WeeklyVerification[]
+    }
   > {
     const project = payload?.project ?? this.getWorkspaceProjectName()
     const convData = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
@@ -573,7 +580,9 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     const weekly = computeWeeklyAgentMetrics(conversations)
     const error_recovery = computeErrorRecoveryMetrics(conversations)
     const error_recovery_weekly = computeWeeklyErrorRecovery(conversations)
-    return { ...metrics, weekly, error_recovery, error_recovery_weekly }
+    const verification = computeVerificationMetrics(conversations)
+    const verification_weekly = computeWeeklyVerification(conversations)
+    return { ...metrics, weekly, error_recovery, error_recovery_weekly, verification, verification_weekly }
   }
 
   private async handleGetConversationAnalytics(payload?: { project?: string }) {

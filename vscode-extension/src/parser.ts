@@ -53,6 +53,7 @@ export interface TimestampedMessage {
             cache_creation_input_tokens: number; cache_read_input_tokens: number }
   tool_names?: string[]         // tool names from assistant content blocks
   tool_use_ids?: string[]       // tool_use block IDs from assistant content blocks
+  bash_commands?: string[]      // parallel to tool_names; command text (truncated 200 chars) for Bash positions, '' otherwise
   model?: string
   // Tool result fields
   is_error?: boolean            // true if tool_result had is_error: true
@@ -441,11 +442,16 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
     } else if (msgType === 'assistant') {
       const toolNames: string[] = []
       const toolUseIds: string[] = []
+      const bashCommands: string[] = []
       const content = msg.message?.content
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block && typeof block === 'object' && block.type === 'tool_use') {
-            if (block.name) toolNames.push(block.name)
+            if (block.name) {
+              toolNames.push(block.name)
+              const cmd = block.name === 'Bash' ? String(block.input?.command || '').slice(0, 200) : ''
+              bashCommands.push(cmd)
+            }
             if (block.id) toolUseIds.push(block.id)
           }
         }
@@ -459,6 +465,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
         model: msg.message?.model || undefined,
         tool_names: toolNames.length > 0 ? toolNames : undefined,
         tool_use_ids: toolUseIds.length > 0 ? toolUseIds : undefined,
+        bash_commands: bashCommands.some(c => c.length > 0) ? bashCommands : undefined,
       }
       const messageId = msg.message?.id
       if (usage && messageId) {
@@ -481,6 +488,10 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
           if (extracted.tool_use_ids) {
             const prev = existing.tool_use_ids || []
             existing.tool_use_ids = [...prev, ...extracted.tool_use_ids]
+          }
+          if (extracted.bash_commands) {
+            const prev = existing.bash_commands || []
+            existing.bash_commands = [...prev, ...extracted.bash_commands]
           }
           existing.timestamp = extracted.timestamp
           existing.file_position = extracted.file_position
@@ -510,16 +521,22 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
     } else if (msgType === 'tool_use') {
       flushPendingAssistant()
       let name = msg.name || msg.message?.name
+      let bashCommand = ''
       if (!name) {
         const content = msg.message?.content
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block && typeof block === 'object' && block.type === 'tool_use') {
               name = block.name
+              if (name === 'Bash') {
+                bashCommand = String(block.input?.command || '').slice(0, 200)
+              }
               break
             }
           }
         }
+      } else if (name === 'Bash') {
+        bashCommand = String(msg.input?.command || msg.message?.input?.command || '').slice(0, 200)
       }
       messages.push({
         type: 'tool_use',
@@ -527,6 +544,7 @@ export function parseSessionMessages(filepath: string): SessionMessagesResult | 
         session_id: '',
         file_position: i,
         tool_names: name ? [name] : undefined,
+        bash_commands: name && bashCommand ? [bashCommand] : undefined,
       })
     } else if (msgType === 'thinking') {
       flushPendingAssistant()

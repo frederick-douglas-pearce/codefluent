@@ -5,6 +5,7 @@ import { TimestampedMessage, SessionMessagesResult, parseSessionMessages, scanSu
 import { classifyTask } from './taskClassification'
 import { detectStructuredOutputAntiPattern } from './antiPatterns'
 import { computeConversationErrorRecovery } from './errorRecovery'
+import { computeConversationVerification } from './verificationBehaviors'
 
 export interface ParsedConversation {
   id: string
@@ -35,6 +36,12 @@ export interface ParsedConversation {
   avg_failure_to_resolution_turns: number | null
   recovery_strategy_diversity: number
   error_tools: string[]
+  edits_count: number
+  reviewed_edits: number
+  commits_count: number
+  tested_commits: number
+  review_before_accept_rate: number
+  test_before_commit_rate: number
   total_input_tokens: number
   total_output_tokens: number
   total_cache_creation_tokens: number
@@ -183,6 +190,7 @@ export function buildConversations(
 
     const antiPatternResult = detectStructuredOutputAntiPattern(userPrompts)
     const errorRecovery = computeConversationErrorRecovery(bucket)
+    const verification = computeConversationVerification(bucket)
 
     conversations.push({
       id: '', // filled below with zero-padded index
@@ -213,6 +221,12 @@ export function buildConversations(
       avg_failure_to_resolution_turns: errorRecovery.avg_failure_to_resolution_turns,
       recovery_strategy_diversity: errorRecovery.recovery_strategy_diversity,
       error_tools: errorRecovery.error_tools,
+      edits_count: verification.edits_count,
+      reviewed_edits: verification.reviewed_edits,
+      commits_count: verification.commits_count,
+      tested_commits: verification.tested_commits,
+      review_before_accept_rate: verification.review_before_accept_rate,
+      test_before_commit_rate: verification.test_before_commit_rate,
       total_input_tokens: totalInputTokens,
       total_output_tokens: totalOutputTokens,
       total_cache_creation_tokens: totalCacheCreationTokens,
