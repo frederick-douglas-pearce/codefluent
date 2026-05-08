@@ -18,7 +18,7 @@ jobs:
       webapp: ${{ steps.filter.outputs.webapp }}
     steps:
       - uses: actions/checkout@v6
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         id: filter
         with:
           filters: |
@@ -120,7 +120,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('webapp/uv.lock') }}
