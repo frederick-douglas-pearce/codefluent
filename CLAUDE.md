@@ -31,102 +31,21 @@ Originally built at PDX Hacks 2026. Now in **production deployment** phase — e
 ## Project Structure
 ```
 codefluent/
-├── CLAUDE.md                  # This file
-├── README.md                  # Project readme
-├── docs/
-│   ├── PROJECT_PLAN.md        # Master plan (read for context)
-│   ├── TECHNICAL_SPEC.md      # Detailed implementation spec
-│   ├── UI_SPEC.md             # Frontend design spec
-│   ├── REFERENCES.md          # Research papers and docs links
-│   ├── SESSION_DATA.md        # Session data format, availability, scope
-│   ├── DEMO_SCRIPT.md         # 3-minute demo script
-│   ├── RELEASE_ROADMAP.md     # Epic definitions, release mapping, issue tracker
-│   ├── NEW_METRICS_RESEARCH.md          # Agent behavior + outcome metrics research
-│   ├── TASK_CLASSIFICATION_RESEARCH.md  # Task taxonomy + classification approach
-│   ├── CCA_FEATURE_RESEARCH.md          # CCA-F exam feature extraction
-│   └── AGENT_ANALYTICS_RESEARCH.md     # Agent SDK monitoring + AgentFluent opportunity
-├── vscode-extension/          # VS Code extension (PRIMARY)
-│   ├── package.json           # Extension manifest + dependencies
-│   ├── tsconfig.json          # TypeScript config
-│   ├── jest.config.js         # Test config
-│   ├── .vscodeignore          # VSIX packaging exclusions
-│   ├── src/
-│   │   ├── extension.ts       # Activation, status bar, commands
-│   │   ├── webviewProvider.ts # WebviewViewProvider, IPC, terminal launch
-│   │   ├── parser.ts          # JSONL session file parsing + message extraction (~/.claude/projects/)
-│   │   ├── scoring.ts         # Fluency scoring via Anthropic API
-│   │   ├── analytics.ts       # Conversation token analytics (efficiency metrics, cost calculations)
-│   │   ├── pricing.ts         # Token pricing lookup (shared/pricing.json)
-│   │   ├── usage.ts           # ccusage CLI bridge
-│   │   ├── quickwins.ts       # GitHub repo scoping + task suggestions
-│   │   ├── config.ts          # Centralized config (shared/defaults.json + VS Code settings)
-│   │   ├── prompts.ts         # Prompt loader + template filler (shared/prompts/)
-│   │   ├── cache.ts           # Persistent score caching (globalStorageUri)
-│   │   ├── dataCache.ts       # Conversation/usage data caching (stale-while-revalidate)
-│   │   ├── conversation.ts    # Conversation assembly (gap-based splitting from session files)
-│   │   ├── platform.ts        # Cross-platform shell, terminal, subprocess helpers
-│   │   ├── taskClassification.ts  # Heuristic task type classifier (branch prefix + keyword regex)
-│   │   ├── antiPatterns.ts    # Structured output anti-pattern detection in user prompts
-│   │   ├── configScanner.ts   # .claude/ directory maturity scanner (hooks, rules, commands, skills, MCP, agents)
-│   │   └── verificationBehaviors.ts  # Tool-sequence detection: review-after-edit, test-before-commit
-│   ├── media/
-│   │   ├── index.html         # Webview HTML template (nonce-based CSP)
-│   │   ├── app.js             # Frontend logic, charts, IPC
-│   │   ├── style.css          # VS Code theme-aware CSS
-│   │   ├── icon.svg           # Activity bar icon (amber brackets)
-│   │   └── libs/chart.min.js  # Chart.js (bundled, no CDN)
-│   ├── test/
-│   │   ├── unit/{analytics,config,conversation,scoring,quickwins,xss,platform,prompts,cache,dataCache,parser,recommendations,usage,agentMetrics,taskClassification,antiPatterns,configScanner,verificationBehaviors}.test.ts
-│   │   └── integration/{extension,webviewProvider}.test.ts
-│   └── out/                   # Compiled JS (gitignored)
-├── webapp/                    # FastAPI web app
-│   ├── config.py              # Centralized config (shared/defaults.json + env vars + config.json)
-│   ├── main.py                # FastAPI backend (scoring, optimizer, quickwins, usage)
-│   ├── conversations.py       # Python conversation assembly equivalent
-│   ├── extract_prompts.py     # Python JSONL prompt extractor
-│   ├── task_classification.py # Heuristic task type classifier
-│   ├── anti_patterns.py       # Structured output anti-pattern detection
-│   ├── config_scanner.py      # .claude/ directory maturity scanner
-│   ├── verification_behaviors.py  # Tool-sequence detection: review-after-edit, test-before-commit
-│   ├── static/
-│   │   ├── index.html         # Web frontend HTML
-│   │   ├── app.js             # Frontend logic, charts, project scoping
-│   │   └── style.css          # Styles (Inter font, amber accent)
-│   ├── pyproject.toml         # Python dependencies
-│   └── uv.lock
-├── shared/
-│   ├── defaults.json          # Centralized default config values (single source of truth)
-│   ├── benchmarks.json        # Benchmark data
-│   ├── pricing.json           # Token pricing by model (input/output/cache rates)
-│   ├── prompts/               # Versioned prompt templates
-│   │   ├── registry.json          # Active version pointers
-│   │   ├── scoring/v2.1.md        # Conversation scoring prompt (current)
-│   │   ├── config/v1.1.md         # CLAUDE.md scoring prompt (current)
-│   │   ├── optimizer/v1.1.md      # Prompt optimizer prompt (config-aware)
-│   │   ├── single_scoring/v1.0.md # Single-prompt verification scorer
-│   │   └── config_advisor/v1.0.md # Hook config generation prompt
-│   └── eval/                  # Scoring regression testing framework
-│       ├── README.md              # Golden set + eval runner docs
-│       ├── golden_set.json        # 84 curated regression test cases (79 in CI)
-│       ├── run_eval.py            # CLI entry point (argparse)
-│       ├── scorer.py              # Prompt loading, API calls, retry
-│       ├── checks.py              # 5 check implementations
-│       ├── report.py              # JSON + stdout output, cost tracking
-│       └── results/               # Output directory (gitignored)
-├── .claude/
-│   └── specs/                 # PM agent output (PRDs, decision logs)
-├── .github/workflows/         # CI/CD
-│   ├── ci.yml                 # Tests + lint on PR
-│   ├── eval.yml               # Scoring regression checks on prompt changes
-│   ├── claude-review.yml      # AI code review (needs-review label)
-│   ├── security-review.yml    # Security-focused review
-│   ├── release.yml            # Build VSIX + publish on tag
-│   └── release-please.yml     # Auto release PRs + changelog
-├── release-please-config.json # Release Please configuration
-├── .release-please-manifest.json # Current version tracking
+├── docs/                      # PROJECT_PLAN, TECHNICAL_SPEC, UI_SPEC, SESSION_DATA, RELEASE_ROADMAP, *_RESEARCH
+├── vscode-extension/          # VS Code extension (PRIMARY) — src/, media/, test/{unit,integration}/, out/ (gitignored)
+├── webapp/                    # FastAPI web app — main.py, conversations.py, static/, tests/, pyproject.toml
+├── shared/                    # Cross-interface assets
+│   ├── defaults.json          # Single source of truth for config
+│   ├── pricing.json           # Token pricing by model
+│   ├── prompts/               # Versioned prompt templates (registry.json + scoring/, config/, optimizer/, …)
+│   └── eval/                  # Scoring regression framework (run_eval.py, golden_set.json, results/)
+├── .claude/specs/             # PM agent output (PRDs, decision logs)
+├── .github/workflows/         # ci.yml, eval.yml, claude-review.yml, security-review.yml, release.yml, release-please.yml
 ├── data/                      # Generated data (gitignored)
 └── images/                    # Demo screenshots
 ```
+
+File roles are self-documenting from filenames. For module-level detail, list the directory directly; for design intent, see `docs/TECHNICAL_SPEC.md`.
 
 ## Documentation Map
 
@@ -379,83 +298,19 @@ The rule generalizes beyond what the hooks catch:
 
 See [`SECURITY.md`](SECURITY.md) for the full policy, layered defense model, the audit one-liner for historical leaks, and the bypass surface the hooks do not cover.
 
-## JSONL Data Format (VERIFIED against real data)
+## JSONL Data Format
 
-Claude Code stores sessions at: `~/.claude/projects/`
+Sessions live at `~/.claude/projects/<encoded-project-path>/<session-uuid>.jsonl`, one JSON object per line. The verified schema, message types to skip, subagent filtering (`isSidechain`), and token deduplication rules (group by `message.id`, keep highest `output_tokens`) are documented in **`docs/SESSION_DATA.md`**. Parser implementation lives in `vscode-extension/src/parser.ts` and `webapp/extract_prompts.py`.
 
-Directory structure:
-```
-~/.claude/projects/
-├── -home-fdpearce-Documents-project-name/
-│   ├── session-uuid-1.jsonl
-│   ├── session-uuid-2.jsonl
-│   └── ...
-└── -home-fdpearce-Documents-other-project/
-    └── ...
-```
-
-### Verified Message Types (from real data)
-Each JSONL file has one JSON object per line. These are the types we care about:
-
-**`type: "user"` — User prompts (EXTRACT THESE)**
-```json
-{
-  "type": "user",
-  "sessionId": "uuid",
-  "version": "2.1.44",
-  "gitBranch": "main",
-  "cwd": "/path/to/project",
-  "message": {
-    "role": "user",
-    "content": "plain string"
-  },
-  "uuid": "msg-uuid",
-  "timestamp": "2026-02-27T01:10:20.969Z",
-  "planContent": "optional — present when Plan Mode was used"
-}
-```
-**NOTE:** `message.content` can be either:
-- A plain string: `"content": "Implement the following plan..."`
-- An array of blocks: `"content": [{"type": "text", "text": "..."}]`
-The parser MUST handle both.
-
-**`type: "assistant"` — Claude responses (token usage here)**
-```json
-{
-  "type": "assistant",
-  "message": {
-    "model": "claude-opus-4-6",
-    "role": "assistant",
-    "content": [{"type": "text", "text": "..."}, {"type": "tool_use", ...}],
-    "usage": {
-      "input_tokens": 3,
-      "output_tokens": 2,
-      "cache_creation_input_tokens": 14450,
-      "cache_read_input_tokens": 19155
-    }
-  },
-  "timestamp": "2026-02-27T01:10:24.420Z"
-}
-```
-
-**Types to SKIP:**
-- `file-history-snapshot` — metadata
-- `tool_use` — top-level tool invocations (count for stats but don't extract content)
-- `tool_result` — tool output
-- `progress`, `hook_progress`, `bash_progress` — streaming events
-- `thinking` — extended thinking (count as a signal but skip content)
-- `system` — system messages
-- `create` — file creation events
-
-### Signals to Detect for Fluency Scoring
-- `planContent` field on user messages -> Plan Mode usage (positive fluency signal)
-- `type: "thinking"` lines -> Extended thinking usage
-- `type: "tool_use"` -> Tool diversity (count unique tool names)
-- Content of user prompts -> Behavioral analysis
+### Operational signals extracted for scoring
+- `planContent` on `user` messages → Plan Mode usage
+- `type: "thinking"` entries → extended thinking count
+- `type: "tool_use"` entries → tool diversity (unique tool names)
+- `message.content` (string or content-block array — handle both) → behavioral analysis
 
 ## Anthropic API Usage
 - Model for scoring: `claude-sonnet-4-6` (fast, cheap, good for classification)
-- API key via: env var > `.env` > VS Code secrets > prompt
+- API key resolution: see "API Key Resolution Order" above
 - Keep prompts concise — send only user prompt text (up to 20 per conversation, max 2000 chars each)
 - Cache scoring results in `globalStorageUri/scores.json` to avoid re-scoring
 
@@ -599,52 +454,11 @@ Fixed brand colors (semantic meaning, don't change with theme):
 
 ## Testing
 ```bash
-cd vscode-extension
-npm test                   # Runs all 907 Jest tests (23 suites)
-
-# Test structure:
-# test/unit/config.test.ts                     — centralized config module (defaults, VS Code overrides, display config)
-# test/unit/prompts.test.ts                    — prompt loader + template filler (all prompt types)
-# test/unit/conversation.test.ts               — conversation assembly, gap-based splitting, boundary detection
-# test/unit/scoring.test.ts                    — scoreConversations, computeAggregate, optimizePrompt, scoreSinglePrompt, prompt versioning
-# test/unit/quickwins.test.ts                  — GitHub name validation, repo detection, arg safety
-# test/unit/xss.test.ts                        — escapeHtml payloads + source-level XSS vector coverage
-# test/unit/platform.test.ts                   — cross-platform shell, escaping, npx helpers
-# test/unit/cache.test.ts                      — score cache persistence, content hashing, invalidation
-# test/unit/dataCache.test.ts                  — conversation/usage data caching, stale-while-revalidate
-# test/unit/parser.test.ts                     — JSONL parsing, content extraction, subagent filtering
-# test/unit/recommendations.test.ts            — recommendation generation, behavior categorization
-# test/unit/usage.test.ts                      — ccusage CLI bridge, data formatting
-# test/unit/analytics.test.ts                  — conversation analytics, efficiency metrics, cost calculations
-# test/unit/pricing.test.ts                    — token pricing lookup, model matching, fallback rates
-# test/unit/agentMetrics.test.ts               — agent metrics computation, per-conversation, weekly aggregation
-# test/unit/taskClassification.test.ts         — branch prefix mapping, keyword regex, classification priority
-# test/unit/antiPatterns.test.ts               — structured output anti-pattern detection, false positive avoidance
-# test/unit/configScanner.test.ts              — .claude/ directory scanning, frontmatter parsing, error resilience
-# test/unit/renderUsageDashboard.test.ts       — Pattern A render-function idempotency: clearEmptyState helper + call-site audits in both interfaces (JSDOM env)
-# test/integration/extension.test.ts           — activation, status bar, commands
-# test/integration/webviewProvider.test.ts      — message handling, HTML generation, injection tests, optimizer IPC
-# test/__mocks__/vscode.ts                     — VS Code API mock for Jest
-
-cd ../webapp
-uv run pytest tests/ -v    # Runs all webapp tests (853 tests, 12 suites)
-
-# Test structure:
-# tests/test_conversations.py    — conversation assembly, gap-based splitting, boundary detection
-# tests/test_api.py              — health endpoint, conversations, scores, scoring, optimizer, quickwins, usage
-# tests/test_helpers.py          — _decode_project_path, _detect_project_repo, validators, compute_aggregate, classify_error
-# tests/test_security.py         — rate limiting, CORS, error leakage, path traversal, security headers, XSS source-level verification
-# tests/test_extract_prompts.py  — JSONL parsing, content extraction, session filtering, metadata
-# tests/test_prompts.py          — prompt loading, template filling, registry consistency
-# tests/test_config.py           — centralized config module (defaults, env vars, config.json overrides)
-# tests/test_analyze_gaps.py     — inter-prompt gap analysis, histogram generation
-# tests/test_eval.py             — eval framework (scorer, checks, report, CLI, golden set integration)
-# tests/test_task_classification.py — branch prefix mapping, keyword regex, classification priority
-# tests/test_anti_patterns.py    — structured output anti-pattern detection, false positives
-# tests/test_config_scanner.py   — .claude/ directory scanning, frontmatter parsing, endpoint tests
-# tests/test_verification_behaviors.py — tool-sequence detection: review-after-edit, test-before-commit
-# tests/conftest.py              — shared fixtures (TestClient, mock Anthropic, mock sessions)
+cd vscode-extension && npm test    # Jest: 1019 tests across unit/ + integration/
+cd webapp && uv run pytest tests/  # pytest: 853 tests across unit suites + tests/e2e/
 ```
+
+Test files mirror their source modules (e.g., `parser.ts` ↔ `test/unit/parser.test.ts`, `conversations.py` ↔ `tests/test_conversations.py`). Coverage spans parsing, conversation assembly, scoring, analytics, caching, security (XSS, path traversal, error redaction), config, prompts, and platform helpers. List the test directories directly for the current inventory — don't maintain a duplicate index here.
 
 ### E2E Smoke Test Checklist
 
