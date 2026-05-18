@@ -4,11 +4,11 @@
 
 ## 1. Data Pipeline Overview
 
-CodeFluent uses two independent data sources, both reading from the same JSONL session files:
+All CodeFluent analytics derive from the same JSONL session files:
 
 | Concern | Source | How it works |
 |---------|--------|--------------|
-| All-projects token/cost data | [`ccusage`](https://github.com/ryoppippi/ccusage) (npm) | Aggregates daily, monthly, and per-session totals. Webapp stores results in `data/ccusage/`. Extension calls via IPC. **Planned for removal** (#251) — has known dedup bugs; being replaced by JSONL-derived data. |
+| Daily/monthly token + cost totals | JSONL parser + aggregation | Daily aggregator groups conversations by `started_at[:10]` and sums tokens; cost uses `shared/pricing.json` model rates. Extension: `analytics.ts` (`aggregateUsage`). Webapp: `main.py` (`aggregate_daily_usage`, `aggregate_monthly_usage`). |
 | Per-conversation prompts + token analytics | JSONL parser + conversation assembly | Parses `~/.claude/projects/*.jsonl`, assembles conversations via gap-based splitting. Extension: `parser.ts` + `conversation.ts` + `analytics.ts`. Webapp: `extract_prompts.py` + `conversations.py`. |
 | Agent behavior metrics | Computed from parsed conversations | Tool diversity, plan mode adoption, cache hit rate, thinking utilization. Extension: `agentMetrics.ts`. Webapp: `agent_metrics.py`. |
 | Task classification | Heuristic (branch prefix + keyword regex) | Classifies conversations into 8 categories. Extension: `taskClassification.ts`. Webapp: `task_classification.py`. |
@@ -19,47 +19,28 @@ Both interfaces parse JSONL directly on demand — there is no pre-generated int
 
 ---
 
-## 2. ccusage Integration (Deprecated — Planned Removal)
+## 2. Usage Aggregation (JSONL-Derived)
 
-> **Status:** Planned for removal in v1.2 (#251). ccusage has known token counting bugs (see below) and doesn't support project-level scoping. Being replaced by JSONL-derived data using the same parser as Conversation Analytics.
+The Usage tab's "Usage Pace" cards and "Daily Token Usage" chart aggregate from local JSONL through the conversations pipeline. The endpoint output shape mirrors what ccusage used to return so the frontend stays unchanged:
 
-The webapp fetches three ccusage data types on demand via `/api/usage/refresh`:
-
+```jsonc
+{
+  "daily":   { "daily":   [{ "date":  "YYYY-MM-DD", "inputTokens": ..., "outputTokens": ..., "cacheCreationTokens": ..., "cacheReadTokens": ..., "totalTokens": ..., "totalCost": ... }, ...] },
+  "monthly": { "monthly": [{ "month": "YYYY-MM",    /* same shape */ }, ...] }
+}
 ```
-npx ccusage@latest daily --json
-npx ccusage@latest monthly --json
-npx ccusage@latest session --json -o desc
-```
 
-Results are stored in `data/ccusage/{daily,monthly,session}.json` and served directly via `GET /api/usage`. The extension calls `ccusage` through its IPC bridge (`usage.ts`).
+**How it works:**
 
-### ccusage JSON Schema
+1. Conversations are loaded from the shared cache (extension: `dataCache.ts`; webapp: `get_all_conversations()`).
+2. Conversations are filtered to the current project (workspace folder name in the extension; `?project=` query param in the webapp).
+3. The aggregator groups conversations by `started_at[:10]` and sums per-conversation token totals. Multi-day conversations attribute entirely to their start date — see [#327](https://github.com/frederick-douglas-pearce/codefluent/issues/327) for follow-up research on per-message attribution.
+4. Costs are computed via `shared/pricing.json` (date-aware model rate lookup; same logic as Conversation Analytics).
+5. Monthly entries are derived from the daily output (no second pipeline).
 
-Each data type returns arrays with the same structure (grouped by day, month, or session):
+**Why JSONL aggregation instead of `ccusage`:** The previous `ccusage` integration didn't support project-level scoping and had known accuracy issues — first-wins dedup under-reported output, lack of subagent filtering over-reported elsewhere. Issue [#251](https://github.com/frederick-douglas-pearce/codefluent/issues/251) removed the dependency. The conversation parser already applies highest-output-wins dedup per `message.id` (per [PR #261](https://github.com/frederick-douglas-pearce/codefluent/pull/261)) and scans subagent files for token-only attribution, so the JSONL totals are more accurate than ccusage's.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `inputTokens` | number | Fresh input tokens |
-| `outputTokens` | number | Output tokens |
-| `cacheCreationTokens` | number | Tokens written to cache |
-| `cacheReadTokens` | number | Tokens read from cache |
-| `totalTokens` | number | Sum of all token types |
-| `totalCost` | number | USD cost estimate |
-| `modelsUsed` | string[] | Model IDs used in period |
-| `modelBreakdowns` | object[] | Per-model token/cost split |
-
-### Known ccusage issues (as of April 2026)
-
-| Issue | Impact | Source |
-|-------|--------|--------|
-| First-wins dedup | Under-reports `output_tokens` by ~2.7x — keeps first streaming snapshot (partial count) instead of last (final count) | ryoppippi/ccusage#938 |
-| No subagent filtering | Over-counts by ~2x when `/btw` sidechains re-log conversation history | ryoppippi/ccusage#913, #806 |
-| No project scoping | Reports across all projects — can't filter to current workspace | #251 |
-| No `isSidechain` handling | Schema ignores the `isSidechain` flag entirely | Source code review |
-
-These bugs partially cancel out, but the net result is unreliable totals.
-
-**Source:** `webapp/main.py` (usage endpoints), `vscode-extension/src/usage.ts`
+**Source:** `webapp/main.py` (`/api/usage`), `vscode-extension/src/webviewProvider.ts` (`handleGetUsage`), `vscode-extension/src/analytics.ts` (`aggregateUsage`)
 
 ---
 

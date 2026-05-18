@@ -324,7 +324,7 @@ Epic 2a (Heuristic Classification) ──→ Epic 2b (LLM) ──→ Epic 4 (Int
 | #246 | Verification behavior detection | Epic 4 | v1.2 | Open |
 | #247 | Learning trajectory metric | Epic 4 | v1.2 | Open |
 | #248 | Task-type normalization | Epic 4 | v1.2 | Open |
-| #251 | Usage tab project scoping (ccusage removal) | Bug fix | v1.2 | Open |
+| #251 | Usage tab project scoping (ccusage removal) | Bug fix | v1.3 | In progress |
 | #238 | Scan .claude/agents/ for subagent definitions | Epic 5 | v1.3 | Open |
 | #239 | Track subagent invocations | Epic 4/5 | v1.3 | Open |
 | #240 | Agent-aware recommendations | Epic 4/5 | v1.3 | Open |

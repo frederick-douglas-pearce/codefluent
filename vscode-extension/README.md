@@ -11,7 +11,6 @@ CodeFluent parses your local Claude Code session files, scores your prompting be
 - **VS Code** 1.85 or later
 - **Claude Code** installed and used (session data in `~/.claude/projects/`)
 - **Anthropic API key** — for fluency scoring (set `ANTHROPIC_API_KEY` env var, add to workspace `.env`, or enter when prompted)
-- **Node.js** 22+ — for `ccusage` usage data (called via `npx`)
 - **GitHub CLI (`gh`)** — optional, for Quick Wins repo context and issue suggestions
 
 ### Installation
@@ -93,7 +92,7 @@ GitHub-repo-scoped task suggestions — CodeFluent detects your current workspac
 
 ### Usage Dashboard
 
-Track daily and monthly token usage, costs, and conversation history. Powered by [`ccusage`](https://github.com/ryoppippi/ccusage). Conversation analytics shows per-conversation efficiency metrics, cost-efficiency scatter charts with fluency score color gradients, and a sortable details table with cost/prompt, cache hit rates, and output/input ratios.
+Track daily and monthly token usage, costs, and conversation history — all aggregated from your local JSONL sessions and scoped to the current workspace. Conversation analytics shows per-conversation efficiency metrics, cost-efficiency scatter charts with fluency score color gradients, and a sortable details table with cost/prompt, cache hit rates, and output/input ratios.
 
 ![Usage Dashboard](https://raw.githubusercontent.com/frederick-douglas-pearce/codefluent/main/images/vscode-usage.png)
 
@@ -110,7 +109,7 @@ Track daily and monthly token usage, costs, and conversation history. Powered by
 5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, custom subagents, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
 6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
 7. **Cache** — Scores are cached locally (by conversation ID, content hash, and prompt version) to avoid re-scoring unchanged conversations
-8. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) are computed from parsed JSONL token data
+8. **Usage analytics** — daily/monthly token totals are aggregated from parsed JSONL conversations and scoped to the current workspace; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) come from the same data source. Costs are computed via `shared/pricing.json` model rates.
 
 Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
@@ -165,7 +164,7 @@ The CodeFluent repository itself ships Claude Code hooks that block reads of `.e
 | **No sessions found** | Check that `~/.claude/projects/` contains `.jsonl` session files. Claude Code creates these automatically during use. |
 | **API key not found** | The extension checks: env var → workspace `.env` → VS Code secrets → interactive prompt. Make sure `ANTHROPIC_API_KEY` is set in at least one location. |
 | **Quick Wins shows no results** | Run `gh auth login` to authenticate the GitHub CLI. |
-| **ccusage returns no data** | Click the Refresh button in the Usage tab. Ensure Node.js and npm are on PATH so `npx ccusage` works. |
+| **Usage tab is empty** | Make sure you've used Claude Code in the current workspace so `~/.claude/projects/<workspace>/*.jsonl` files exist. The Usage tab is scoped to the current workspace project. |
 | **Extension doesn't activate** | Look for the CodeFluent icon in the activity bar. If missing, try reloading the window (`Ctrl+Shift+P` → "Reload Window"). |
 
 ## Roadmap

@@ -57,10 +57,9 @@ Terminal launch, shell escaping, subprocess invocation, and session path resolut
 
 ### Prerequisites
 
-- **All platforms:** Node.js 22+ (for `npx ccusage`), an [Anthropic API key](https://console.anthropic.com/settings/keys) (sign up at [console.anthropic.com](https://console.anthropic.com/) if you don't have one), [`gh` CLI](https://cli.github.com/) authenticated (`gh auth login` must be run before Quick Wins works), Git
+- **All platforms:** An [Anthropic API key](https://console.anthropic.com/settings/keys) (sign up at [console.anthropic.com](https://console.anthropic.com/) if you don't have one), [`gh` CLI](https://cli.github.com/) authenticated (`gh auth login` must be run before Quick Wins works), Git
 - **VS Code extension:** VS Code 1.85+
 - **Web app:** Python 3.12+ / `uv`
-- **Windows:** No additional dependencies. The extension automatically uses `cmd.exe` and `npx.cmd` where needed.
 
 ### VS Code Extension
 
@@ -108,7 +107,7 @@ uv sync
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Then open `http://localhost:8000` in your browser. Usage data is fetched on demand via the **Refresh** button in the Usage tab — no manual `ccusage` commands needed. See [`webapp/README.md`](webapp/README.md) for detailed setup instructions.
+Then open `http://localhost:8000` in your browser. Usage data is aggregated from your local JSONL sessions on demand via the **Refresh** button in the Usage tab. See [`webapp/README.md`](webapp/README.md) for detailed setup instructions.
 
 ### Configure
 
@@ -230,7 +229,7 @@ CodeFluent resolves this automatically via the system home directory. If your se
 - **Configuration Maturity** — **The first tool to assess your Claude Code project configuration maturity.** Scans your `.claude/` directory and scores your setup (0–100) across 8 weighted categories: CLAUDE.md placement and imports (20 pts), hooks with event types and file matchers (20 pts), rules with path scoping (15 pts), custom commands (10 pts), MCP servers (10 pts), skills with frontmatter (10 pts), permissions (5 pts), and enforcement coverage (10 pts). A tier badge (Beginner / Intermediate / Advanced / Expert) summarizes your maturity level. Enforcement gap detection identifies rules in your CLAUDE.md that lack programmatic enforcement via hooks and assigns severity levels. The Configuration Advisor generates ready-to-use hook configurations from enforcement gaps using Claude, with one-click copy to clipboard. Covers the same configuration competencies tested in the [Claude Certified Architect (CCA)](https://www.anthropic.com/news/claude-certified-architect) exam — use it to validate and improve your project configuration skills. This is the foundation for the CCA readiness radar, interaction quality metrics, and outcome analysis planned for future releases.
 - **Prompt Optimizer** — Paste any prompt and get an optimized version that naturally incorporates missing fluency behaviors. Considers your CLAUDE.md config so it won't add behaviors already covered by project conventions. Shows before/after effective scores, highlights added behaviors, and lets you copy or run the improved prompt directly.
 - **Quick Wins** — Scans your GitHub repos (commits, issues, README status) and generates copy-paste-ready Claude Code prompts for high-value tasks. In the VS Code extension, a "Run" button launches Claude Code in an integrated terminal with the suggested prompt. In the web app, prompts are copied to clipboard for pasting into your terminal — giving you more control and safer cross-platform behavior.
-- **Usage Dashboard** — Two complementary views of your Claude Code usage. **All-projects analytics** (via [ccusage](https://github.com/ryoppippi/ccusage)) shows daily usage pace cards, cost projections, and a stacked token breakdown chart across all projects. **Conversation analytics** (from parsed JSONL history) shows per-conversation efficiency metrics — cost/prompt, cache hit rates, output/input ratios — with summary cards, three cost-efficiency scatter charts colored by fluency score, and a sortable details table. A **Refresh** button fetches the latest data on demand.
+- **Usage Dashboard** — Two complementary views of your Claude Code usage, both aggregated from local JSONL sessions and scoped to the current project. **Usage pace** shows daily pace cards, cost projections, and a stacked token breakdown chart. **Conversation analytics** shows per-conversation efficiency metrics — cost/prompt, cache hit rates, output/input ratios — with summary cards, three cost-efficiency scatter charts colored by fluency score, and a sortable details table. A **Refresh** button fetches the latest data on demand.
 - **CLAUDE.md Config Scoring** — Scores your project's CLAUDE.md file against 3 meta-interaction behaviors that can genuinely be established as project conventions: *setting interaction terms*, *identifying missing context*, and *questioning reasoning*. Behaviors defined in your CLAUDE.md (e.g., "push back if wrong") boost your effective score via `conversation OR config` logic, with a "CLAUDE.md" attribution tag in the UI. The remaining 8 behaviors are task-specific and can only be demonstrated through actual prompts.
 - **Status Bar** — Shows your aggregate fluency score at a glance in the VS Code status bar.
 - **VS Code Theming** — Automatically respects your light/dark theme.
@@ -245,7 +244,7 @@ CodeFluent resolves this automatically via the system home directory. If your se
 5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, custom subagents, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
 6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
 7. **Cache** — Scores are cached locally (by conversation ID, content hash, and prompt version) in both the VS Code extension and webapp to avoid re-scoring unchanged conversations
-8. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) are computed from parsed JSONL token data
+8. **Usage analytics** — daily/monthly token totals are aggregated from parsed JSONL conversations and scoped to the current project; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) come from the same data source. Costs are computed via `shared/pricing.json` model rates.
 
 Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
@@ -331,7 +330,7 @@ See [`SECURITY.md`](SECURITY.md) for the full policy: leak vector, defense archi
 | **No sessions found** | Check that `~/.claude/projects/` contains `.jsonl` session files. Claude Code creates these automatically during use. |
 | **API key not found** | The extension checks: env var → workspace `.env` → VS Code secrets → interactive prompt. Make sure `ANTHROPIC_API_KEY` is set in at least one location. |
 | **Quick Wins shows no results** | Run `gh auth login` to authenticate the GitHub CLI. Quick Wins requires `gh` to fetch repo context and issues. |
-| **ccusage returns no data** | Click the Refresh button in the Usage tab, or run `npx ccusage@latest daily --json` manually to verify output. Ensure you've used Claude Code at least once so session data exists. |
+| **Usage tab is empty** | Make sure you've used Claude Code in the current workspace (or selected project) so `~/.claude/projects/<workspace>/*.jsonl` files exist. The Usage tab is scoped to that project. |
 | **Extension doesn't activate** | Look for the CodeFluent icon in the VS Code activity bar (left sidebar). If missing, try reloading the window (`Ctrl+Shift+P` → "Reload Window"). |
 | **VSIX is too small (~100KB)** | The `.vscodeignore` file must not exclude `node_modules/`. The Anthropic SDK is a runtime dependency and must be bundled. Expected VSIX size is ~1.2MB. |
 
@@ -341,7 +340,7 @@ See [`SECURITY.md`](SECURITY.md) for the full policy: leak vector, defense archi
 - **Web app:** Python / FastAPI / `uv`
 - **Frontend (both):** Vanilla HTML/CSS/JS + Chart.js (bundled locally)
 - **Scoring:** Anthropic API (`claude-sonnet-4-6`)
-- **Usage data:** [ccusage](https://github.com/ryoppippi/ccusage) (reads Claude Code sessions)
+- **Usage data:** aggregated from local JSONL sessions (`~/.claude/projects/`)
 - **GitHub integration:** `gh` CLI
 - **Testing:** Jest + ts-jest (extension)
 
@@ -356,7 +355,6 @@ codefluent/
 │   │   ├── parser.ts          # JSONL session file parsing
 │   │   ├── scoring.ts         # Fluency scoring via Anthropic API
 │   │   ├── conversation.ts    # Conversation assembly (gap-based splitting)
-│   │   ├── usage.ts           # ccusage CLI bridge
 │   │   ├── quickwins.ts       # GitHub integration + task suggestions
 │   │   ├── prompts.ts         # Prompt loader + template filler
 │   │   ├── analytics.ts       # Conversation token analytics (efficiency, cost)
@@ -367,7 +365,7 @@ codefluent/
 │   │   ├── configScanner.ts   # .claude/ directory maturity scanner
 │   │   ├── enforcementGaps.ts # Advisory-vs-programmatic gap detection
 │   │   ├── cache.ts           # Persistent score caching
-│   │   ├── dataCache.ts       # Conversation/usage data caching
+│   │   ├── dataCache.ts       # Conversations data caching
 │   │   └── platform.ts        # Cross-platform shell, terminal, subprocess helpers
 │   ├── media/
 │   │   ├── index.html         # Webview UI

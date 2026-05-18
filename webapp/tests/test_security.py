@@ -109,7 +109,6 @@ class TestErrorLeakage:
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         monkeypatch.setattr(main, "DATA_DIR", data_dir)
-        monkeypatch.setattr(main, "CCUSAGE_DIR", data_dir / "ccusage")
         main._score_timestamps.clear()
         monkeypatch.setattr(main, "_get_or_score_config_behaviors", lambda p: {})
 

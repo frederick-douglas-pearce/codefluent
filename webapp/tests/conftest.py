@@ -31,7 +31,6 @@ def client(tmp_path, monkeypatch):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     monkeypatch.setattr(main, "DATA_DIR", data_dir)
-    monkeypatch.setattr(main, "CCUSAGE_DIR", data_dir / "ccusage")
 
     # Clear rate limiter between tests
     main._score_timestamps.clear()

@@ -11,7 +11,6 @@ function makeCache(): DataCache {
 
 describe('DataCache', () => {
   beforeEach(() => {
-    // Clean up test directory
     try {
       fs.rmSync(TEST_DIR, { recursive: true, force: true })
     } catch {
@@ -27,88 +26,73 @@ describe('DataCache', () => {
     }
   })
 
-  describe('getUsage / setUsage', () => {
+  describe('getConversations / setConversations', () => {
     it('returns null when empty', () => {
       const cache = makeCache()
-      const { data, isStale } = cache.getUsage()
+      const { data, isStale } = cache.getConversations()
       expect(data).toBeNull()
       expect(isStale).toBe(true)
     })
 
     it('returns fresh data after set', () => {
       const cache = makeCache()
-      const mockData = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
-      cache.setUsage(mockData)
+      const mockData = { conversations: [{ id: 'c1' }], metadata: {} }
+      cache.setConversations(mockData)
 
-      const { data, isStale } = cache.getUsage()
+      const { data, isStale } = cache.getConversations()
       expect(data).toEqual(mockData)
       expect(isStale).toBe(false)
     })
 
     it('returns stale after TTL expires', () => {
       const cache = makeCache()
-      cache.setUsage({ daily: [] })
+      cache.setConversations({ conversations: [] })
 
-      // Manually expire the memory entry by patching the timestamp
-      const entry = (cache as any).usageMemory
+      const entry = (cache as any).conversationsMemory
       entry.timestamp = Date.now() - 6 * 60 * 1000 // 6 minutes ago
 
-      const { data, isStale } = cache.getUsage()
-      expect(data).toEqual({ daily: [] })
+      const { data, isStale } = cache.getConversations()
+      expect(data).toEqual({ conversations: [] })
       expect(isStale).toBe(true)
     })
   })
 
-  describe('getSessions / setSessions', () => {
-    it('returns null when empty', () => {
+  describe('deprecated getSessions / setSessions aliases', () => {
+    it('getSessions delegates to getConversations', () => {
       const cache = makeCache()
-      const { data, isStale } = cache.getSessions()
-      expect(data).toBeNull()
-      expect(isStale).toBe(true)
-    })
-
-    it('returns fresh data after set', () => {
-      const cache = makeCache()
-      const mockData = { sessions: [{ id: 's1' }], metadata: {} }
+      const mockData = { conversations: [{ id: 'c1' }], metadata: {} }
       cache.setSessions(mockData)
 
-      const { data, isStale } = cache.getSessions()
+      const { data } = cache.getSessions()
       expect(data).toEqual(mockData)
-      expect(isStale).toBe(false)
     })
   })
 
   describe('invalidate', () => {
-    it('clears memory cache', () => {
+    it('clears memory cache but disk persists', () => {
       const cache = makeCache()
-      cache.setUsage({ daily: [] })
-      cache.setSessions({ sessions: [] })
+      cache.setConversations({ conversations: [] })
 
       cache.invalidate()
 
-      // Memory is cleared, but disk still has data
       // After invalidate, get should fall back to disk
-      const usage = cache.getUsage()
-      expect(usage.data).toEqual({ daily: [] })
-
-      const sessions = cache.getSessions()
-      expect(sessions.data).toEqual({ sessions: [] })
+      const { data } = cache.getConversations()
+      expect(data).toEqual({ conversations: [] })
     })
 
     it('forces disk fallback which may be stale', () => {
       const cache = makeCache()
-      cache.setUsage({ daily: [] })
+      cache.setConversations({ conversations: [] })
 
-      // Manually make disk entry stale
-      const diskPath = path.join(TEST_DIR, 'usage_cache.json')
+      const diskPath = path.join(TEST_DIR, 'conversations_cache.json')
       const raw = JSON.parse(fs.readFileSync(diskPath, 'utf8'))
       raw.timestamp = Date.now() - 10 * 60 * 1000
       fs.writeFileSync(diskPath, JSON.stringify(raw))
 
       cache.invalidate()
 
-      const { data, isStale } = cache.getUsage()
-      expect(data).toEqual({ daily: [] })
+      const { data, isStale } = cache.getConversations()
+      expect(data).toEqual({ conversations: [] })
       expect(isStale).toBe(true)
     })
   })
@@ -116,22 +100,16 @@ describe('DataCache', () => {
   describe('disk persistence', () => {
     it('persists across instances', () => {
       const cache1 = makeCache()
-      cache1.setUsage({ daily: [{ date: '2026-03-01' }] })
-      cache1.setSessions({ sessions: [{ id: 'abc' }] })
+      cache1.setConversations({ conversations: [{ id: 'abc' }] })
 
-      // New instance reads from disk
       const cache2 = makeCache()
-      const { data: usageData } = cache2.getUsage()
-      expect(usageData).toEqual({ daily: [{ date: '2026-03-01' }] })
-
-      const { data: sessionsData } = cache2.getSessions()
-      expect(sessionsData).toEqual({ sessions: [{ id: 'abc' }] })
+      const { data } = cache2.getConversations()
+      expect(data).toEqual({ conversations: [{ id: 'abc' }] })
     })
 
     it('handles missing disk files gracefully', () => {
       const cache = makeCache()
-      // No files exist
-      const { data } = cache.getUsage()
+      const { data } = cache.getConversations()
       expect(data).toBeNull()
     })
   })

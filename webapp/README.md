@@ -11,7 +11,6 @@ See the [main README](../README.md) for the full project overview. This document
 ### Prerequisites
 
 - **Python 3.12+** with **[uv](https://docs.astral.sh/uv/)** (Python package manager)
-- **Node.js 22+** (for `npx ccusage`)
 - **[Anthropic API key](https://console.anthropic.com/settings/keys)** — required for fluency scoring
 - **[`gh` CLI](https://cli.github.com/)** authenticated (`gh auth login`) — required for Quick Wins
 - **Git** — version control
@@ -103,7 +102,7 @@ The VS Code extension can launch prompts directly in an integrated terminal. The
 
 ### On-Demand Data Refresh
 
-Usage data is fetched via `ccusage` CLI on the server. The webapp runs three `ccusage` commands in parallel (`daily`, `monthly`, `session`) when the user clicks **Refresh**, storing results in `data/ccusage/`. The extension calls `ccusage` through IPC on each request.
+Usage data is aggregated directly from local JSONL sessions when the user clicks **Refresh**. The `GET /api/usage` endpoint groups conversations by start date and sums per-day token/cost totals, scoped to the project selected in the dropdown. The extension does the same aggregation in-process through IPC.
 
 ### Health Endpoint
 
@@ -118,7 +117,7 @@ The webapp exposes `GET /health` returning server status, version, and dependenc
 5. **Config maturity** — The `.claude/` directory is scanned for hooks, rules, commands, skills, MCP servers, custom subagents, CLAUDE.md, and permissions. Enforcement gaps are detected by cross-referencing CLAUDE.md enforcement language against hook configuration.
 6. **Agent metrics** — Tool diversity, plan mode adoption, cache hit rate, and thinking utilization are computed from parsed session metadata and aggregated weekly for trend analysis.
 7. **Cache** — Scores are cached locally (by conversation ID, content hash, and prompt version) to avoid re-scoring unchanged conversations
-8. **Usage analytics** — `ccusage` provides all-projects token/cost data; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) are computed from parsed JSONL token data
+8. **Usage analytics** — daily/monthly token totals are aggregated from parsed JSONL conversations and scoped to the selected project; per-conversation efficiency metrics (cost/prompt, cache hit rates, output/input ratios) come from the same data source. Costs are computed via `shared/pricing.json` model rates.
 
 Everything runs locally. No data leaves your machine except the API calls to Anthropic for scoring.
 
@@ -248,7 +247,7 @@ See [`docs/SESSION_DATA.md`](../docs/SESSION_DATA.md) for details on data availa
 |---------|----------|
 | **No sessions found** | Check that `~/.claude/projects/` contains `.jsonl` session files. Claude Code creates these automatically during use. |
 | **API key not found** | Set `ANTHROPIC_API_KEY` via environment variable or `.env` file in `webapp/` |
-| **ccusage returns no data** | Click the Refresh button in the Usage tab, or run `npx ccusage@latest daily --json` manually to verify output. Ensure you've used Claude Code at least once. |
+| **Usage tab is empty** | Pick a project in the dropdown and click Refresh. Make sure you've used Claude Code in that project so `~/.claude/projects/<project>/*.jsonl` exists. |
 | **Quick Wins shows no results** | Run `gh auth login` to authenticate the GitHub CLI |
 | **Health endpoint shows degraded** | Check that `ANTHROPIC_API_KEY` is set and the `data/` directory is writable |
 
@@ -264,7 +263,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for code conventions, branching strate
 
 ## Windows Notes
 
-- Use `\` instead of `/` in paths (e.g., `..\data\ccusage\daily.json`)
+- Use `\` instead of `/` in paths
 - Use `$env:ANTHROPIC_API_KEY = "sk-ant-api03-..."` to set environment variables in PowerShell
 - Session files are at `C:\Users\<username>\.claude\projects\`
 

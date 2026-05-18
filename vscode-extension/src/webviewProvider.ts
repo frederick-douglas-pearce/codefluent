@@ -3,13 +3,12 @@ import * as fs from 'fs'
 import * as path from 'path'
 import Anthropic from '@anthropic-ai/sdk'
 import { getAllConversations } from './conversation'
-import { getUsageData } from './usage'
 import { scoreConversations, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt, OPTIMIZER_PROMPT_VERSION, OptimizeResponse } from './scoring'
 import { getQuickWins } from './quickwins'
 import { ScoreCache } from './cache'
 import { DataCache } from './dataCache'
 import { getDefaultShell, getShellArgs, escapePromptForShell, getClaudeCommand } from './platform'
-import { buildConversationAnalytics } from './analytics'
+import { buildConversationAnalytics, aggregateUsage } from './analytics'
 import { computeAgentMetrics, computeWeeklyAgentMetrics, AgentMetrics, WeeklyAgentMetrics } from './agentMetrics'
 import { computeErrorRecoveryMetrics, computeWeeklyErrorRecovery, AggregateErrorRecovery, WeeklyErrorRecovery } from './errorRecovery'
 import { computeVerificationMetrics, computeWeeklyVerification, AggregateVerification, WeeklyVerification } from './verificationBehaviors'
@@ -215,15 +214,28 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async handleGetUsage() {
-    const { data, isStale } = this.dataCache.getUsage()
-    if (data && !isStale) return data
-    if (data && isStale) {
-      this.refreshUsageInBackground()
-      return data
+    // Derive usage from the conversations cache (project-scoped to workspace).
+    // This replaces the prior ccusage subprocess and removes the separate usage
+    // cache — see issue #251. Output shape mirrors ccusage's nested
+    // `{ daily: { daily: [...] } }` so the frontend stays unchanged.
+    const project = this.getWorkspaceProjectName()
+    const { data, isStale } = this.dataCache.getConversations()
+
+    let conversations: any[]
+    if (data && !isStale) {
+      conversations = data.conversations || []
+    } else if (data && isStale) {
+      this.refreshConversationsInBackground()
+      conversations = data.conversations || []
+    } else {
+      const fresh = getAllConversations(undefined, undefined, this.getSessionDataPath(), 200)
+      this.dataCache.setConversations(fresh)
+      conversations = fresh.conversations || []
     }
-    const fresh = await getUsageData()
-    this.dataCache.setUsage(fresh)
-    return fresh
+
+    const scoped = project ? conversations.filter((c: any) => c.project === project) : conversations
+    const { daily, monthly } = aggregateUsage(scoped)
+    return { daily: { daily }, monthly: { monthly } }
   }
 
   private getWorkspaceProjectName(): string | undefined {
@@ -733,18 +745,6 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private refreshUsageInBackground(): void {
-    setImmediate(async () => {
-      try {
-        const fresh = await getUsageData()
-        this.dataCache.setUsage(fresh)
-        this.view?.webview.postMessage({ type: 'usageUpdated', data: fresh })
-      } catch (err: any) {
-        console.error('[CodeFluent] Background usage refresh failed:', err?.message || err)
-      }
-    })
-  }
-
   private refreshConversationsInBackground(): void {
     setImmediate(() => {
       try {
@@ -752,6 +752,10 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
         this.dataCache.setConversations(fresh)
         const filtered = this.filterConversations(fresh, undefined, this.getWorkspaceProjectName())
         this.view?.webview.postMessage({ type: 'conversationsUpdated', data: filtered })
+        // Frontend also re-renders the Usage tab when conversations change,
+        // since usage is now derived from the same cache.
+        const { daily, monthly } = aggregateUsage(filtered.conversations || [])
+        this.view?.webview.postMessage({ type: 'usageUpdated', data: { daily: { daily }, monthly: { monthly } } })
       } catch (err: any) {
         console.error('[CodeFluent] Background conversations refresh failed:', err?.message || err)
       }
@@ -759,7 +763,6 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
   }
 
   private refreshInBackground(): void {
-    this.refreshUsageInBackground()
     this.refreshConversationsInBackground()
   }
 

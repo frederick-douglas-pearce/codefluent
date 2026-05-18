@@ -1,4 +1,5 @@
-import { computeWeeklyTokenAggregation, computeSessionEfficiency, joinSessionsWithScores, buildSessionAnalytics } from '../../src/analytics'
+import { computeWeeklyTokenAggregation, computeSessionEfficiency, joinSessionsWithScores, buildSessionAnalytics, aggregateDailyUsage, aggregateMonthlyUsage, aggregateUsage } from '../../src/analytics'
+import { PricingData } from '../../src/pricing'
 import { ParsedSession } from '../../src/parser'
 import { ScoreResult, SCORING_PROMPT_VERSION } from '../../src/scoring'
 
@@ -406,5 +407,165 @@ describe('buildSessionAnalytics', () => {
     expect(result.weekly[0]).toHaveProperty('avg_cache_hit_rate')
     expect(result.weekly[0]).toHaveProperty('conversation_count')
     expect(result.weekly[0]).toHaveProperty('session_count') // deprecated alias
+  })
+})
+
+// Synthetic in-memory pricing — keeps the aggregator tests independent of disk
+// and pins expected cost totals without coupling to shared/pricing.json edits.
+const TEST_PRICING: PricingData = {
+  models: {
+    'claude-sonnet-4-6': [
+      {
+        effective_date: '2026-01-01',
+        input: 3.0,
+        output: 15.0,
+        cache_creation: 3.75,
+        cache_read: 0.3,
+      },
+    ],
+  },
+  aliases: {},
+  default_model: 'claude-sonnet-4-6',
+}
+
+describe('aggregateDailyUsage', () => {
+  it('groups conversations by start date and sums token totals', () => {
+    const a = makeSession({
+      id: 'a', started_at: '2026-01-06T01:00:00Z',
+      total_input_tokens: 100, total_output_tokens: 50,
+      total_cache_creation_tokens: 200, total_cache_read_tokens: 1000,
+      total_tokens: 1350,
+    })
+    const b = makeSession({
+      id: 'b', started_at: '2026-01-06T22:00:00Z',
+      total_input_tokens: 200, total_output_tokens: 80,
+      total_cache_creation_tokens: 100, total_cache_read_tokens: 500,
+      total_tokens: 880,
+    })
+    const c = makeSession({
+      id: 'c', started_at: '2026-01-07T03:00:00Z',
+      total_input_tokens: 10, total_output_tokens: 20,
+      total_cache_creation_tokens: 0, total_cache_read_tokens: 0,
+      total_tokens: 30,
+    })
+
+    const result = aggregateDailyUsage([a, b, c], TEST_PRICING)
+
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        date: '2026-01-06',
+        inputTokens: 300,
+        outputTokens: 130,
+        cacheCreationTokens: 300,
+        cacheReadTokens: 1500,
+        totalTokens: 2230,
+      }),
+    )
+    expect(result[1]).toEqual(
+      expect.objectContaining({
+        date: '2026-01-07',
+        inputTokens: 10,
+        outputTokens: 20,
+        totalTokens: 30,
+      }),
+    )
+  })
+
+  it('skips conversations with no started_at', () => {
+    const c1 = makeSession({ id: 'c1', started_at: null, total_tokens: 999 })
+    const c2 = makeSession({
+      id: 'c2', started_at: '2026-01-06T10:00:00Z',
+      total_input_tokens: 100, total_tokens: 100,
+    })
+
+    const result = aggregateDailyUsage([c1, c2], TEST_PRICING)
+    expect(result).toHaveLength(1)
+    expect(result[0].date).toBe('2026-01-06')
+    expect(result[0].totalTokens).toBe(100)
+  })
+
+  it('computes per-day cost using model pricing rates', () => {
+    const c = makeSession({
+      id: 'c', started_at: '2026-01-06T10:00:00Z',
+      model: 'claude-sonnet-4-6',
+      total_input_tokens: 1_000_000,
+      total_output_tokens: 1_000_000,
+      total_cache_creation_tokens: 0,
+      total_cache_read_tokens: 0,
+      total_tokens: 2_000_000,
+    })
+
+    const result = aggregateDailyUsage([c], TEST_PRICING)
+    expect(result).toHaveLength(1)
+    // 1M input @ $3/M + 1M output @ $15/M = $18.00
+    expect(result[0].totalCost).toBeCloseTo(18.0, 4)
+  })
+
+  it('returns empty array for empty input', () => {
+    expect(aggregateDailyUsage([], TEST_PRICING)).toEqual([])
+  })
+
+  it('preserves higher output_tokens when duplicate message IDs land in same day (relies on parser dedup upstream)', () => {
+    // This test pins the contract: aggregateDailyUsage operates on already-deduped
+    // conversation totals. If the parser correctly applies highest-output-wins per
+    // message.id (PR #261), then conversation.total_output_tokens reflects that and
+    // the aggregator just sums. We don't re-dedup at the aggregator level.
+    const c = makeSession({
+      id: 'c', started_at: '2026-01-06T10:00:00Z',
+      total_output_tokens: 5000, total_tokens: 5000,
+    })
+    const result = aggregateDailyUsage([c], TEST_PRICING)
+    expect(result[0].outputTokens).toBe(5000)
+  })
+
+  it('sorts daily entries by date ascending', () => {
+    const c1 = makeSession({ id: 'c1', started_at: '2026-03-15T10:00:00Z' })
+    const c2 = makeSession({ id: 'c2', started_at: '2026-01-06T10:00:00Z' })
+    const c3 = makeSession({ id: 'c3', started_at: '2026-02-10T10:00:00Z' })
+
+    const result = aggregateDailyUsage([c1, c2, c3], TEST_PRICING)
+    expect(result.map(d => d.date)).toEqual(['2026-01-06', '2026-02-10', '2026-03-15'])
+  })
+})
+
+describe('aggregateMonthlyUsage', () => {
+  it('groups daily entries by YYYY-MM and sums', () => {
+    const daily = [
+      { date: '2026-01-01', inputTokens: 100, outputTokens: 200, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 300, totalCost: 1.5 },
+      { date: '2026-01-15', inputTokens: 50, outputTokens: 100, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 150, totalCost: 0.75 },
+      { date: '2026-02-01', inputTokens: 200, outputTokens: 400, cacheCreationTokens: 0, cacheReadTokens: 0, totalTokens: 600, totalCost: 3.0 },
+    ]
+
+    const result = aggregateMonthlyUsage(daily)
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        month: '2026-01', inputTokens: 150, outputTokens: 300, totalTokens: 450, totalCost: 2.25,
+      }),
+    )
+    expect(result[1]).toEqual(
+      expect.objectContaining({
+        month: '2026-02', inputTokens: 200, outputTokens: 400, totalTokens: 600, totalCost: 3.0,
+      }),
+    )
+  })
+})
+
+describe('aggregateUsage', () => {
+  it('returns both daily and monthly aggregations from one conversation pass', () => {
+    const c = makeSession({
+      id: 'c', started_at: '2026-01-06T10:00:00Z',
+      total_input_tokens: 100, total_output_tokens: 50,
+      total_tokens: 150,
+    })
+
+    const result = aggregateUsage([c], TEST_PRICING)
+    expect(result.daily).toHaveLength(1)
+    expect(result.monthly).toHaveLength(1)
+    expect(result.daily[0].date).toBe('2026-01-06')
+    expect(result.monthly[0].month).toBe('2026-01')
+    expect(result.daily[0].totalTokens).toBe(150)
+    expect(result.monthly[0].totalTokens).toBe(150)
   })
 })

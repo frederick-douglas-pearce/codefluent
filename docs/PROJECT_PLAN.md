@@ -1,11 +1,13 @@
 # CodeFluent — Project Plan
 
+> **Historical hackathon plan — kept for context.** The post-hackathon architecture has since evolved: `ccusage` was removed in #251 and token/cost data now comes from the same JSONL parser as fluency scoring. See [`TECHNICAL_SPEC.md`](TECHNICAL_SPEC.md) for the current data pipeline.
+
 ## Hackathon: PDX Hacks x AI Collective: Claude Hackathon
 **Date:** Saturday, February 28, 2026 | Build window: 10:00 AM – 1:00 PM (2.5 hours)
 **Builder:** Solo
 **Stack:** Python 3.12.3 (FastAPI) + vanilla JS + Anthropic API
 **Package manager:** `uv`
-**Data sources:** `ccusage` (token/cost data) + custom JSONL prompt extractor (fluency scoring)
+**Data sources:** `ccusage` (token/cost data) + custom JSONL prompt extractor (fluency scoring) — _ccusage removed post-hackathon, see #251_
 
 ---
 

@@ -979,36 +979,141 @@ class TestConversationDetail:
 
 
 class TestGetUsage:
-    def test_returns_empty_when_no_data(self, client):
-        resp = client.get("/api/usage")
+    """Conversations-derived usage endpoint (issue #251 replaces the prior ccusage subprocess)."""
+
+    def test_returns_empty_aggregates_when_no_data(self, client, tmp_path):
+        empty_dir = tmp_path / "empty_projects"
+        empty_dir.mkdir()
+        resp = client.get("/api/usage", params={"data_path": str(empty_dir)})
         assert resp.status_code == 200
-        assert resp.json() == {}
+        data = resp.json()
+        assert data == {"daily": {"daily": []}, "monthly": {"monthly": []}}
 
-    def test_returns_data_when_files_exist(self, client, tmp_path, monkeypatch):
-        ccusage_dir = tmp_path / "data" / "ccusage"
-        ccusage_dir.mkdir(parents=True)
-        monkeypatch.setattr(main, "CCUSAGE_DIR", ccusage_dir)
-
-        daily_data = [{"date": "2026-03-01", "tokens": 1000}]
-        (ccusage_dir / "daily.json").write_text(json.dumps(daily_data))
-
-        resp = client.get("/api/usage")
+    def test_returns_aggregated_daily_from_jsonl(self, client, mock_sessions_dir):
+        resp = client.get("/api/usage", params={"data_path": str(mock_sessions_dir)})
         assert resp.status_code == 200
         data = resp.json()
         assert "daily" in data
-        assert data["daily"][0]["tokens"] == 1000
-
-    def test_returns_partial_data(self, client, tmp_path, monkeypatch):
-        ccusage_dir = tmp_path / "data" / "ccusage"
-        ccusage_dir.mkdir(parents=True)
-        monkeypatch.setattr(main, "CCUSAGE_DIR", ccusage_dir)
-
-        (ccusage_dir / "monthly.json").write_text(json.dumps([{"month": "2026-03"}]))
-
-        resp = client.get("/api/usage")
-        data = resp.json()
         assert "monthly" in data
-        assert "daily" not in data
+        daily = data["daily"]["daily"]
+        assert len(daily) >= 1
+        entry = daily[0]
+        # Verify ccusage-compatible field names (frontend reads .date, .totalTokens, etc.)
+        assert "date" in entry
+        assert "inputTokens" in entry
+        assert "outputTokens" in entry
+        assert "cacheCreationTokens" in entry
+        assert "cacheReadTokens" in entry
+        assert "totalTokens" in entry
+        assert "totalCost" in entry
+
+    def test_project_scoping(self, client, mock_sessions_dir):
+        # Scoped to a non-existent project — should return empty
+        resp = client.get(
+            "/api/usage",
+            params={"data_path": str(mock_sessions_dir), "project": "nonexistent-project"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["daily"]["daily"] == []
+        assert data["monthly"]["monthly"] == []
+
+
+class TestUsageAggregators:
+    """Unit-level tests for the aggregation helpers used by /api/usage."""
+
+    def _conv(self, **overrides):
+        defaults = {
+            "started_at": "2026-01-06T10:00:00Z",
+            "model": "claude-sonnet-4-6",
+            "total_input_tokens": 0,
+            "total_output_tokens": 0,
+            "total_cache_creation_tokens": 0,
+            "total_cache_read_tokens": 0,
+            "total_tokens": 0,
+        }
+        defaults.update(overrides)
+        return defaults
+
+    _pricing = {
+        "models": {
+            "claude-sonnet-4-6": [
+                {
+                    "effective_date": "2026-01-01",
+                    "input": 3.0,
+                    "output": 15.0,
+                    "cache_creation": 3.75,
+                    "cache_read": 0.3,
+                },
+            ],
+        },
+        "aliases": {},
+        "default_model": "claude-sonnet-4-6",
+    }
+
+    def test_groups_by_start_date(self):
+        convs = [
+            self._conv(started_at="2026-01-06T01:00:00Z", total_input_tokens=100, total_tokens=100),
+            self._conv(started_at="2026-01-06T22:00:00Z", total_input_tokens=200, total_tokens=200),
+            self._conv(started_at="2026-01-07T03:00:00Z", total_input_tokens=10, total_tokens=10),
+        ]
+        result = main.aggregate_daily_usage(convs, self._pricing)
+        assert len(result) == 2
+        assert result[0]["date"] == "2026-01-06"
+        assert result[0]["inputTokens"] == 300
+        assert result[0]["totalTokens"] == 300
+        assert result[1]["date"] == "2026-01-07"
+        assert result[1]["totalTokens"] == 10
+
+    def test_skips_conversations_with_no_started_at(self):
+        convs = [
+            self._conv(started_at=None, total_tokens=999),
+            self._conv(started_at="2026-01-06T10:00:00Z", total_input_tokens=100, total_tokens=100),
+        ]
+        result = main.aggregate_daily_usage(convs, self._pricing)
+        assert len(result) == 1
+        assert result[0]["date"] == "2026-01-06"
+        assert result[0]["totalTokens"] == 100
+
+    def test_computes_cost_using_pricing(self):
+        # 1M input @ $3/M + 1M output @ $15/M = $18.00
+        conv = self._conv(
+            total_input_tokens=1_000_000,
+            total_output_tokens=1_000_000,
+            total_tokens=2_000_000,
+        )
+        result = main.aggregate_daily_usage([conv], self._pricing)
+        assert result[0]["totalCost"] == pytest.approx(18.0, rel=1e-4)
+
+    def test_dedup_relies_on_parser_upstream(self):
+        # The aggregator does not re-dedup — it sums conversation totals as given.
+        # Parser (PR #261) is responsible for highest-output-wins per message.id.
+        conv = self._conv(total_output_tokens=5000, total_tokens=5000)
+        result = main.aggregate_daily_usage([conv], self._pricing)
+        assert result[0]["outputTokens"] == 5000
+
+    def test_sorts_daily_entries_ascending(self):
+        convs = [
+            self._conv(started_at="2026-03-15T10:00:00Z"),
+            self._conv(started_at="2026-01-06T10:00:00Z"),
+            self._conv(started_at="2026-02-10T10:00:00Z"),
+        ]
+        result = main.aggregate_daily_usage(convs, self._pricing)
+        assert [d["date"] for d in result] == ["2026-01-06", "2026-02-10", "2026-03-15"]
+
+    def test_monthly_aggregates_daily(self):
+        daily = [
+            {"date": "2026-01-01", "inputTokens": 100, "outputTokens": 200, "cacheCreationTokens": 0, "cacheReadTokens": 0, "totalTokens": 300, "totalCost": 1.5},
+            {"date": "2026-01-15", "inputTokens": 50, "outputTokens": 100, "cacheCreationTokens": 0, "cacheReadTokens": 0, "totalTokens": 150, "totalCost": 0.75},
+            {"date": "2026-02-01", "inputTokens": 200, "outputTokens": 400, "cacheCreationTokens": 0, "cacheReadTokens": 0, "totalTokens": 600, "totalCost": 3.0},
+        ]
+        result = main.aggregate_monthly_usage(daily)
+        assert len(result) == 2
+        assert result[0]["month"] == "2026-01"
+        assert result[0]["totalTokens"] == 450
+        assert result[0]["totalCost"] == pytest.approx(2.25, rel=1e-4)
+        assert result[1]["month"] == "2026-02"
+        assert result[1]["totalTokens"] == 600
 
 
 class TestGetAgentMetrics:

@@ -250,3 +250,143 @@ export function buildConversationAnalytics(
 
 /** @deprecated Use buildConversationAnalytics */
 export const buildSessionAnalytics = buildConversationAnalytics
+
+export interface DailyUsageEntry {
+  date: string
+  inputTokens: number
+  outputTokens: number
+  cacheCreationTokens: number
+  cacheReadTokens: number
+  totalTokens: number
+  totalCost: number
+}
+
+export interface MonthlyUsageEntry {
+  month: string
+  inputTokens: number
+  outputTokens: number
+  cacheCreationTokens: number
+  cacheReadTokens: number
+  totalTokens: number
+  totalCost: number
+}
+
+export interface UsageAggregation {
+  daily: DailyUsageEntry[]
+  monthly: MonthlyUsageEntry[]
+}
+
+/**
+ * Aggregate per-day token/cost totals from conversations.
+ *
+ * Conversations are grouped by `started_at[:10]`. Multi-day conversations
+ * attribute entirely to their start date — see #327 for follow-up research on
+ * message-timestamp attribution.
+ *
+ * Output shape mirrors ccusage's daily entries (`date`, `inputTokens`, etc.)
+ * so frontends consuming the previous ccusage-backed `/getUsage` data don't
+ * need to change.
+ */
+export function aggregateDailyUsage(
+  conversations: (ParsedConversation | ParsedSession)[],
+  pricing?: PricingData,
+): DailyUsageEntry[] {
+  let pricingData: PricingData | undefined
+  try {
+    pricingData = pricing || loadPricing()
+  } catch {
+    // pricing.json not found — costs will be 0
+  }
+
+  const byDate = new Map<string, DailyUsageEntry>()
+
+  for (const conv of conversations) {
+    if (!conv.started_at) continue
+    const date = conv.started_at.slice(0, 10)
+
+    let entry = byDate.get(date)
+    if (!entry) {
+      entry = {
+        date,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        totalCost: 0,
+      }
+      byDate.set(date, entry)
+    }
+
+    entry.inputTokens += conv.total_input_tokens
+    entry.outputTokens += conv.total_output_tokens
+    entry.cacheCreationTokens += conv.total_cache_creation_tokens
+    entry.cacheReadTokens += conv.total_cache_read_tokens
+    entry.totalTokens += conv.total_tokens
+
+    if (pricingData) {
+      const cost = estimateSessionCost(
+        conv.total_input_tokens,
+        conv.total_output_tokens,
+        conv.total_cache_creation_tokens,
+        conv.total_cache_read_tokens,
+        conv.model,
+        conv.started_at,
+        pricingData,
+      )
+      entry.totalCost += cost.total_cost
+    }
+  }
+
+  const result = Array.from(byDate.values())
+  result.sort((a, b) => a.date.localeCompare(b.date))
+  return result
+}
+
+/**
+ * Aggregate per-month token/cost totals by grouping the daily aggregation
+ * by month (`YYYY-MM`). Output shape mirrors ccusage's monthly entries.
+ */
+export function aggregateMonthlyUsage(daily: DailyUsageEntry[]): MonthlyUsageEntry[] {
+  const byMonth = new Map<string, MonthlyUsageEntry>()
+
+  for (const d of daily) {
+    const month = d.date.slice(0, 7)
+    let entry = byMonth.get(month)
+    if (!entry) {
+      entry = {
+        month,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 0,
+        totalCost: 0,
+      }
+      byMonth.set(month, entry)
+    }
+    entry.inputTokens += d.inputTokens
+    entry.outputTokens += d.outputTokens
+    entry.cacheCreationTokens += d.cacheCreationTokens
+    entry.cacheReadTokens += d.cacheReadTokens
+    entry.totalTokens += d.totalTokens
+    entry.totalCost += d.totalCost
+  }
+
+  const result = Array.from(byMonth.values())
+  result.sort((a, b) => a.month.localeCompare(b.month))
+  return result
+}
+
+/**
+ * Build the full usage aggregation (daily + monthly) from conversations.
+ * This is the replacement for `getUsageData()` (ccusage subprocess).
+ */
+export function aggregateUsage(
+  conversations: (ParsedConversation | ParsedSession)[],
+  pricing?: PricingData,
+): UsageAggregation {
+  const daily = aggregateDailyUsage(conversations, pricing)
+  const monthly = aggregateMonthlyUsage(daily)
+  return { daily, monthly }
+}

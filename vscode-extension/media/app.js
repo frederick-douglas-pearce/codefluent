@@ -350,7 +350,7 @@ async function loadData() {
     if (canvas) {
       canvas.style.display = 'none'
       canvas.parentElement.querySelector('h3').insertAdjacentHTML('afterend',
-        '<div class="empty-state-box"><div class="empty-state-icon">⚠️</div><p class="empty-state">Failed to load usage data. Ensure ccusage is installed (npx ccusage) and try the Refresh button on the Usage tab.</p></div>')
+        '<div class="empty-state-box"><div class="empty-state-icon">⚠️</div><p class="empty-state">Failed to load usage data. Try the Refresh button on the Usage tab.</p></div>')
     }
   }
 }
@@ -717,8 +717,8 @@ function renderUsageDashboard() {
   // Usage pace
   renderUsagePace(daily)
 
-  // Show ccusage scope label when we have data
-  const scopeLabel = document.getElementById('ccusage-scope-label')
+  // Show scope label when we have data
+  const scopeLabel = document.getElementById('usage-scope-label')
   if (scopeLabel) scopeLabel.style.display = daily.length ? '' : 'none'
 }
 
