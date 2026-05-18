@@ -1,9 +1,9 @@
 """E2E item 9: Usage tab — pace cards, chart, conversation analytics render.
 
-`/api/usage` reads from a hardcoded `DATA_DIR / 'ccusage'` (does not respect
-`CLAUDE_DATA_DIR`), so the global ccusage section renders empty-state in
-E2E. The conversation-analytics section, in contrast, sources from the
-seeded `CLAUDE_DATA_DIR` and should populate.
+`/api/usage` aggregates daily usage from the same JSONL source as the
+conversations endpoint (issue #251), so the pace cards and daily chart
+now populate from the seeded `CLAUDE_DATA_DIR` test fixture alongside
+the conversation analytics section.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from ._helpers import go_to_tab
 
 
 @pytest.mark.e2e
-def test_usage_tab_renders_ccusage_section(page: Page):
+def test_usage_tab_renders_pace_and_chart(page: Page):
     go_to_tab(page, "usage")
 
     expect(page.locator("#usage-pace")).to_be_attached()

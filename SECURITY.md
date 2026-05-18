@@ -12,10 +12,10 @@ We aim to acknowledge reports within 5 business days.
 
 ## Scope
 
-CodeFluent is a local-first analytics tool with two interfaces — a VS Code extension and a FastAPI webapp. Both read session JSONL files from `~/.claude/projects/` on the user's own machine, call the Anthropic API for fluency scoring, and shell out to `gh` and `ccusage` for repo context and usage data. Security concerns likely to be in scope:
+CodeFluent is a local-first analytics tool with two interfaces — a VS Code extension and a FastAPI webapp. Both read session JSONL files from `~/.claude/projects/` on the user's own machine, call the Anthropic API for fluency scoring, and shell out to `gh` for repo context. Security concerns likely to be in scope:
 
 - XSS or injection via session content rendered in the webview or webapp UI
-- Command injection via project paths, repo names, or CLI arguments passed to `gh`, `ccusage`, or the terminal launcher
+- Command injection via project paths, repo names, or CLI arguments passed to `gh` or the terminal launcher
 - Path traversal in the webapp's project-scoping endpoints
 - Credential leakage (API keys, tokens) through error messages, logs, or session persistence
 - Insecure deserialization of JSONL content

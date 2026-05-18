@@ -812,7 +812,6 @@ class TestConfigMaturityEndpoint:
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         monkeypatch.setattr(_main, "DATA_DIR", data_dir)
-        monkeypatch.setattr(_main, "CCUSAGE_DIR", data_dir / "ccusage")
         _main._score_timestamps.clear()
         return TestClient(_main.app)
 

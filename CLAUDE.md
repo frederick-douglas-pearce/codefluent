@@ -6,7 +6,7 @@
 - Flag assumptions you're making
 
 ## Project Overview
-CodeFluent provides AI fluency analytics for Claude Code users. It parses local JSONL session files, uses `ccusage` for token/cost data, scores prompting behaviors via the Anthropic API, and provides personalized coaching.
+CodeFluent provides AI fluency analytics for Claude Code users. It parses local JSONL session files for token/cost analytics, scores prompting behaviors via the Anthropic API, and provides personalized coaching.
 
 The project ships **two production interfaces** for the same core functionality:
 - **VS Code extension** (`vscode-extension/`) — sidebar panel for VS Code users
@@ -22,7 +22,7 @@ Originally built at PDX Hacks 2026. Now in **production deployment** phase — e
 - **Extension API:** VS Code 1.110+ (WebviewViewProvider)
 - **Charts:** Chart.js (bundled locally in `media/libs/`)
 - **API:** Anthropic TypeScript SDK (`@anthropic-ai/sdk`)
-- **Usage data:** `ccusage` (called via `npx`, reads Claude Code sessions)
+- **Usage data:** aggregated directly from local JSONL sessions (`~/.claude/projects/`); see `shared/pricing.json` for cost rates
 - **GitHub:** `gh` CLI tool (already installed and authenticated)
 - **Testing:** Jest 30 + ts-jest
 - **Data:** Local JSONL files from `~/.claude/projects/`
@@ -84,7 +84,7 @@ npm run compile            # One-shot TypeScript compilation
 npm run watch              # Continuous compilation
 
 # Test
-npm test                   # Jest (unit + integration, 1019 tests)
+npm test                   # Jest (unit + integration, 1017 tests)
 
 # Package and install
 npx @vscode/vsce package --allow-missing-repository
@@ -96,7 +96,6 @@ code --install-extension codefluent-1.2.1.vsix    # x-release-please-version
 
 cd webapp
 uv sync
-npx ccusage@latest daily --json > ../data/ccusage/daily.json
 uv run python extract_prompts.py
 uv run uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
@@ -126,7 +125,7 @@ The webview (browser context) communicates with the extension host (Node context
 ### Message Types
 | Type | Direction | Handler |
 |------|-----------|---------|
-| `getUsage` | webview -> ext | Calls `ccusage` CLI, returns daily/monthly/session data |
+| `getUsage` | webview -> ext | Aggregates daily/monthly token totals from the conversations cache (project-scoped) |
 | `getConversations` | webview -> ext | Parses `~/.claude/projects/` JSONL files, assembles conversations via gap-based splitting |
 | `getSessions` | webview -> ext | Deprecated alias for `getConversations` (kept for backward compatibility) |
 | `runScoring` | webview -> ext | Scores conversation prompts + workspace CLAUDE.md via Anthropic API, caches results |
@@ -214,7 +213,7 @@ chore: bump @anthropic-ai/sdk to 0.52.0
 4. Release Please creates the git tag → triggers `release.yml` → builds VSIX → publishes to Marketplace
 
 ### CI Workflows
-- **`ci.yml`** — Runs on every PR: `npm test` (1019 tests) + `vsce package` (catches `engines.vscode` / `@types/vscode` mismatches and `.vscodeignore` misconfig pre-merge) in `vscode-extension/`, `uv lock --check` + `pytest` (853 tests) in `webapp/` — `uv lock --check` fails the PR if `webapp/uv.lock` has drifted from `pyproject.toml`
+- **`ci.yml`** — Runs on every PR: `npm test` (1017 tests) + `vsce package` (catches `engines.vscode` / `@types/vscode` mismatches and `.vscodeignore` misconfig pre-merge) in `vscode-extension/`, `uv lock --check` + `pytest` (859 tests) in `webapp/` — `uv lock --check` fails the PR if `webapp/uv.lock` has drifted from `pyproject.toml`
 - **`eval.yml`** — Runs on PRs touching `shared/prompts/**`, `shared/defaults.json`, or `shared/eval/scorer.py`: scores golden set (79 CI entries / 84 total) via Anthropic API, validates schema + agreement (~$0.30/run). Skipped for Dependabot.
 - **`security-review.yml`** — Claude-powered security review via `anthropics/claude-code-security-review`. Triggered by `needs-security-review` label on PR (not on every push, to control API costs). Skipped on docs-only PRs and Dependabot. Scans webview (`media/app.js`), webapp (`webapp/`), and project Claude config (`.claude/hooks/`, `.claude/settings.json`, `.claude/agents/`).
 - **`claude-review.yml`** — AI code review via `claude-code-action@v1`. Triggered by `needs-review` label on PR (not on every push, to control API costs). Also responds to `@claude` mentions in PR comments.
@@ -274,7 +273,7 @@ When implementing from a PM-produced spec or issue:
 ## Production Standards
 - **All new features must have tests.** No merging without test coverage for the change.
 - **Security:** All user-controlled strings rendered in HTML must pass through `escapeHtml()`. All shell commands must use `execFileSync` with argument arrays, never string interpolation. Error messages must pass through `_sanitize_error()` / `sanitizeError()` to redact API keys. XSS and injection tests exist and must stay green.
-- **No regressions:** `npm test` must pass (currently 1019 tests) before any commit to main.
+- **No regressions:** `npm test` must pass (currently 1017 tests) before any commit to main.
 - **Feature parity:** Both the VS Code extension and the webapp are production deliverables. New scoring/analytics features should be implemented in both. Security fixes (XSS, injection) apply to both `media/app.js` and `webapp/static/app.js`.
 - **E2E testing:** Webapp PRs must keep `webapp/tests/e2e/` green. CI runs the suite automatically on PRs touching `webapp/` or `shared/`. Manual Playwright MCP testing is reserved as a fallback for exploratory verification of new surfaces not yet automated. See the E2E Smoke Test Checklist below.
 
@@ -448,14 +447,13 @@ Fixed brand colors (semantic meaning, don't change with theme):
 - If buttons don't work in webview, check for inline `onclick` handlers (CSP blocks them)
 - If VSIX is too small (<500KB), check `.vscodeignore` isn't excluding `node_modules/`
 - If API key isn't found, check workspace folder has `.env` or set the env var
-- If ccusage output is unexpected, use `--debug` flag
 - If Quick Wins shows all repos, check that the workspace folder has a git remote
 - If terminal launch gets interrupted by shell init, terminal uses `--norc --noprofile`
 
 ## Testing
 ```bash
-cd vscode-extension && npm test    # Jest: 1019 tests across unit/ + integration/
-cd webapp && uv run pytest tests/  # pytest: 853 tests across unit suites + tests/e2e/
+cd vscode-extension && npm test    # Jest: 1017 tests across unit/ + integration/
+cd webapp && uv run pytest tests/  # pytest: 859 tests across unit suites + tests/e2e/
 ```
 
 Test files mirror their source modules (e.g., `parser.ts` ↔ `test/unit/parser.test.ts`, `conversations.py` ↔ `tests/test_conversations.py`). Coverage spans parsing, conversation assembly, scoring, analytics, caching, security (XSS, path traversal, error redaction), config, prompts, and platform helpers. List the test directories directly for the current inventory — don't maintain a duplicate index here.
@@ -479,5 +477,5 @@ Manual Playwright MCP testing remains as a fallback for exploratory verification
 6. **Config tab** — configuration maturity score and breakdown render for the selected project
 7. **Prompt Optimizer** — paste prompt, click Optimize, input/output scores and optimized prompt appear
 8. **Quick Wins** — Generate button works; project-scoped mode uses selected project
-9. **Usage tab** — pace cards and Daily Token Usage chart render (if ccusage data exists); conversation analytics section shows efficiency cards, cost-efficiency scatter charts, and sortable conversation details table; project dropdown filters conversation data
+9. **Usage tab** — pace cards and Daily Token Usage chart aggregate from local JSONL (project-scoped via the dropdown); conversation analytics section shows efficiency cards, cost-efficiency scatter charts, and sortable conversation details table
 10. **Health endpoint** — `GET /health` returns status, version, and dependency checks

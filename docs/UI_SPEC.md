@@ -321,9 +321,9 @@ Project-scoped GitHub task suggestions with copy-ready prompts.
 
 ## Tab 7: Usage Dashboard
 
-Two data sources displayed in sequence: ccusage all-projects data, then per-conversation analytics from JSONL parsing.
+Two complementary views of the same JSONL-derived data, displayed in sequence: project-scoped usage pace and daily chart, then per-conversation analytics.
 
-### All-Projects Section (ccusage)
+### Project Usage Section
 
 ```
 ┌──────────────────────────────────────────────────┐

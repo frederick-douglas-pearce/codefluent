@@ -15,9 +15,7 @@ from fastapi.responses import FileResponse, Response
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator, model_validator
 import json
-import asyncio
 import re
-import shutil
 from config import get_config, get_display_config
 import subprocess
 from anthropic import Anthropic
@@ -310,7 +308,6 @@ async def get_app_config():
 
 
 DATA_DIR = Path(__file__).parent.parent / "data"
-CCUSAGE_DIR = DATA_DIR / "ccusage"
 
 
 def _get_version() -> str:
@@ -349,64 +346,95 @@ async def health():
     }
 
 
-@app.get("/api/usage")
-async def get_usage():
-    """Serve ccusage JSON data directly."""
-    data = {}
-    for name in ["daily", "monthly", "session"]:
-        path = CCUSAGE_DIR / f"{name}.json"
-        if path.exists():
-            with open(path) as f:
-                data[name] = json.load(f)
-    return data
+def aggregate_daily_usage(conversations: list[dict], pricing: dict | None = None) -> list[dict]:
+    """Aggregate per-day token/cost totals from conversations.
 
-
-@app.post("/api/usage/refresh")
-async def refresh_usage():
-    """Run ccusage CLI to refresh usage data (daily, monthly, session)."""
-    npx = shutil.which("npx")
-    if not npx:
-        raise HTTPException(status_code=500, detail="npx not found on PATH")
-
-    CCUSAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-    commands = [
-        {"key": "daily", "args": [npx, "ccusage@latest", "daily", "--json"]},
-        {"key": "monthly", "args": [npx, "ccusage@latest", "monthly", "--json"]},
-        {"key": "session", "args": [npx, "ccusage@latest", "session", "--json", "-o", "desc"]},
-    ]
-
-    async def run_one(cmd):
-        proc = await asyncio.create_subprocess_exec(
-            *cmd["args"],
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-        if proc.returncode != 0:
-            return cmd["key"], None
+    Groups conversations by `started_at[:10]`. Multi-day conversations attribute
+    entirely to their start date — see #327 for follow-up research on
+    message-timestamp attribution. Output shape mirrors ccusage's daily entries
+    so the frontend stays unchanged.
+    """
+    if pricing is None:
         try:
-            data = json.loads(stdout.decode())
-            (CCUSAGE_DIR / f"{cmd['key']}.json").write_text(
-                json.dumps(data, indent=2)
-            )
-            return cmd["key"], data
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            return cmd["key"], None
+            pricing = _load_pricing()
+        except Exception:
+            pricing = None
 
-    results = await asyncio.gather(
-        *(run_one(cmd) for cmd in commands), return_exceptions=True
-    )
-
-    data = {}
-    for r in results:
-        if isinstance(r, Exception):
+    by_date: dict[str, dict] = {}
+    for conv in conversations:
+        started = conv.get("started_at")
+        if not started:
             continue
-        key, value = r
-        if value is not None:
-            data[key] = value
+        date = started[:10]
+        entry = by_date.get(date)
+        if entry is None:
+            entry = {
+                "date": date,
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "cacheCreationTokens": 0,
+                "cacheReadTokens": 0,
+                "totalTokens": 0,
+                "totalCost": 0.0,
+            }
+            by_date[date] = entry
 
-    return data
+        entry["inputTokens"] += conv.get("total_input_tokens", 0)
+        entry["outputTokens"] += conv.get("total_output_tokens", 0)
+        entry["cacheCreationTokens"] += conv.get("total_cache_creation_tokens", 0)
+        entry["cacheReadTokens"] += conv.get("total_cache_read_tokens", 0)
+        entry["totalTokens"] += conv.get("total_tokens", 0)
+
+        if pricing:
+            entry["totalCost"] += _estimate_session_cost(conv, pricing)
+
+    return sorted(by_date.values(), key=lambda d: d["date"])
+
+
+def aggregate_monthly_usage(daily: list[dict]) -> list[dict]:
+    """Derive per-month aggregates from the daily output."""
+    by_month: dict[str, dict] = {}
+    for d in daily:
+        month = d["date"][:7]
+        entry = by_month.get(month)
+        if entry is None:
+            entry = {
+                "month": month,
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "cacheCreationTokens": 0,
+                "cacheReadTokens": 0,
+                "totalTokens": 0,
+                "totalCost": 0.0,
+            }
+            by_month[month] = entry
+        entry["inputTokens"] += d["inputTokens"]
+        entry["outputTokens"] += d["outputTokens"]
+        entry["cacheCreationTokens"] += d["cacheCreationTokens"]
+        entry["cacheReadTokens"] += d["cacheReadTokens"]
+        entry["totalTokens"] += d["totalTokens"]
+        entry["totalCost"] += d["totalCost"]
+    return sorted(by_month.values(), key=lambda m: m["month"])
+
+
+@app.get("/api/usage")
+async def get_usage(
+    project: str = Query(default=None, max_length=500),
+    data_path: str = Query(default=None, max_length=1000),
+):
+    """Return token/cost usage aggregated from local JSONL.
+
+    Replaces the prior ccusage subprocess (issue #251). Output shape mirrors
+    ccusage's nested `{ daily: { daily: [...] }, monthly: { monthly: [...] } }`
+    so the existing frontend (`state.usage?.daily?.daily`) is unchanged.
+    Project scoping is supported via the `project` query param.
+    """
+    data_dir = _resolve_data_dir(data_path)
+    conv_data = get_all_conversations(data_dir, project=project, max_files=200)
+    conversations = conv_data.get("conversations", [])
+    daily = aggregate_daily_usage(conversations)
+    monthly = aggregate_monthly_usage(daily)
+    return {"daily": {"daily": daily}, "monthly": {"monthly": monthly}}
 
 
 def _resolve_data_dir(data_path: str | None = None) -> Path:

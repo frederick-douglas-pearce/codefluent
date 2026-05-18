@@ -355,11 +355,21 @@ function buildConversationsUrl(limit = 1000) {
   return url
 }
 
+function buildUsageUrl() {
+  const dataPath = getDataPath()
+  const project = getSelectedProject()
+  const params = new URLSearchParams()
+  if (dataPath) params.set('data_path', dataPath)
+  if (project) params.set('project', project)
+  const qs = params.toString()
+  return qs ? `/api/usage?${qs}` : '/api/usage'
+}
+
 // --- Data Loading ---
 async function loadData() {
   try {
     const [usage, conversations] = await Promise.all([
-      fetch('/api/usage').then(r => r.json()),
+      fetch(buildUsageUrl()).then(r => r.json()),
       fetch(buildConversationsUrl()).then(r => r.json()),
     ])
     state.usage = usage
@@ -376,8 +386,17 @@ async function loadData() {
     if (canvas) {
       canvas.style.display = 'none'
       canvas.parentElement.querySelector('h3').insertAdjacentHTML('afterend',
-        '<div class="empty-state-box"><div class="empty-state-icon">⚠️</div><p class="empty-state">Failed to load usage data. Ensure ccusage is installed (npx ccusage) and try the Refresh button on the Usage tab.</p></div>')
+        '<div class="empty-state-box"><div class="empty-state-icon">⚠️</div><p class="empty-state">Failed to load usage data. Try selecting a different project or data path.</p></div>')
     }
+  }
+}
+
+async function reloadUsage() {
+  try {
+    state.usage = await fetch(buildUsageUrl()).then(r => r.json())
+    renderUsageDashboard()
+  } catch (e) {
+    console.error('Failed to reload usage:', e)
   }
 }
 
@@ -487,6 +506,7 @@ document.getElementById('project-filter').addEventListener('change', (e) => {
   }
   updateTimeScopeCounts()
   if (state.activeTab === 'usage') {
+    reloadUsage()
     loadConversationAnalytics()
   }
   if (state.activeTab === 'conversations') {
@@ -504,11 +524,11 @@ document.getElementById('project-filter').addEventListener('change', (e) => {
 document.addEventListener('click', (e) => {
   const target = e.target
 
-  // Refresh data button
+  // Refresh data button — re-fetches usage from JSONL (project-scoped via query param)
   if (target.id === 'refresh-data-btn') {
     target.disabled = true
     updateCacheStatus('Refreshing...')
-    fetch('/api/usage/refresh', { method: 'POST' })
+    fetch(buildUsageUrl())
       .then(r => r.json())
       .then(data => {
         state.usage = data

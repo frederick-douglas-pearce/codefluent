@@ -6,7 +6,7 @@ CodeFluent ships **two production interfaces** — a VS Code extension and a Fas
 
 ## Prerequisites
 
-- **Node.js 22+** — extension runtime and `npx ccusage`
+- **Node.js 22+** — extension runtime
 - **VS Code 1.85+** — for extension development and debugging
 - **Python 3.12+ / [uv](https://docs.astral.sh/uv/)** — for the web app
 - **[`gh` CLI](https://cli.github.com/)** — authenticated (`gh auth login`) for Quick Wins features
@@ -38,9 +38,9 @@ Then open `http://localhost:8000`. See [`webapp/README.md`](webapp/README.md) fo
 
 ## Running Tests
 
-The project has **1761 automated tests** across both interfaces. All must pass before merging.
+The project has **1876 automated tests** across both interfaces. All must pass before merging.
 
-### VS Code Extension (962 tests, 24 suites)
+### VS Code Extension (1017 tests, 24 suites)
 
 ```bash
 cd vscode-extension
@@ -59,10 +59,9 @@ npx jest test/unit/scoring      # Run a specific test file
 | `platform.test.ts` | Cross-platform shell, escaping, npx helpers |
 | `parser.test.ts` | JSONL session file parsing |
 | `cache.test.ts` | Score cache read/write, invalidation |
-| `dataCache.test.ts` | Conversation/usage data caching, stale-while-revalidate |
-| `analytics.test.ts` | Conversation analytics, efficiency metrics, cost calculations |
+| `dataCache.test.ts` | Conversations data caching, stale-while-revalidate |
+| `analytics.test.ts` | Conversation analytics, daily/monthly usage aggregation, efficiency metrics, cost calculations |
 | `pricing.test.ts` | Token pricing lookup, model matching, fallback rates |
-| `usage.test.ts` | ccusage CLI bridge |
 | `prompts.test.ts` | Prompt loader + template filler |
 | `recommendations.test.ts` | Recommendation generation, behavior categorization |
 | `agentMetrics.test.ts` | Agent metrics computation, sparkline data, tool diversity |
@@ -73,7 +72,7 @@ npx jest test/unit/scoring      # Run a specific test file
 | `webviewProvider.test.ts` | Message handling, HTML generation, injection tests, config advisor |
 | `renderUsageDashboard.test.ts` | Pattern A render-function idempotency: `clearEmptyState` helper + call-site audits in both interfaces |
 
-### Web App (799 tests, 12 suites)
+### Web App (859 tests, 13 suites)
 
 ```bash
 cd webapp

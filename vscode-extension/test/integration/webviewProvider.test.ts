@@ -25,7 +25,6 @@ jest.mock('../../src/conversation', () => ({
   getAllConversations: jest.fn(),
   buildConversations: jest.fn(),
 }))
-jest.mock('../../src/usage')
 jest.mock('../../src/scoring', () => {
   const actual = jest.requireActual('../../src/scoring')
   return {
@@ -53,7 +52,6 @@ jest.mock('@anthropic-ai/sdk')
 import { getDefaultShell, getShellArgs, getClaudeCommand, escapePromptForShell } from '../../src/platform'
 
 import { getAllConversations } from '../../src/conversation'
-import { getUsageData } from '../../src/usage'
 import { scoreConversations, computeAggregate, scoreClaudeMd, computeScoreHistory, CONFIG_SCORING_PROMPT_VERSION, optimizePrompt, scoreSinglePrompt } from '../../src/scoring'
 import { getQuickWins } from '../../src/quickwins'
 import { buildConversationAnalytics } from '../../src/analytics'
@@ -117,7 +115,6 @@ describe('CodeFluentViewProvider', () => {
     jest.clearAllMocks()
     // Clean up data cache files from previous runs
     const actualFs = jest.requireActual('fs') as typeof import('fs')
-    try { actualFs.unlinkSync('/tmp/codefluent-test-storage/usage_cache.json') } catch {}
     try { actualFs.unlinkSync('/tmp/codefluent-test-storage/sessions_cache.json') } catch {}
     try { actualFs.unlinkSync('/tmp/codefluent-test-storage/conversations_cache.json') } catch {}
     context = makeContext()
@@ -303,30 +300,102 @@ describe('CodeFluentViewProvider', () => {
   })
 
   describe('message handling: getUsage', () => {
-    it('fetches usage data and posts response', async () => {
-      const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
-      ;(getUsageData as jest.Mock).mockResolvedValue(mockUsage)
+    it('derives daily usage from conversations and posts ccusage-shaped response', async () => {
+      const mockConversations = {
+        conversations: [
+          {
+            id: 'c1',
+            project: 'proj',
+            user_prompts: ['hi'],
+            started_at: '2026-01-01T10:00:00Z',
+            model: 'claude-sonnet-4-6',
+            total_input_tokens: 100,
+            total_output_tokens: 200,
+            total_cache_creation_tokens: 0,
+            total_cache_read_tokens: 0,
+            total_tokens: 300,
+          },
+        ],
+        metadata: { total_conversations: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
+      }
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockConversations)
 
       await sendMessage({ type: 'getUsage', requestId: 'req-1' })
 
-      expect(getUsageData).toHaveBeenCalled()
-      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
-        type: 'getUsage',
-        requestId: 'req-1',
-        data: mockUsage,
-      })
+      expect(getAllConversations).toHaveBeenCalled()
+      const call = (webviewView.webview.postMessage as jest.Mock).mock.calls.find(
+        (c: any[]) => c[0].type === 'getUsage',
+      )
+      expect(call[0].requestId).toBe('req-1')
+      expect(call[0].data.daily.daily).toEqual([
+        expect.objectContaining({
+          date: '2026-01-01',
+          inputTokens: 100,
+          outputTokens: 200,
+          totalTokens: 300,
+        }),
+      ])
+      expect(call[0].data.monthly.monthly).toEqual([
+        expect.objectContaining({ month: '2026-01', totalTokens: 300 }),
+      ])
     })
 
-    it('posts error when getUsage throws', async () => {
-      ;(getUsageData as jest.Mock).mockRejectedValue(new Error('ccusage not found'))
+    it('posts error when conversation fetch throws', async () => {
+      ;(getAllConversations as jest.Mock).mockImplementation(() => {
+        throw new Error('disk read failed')
+      })
 
       await sendMessage({ type: 'getUsage', requestId: 'req-2' })
 
       expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
         type: 'getUsage',
         requestId: 'req-2',
-        error: 'ccusage not found',
+        error: 'disk read failed',
       })
+    })
+
+    it('scopes daily usage to workspace project', async () => {
+      ;(vscode.workspace as any).workspaceFolders = [
+        { uri: vscode.Uri.file('/home/user/my-project') },
+      ]
+      const mockConversations = {
+        conversations: [
+          {
+            id: 'c1',
+            project: 'my-project',
+            user_prompts: ['hi'],
+            started_at: '2026-01-01T10:00:00Z',
+            model: 'claude-sonnet-4-6',
+            total_input_tokens: 100, total_output_tokens: 200,
+            total_cache_creation_tokens: 0, total_cache_read_tokens: 0,
+            total_tokens: 300,
+          },
+          {
+            id: 'c2',
+            project: 'other-project',
+            user_prompts: ['bye'],
+            started_at: '2026-01-02T10:00:00Z',
+            model: 'claude-sonnet-4-6',
+            total_input_tokens: 500, total_output_tokens: 500,
+            total_cache_creation_tokens: 0, total_cache_read_tokens: 0,
+            total_tokens: 1000,
+          },
+        ],
+        metadata: { total_conversations: 2, total_projects: 2, total_prompts: 2, extracted_at: '' },
+      }
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockConversations)
+
+      await sendMessage({ type: 'getUsage', requestId: 'req-scope' })
+
+      const call = (webviewView.webview.postMessage as jest.Mock).mock.calls.find(
+        (c: any[]) => c[0].type === 'getUsage',
+      )
+      expect(call[0].data.daily.daily).toHaveLength(1)
+      expect(call[0].data.daily.daily[0]).toEqual(
+        expect.objectContaining({ date: '2026-01-01', totalTokens: 300 }),
+      )
+
+      ;(vscode.workspace as any).workspaceFolders = undefined
     })
   })
 
@@ -765,11 +834,11 @@ describe('CodeFluentViewProvider', () => {
 
   describe('message handling: messages without requestId', () => {
     it('ignores non-clipboard/terminal messages without requestId', async () => {
-      ;(getUsageData as jest.Mock).mockResolvedValue({})
+      ;(getAllConversations as jest.Mock).mockReturnValue({ conversations: [] })
 
       await sendMessage({ type: 'getUsage' })
 
-      expect(getUsageData).not.toHaveBeenCalled()
+      expect(getAllConversations).not.toHaveBeenCalled()
       expect(webviewView.webview.postMessage).not.toHaveBeenCalled()
     })
   })
@@ -940,22 +1009,34 @@ describe('CodeFluentViewProvider', () => {
   })
 
   describe('data caching', () => {
-    it('second getUsage call returns cached data without re-fetching', async () => {
-      const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
-      ;(getUsageData as jest.Mock).mockResolvedValue(mockUsage)
+    it('second getUsage call reuses conversations cache (no re-parsing)', async () => {
+      const mockConversations = {
+        conversations: [
+          {
+            id: 'c1', project: 'proj', user_prompts: ['hi'],
+            started_at: '2026-01-01T10:00:00Z', model: 'claude-sonnet-4-6',
+            total_input_tokens: 10, total_output_tokens: 20,
+            total_cache_creation_tokens: 0, total_cache_read_tokens: 0,
+            total_tokens: 30,
+          },
+        ],
+        metadata: { total_conversations: 1, total_projects: 1, total_prompts: 1, extracted_at: '' },
+      }
+      ;(getAllConversations as jest.Mock).mockReturnValue(mockConversations)
 
       await sendMessage({ type: 'getUsage', requestId: 'req-cache-1' })
-      expect(getUsageData).toHaveBeenCalledTimes(1)
+      expect(getAllConversations).toHaveBeenCalledTimes(1)
 
-      ;(getUsageData as jest.Mock).mockClear()
+      ;(getAllConversations as jest.Mock).mockClear()
       await sendMessage({ type: 'getUsage', requestId: 'req-cache-2' })
-      expect(getUsageData).not.toHaveBeenCalled()
+      expect(getAllConversations).not.toHaveBeenCalled()
 
-      expect(webviewView.webview.postMessage).toHaveBeenCalledWith({
-        type: 'getUsage',
-        requestId: 'req-cache-2',
-        data: mockUsage,
-      })
+      const call = (webviewView.webview.postMessage as jest.Mock).mock.calls.find(
+        (c: any[]) => c[0].type === 'getUsage' && c[0].requestId === 'req-cache-2',
+      )
+      expect(call[0].data.daily.daily).toEqual([
+        expect.objectContaining({ date: '2026-01-01', totalTokens: 30 }),
+      ])
     })
 
     it('second getSessions call returns cached data without re-parsing', async () => {
@@ -973,9 +1054,7 @@ describe('CodeFluentViewProvider', () => {
       expect(getAllConversations).not.toHaveBeenCalled()
     })
 
-    it('refreshData message invalidates cache and triggers background refresh', async () => {
-      const mockUsage = { daily: [{ date: '2026-01-01', totalCost: 1.5 }] }
-      ;(getUsageData as jest.Mock).mockResolvedValue(mockUsage)
+    it('refreshData message invalidates cache and triggers conversations background refresh', async () => {
       const mockSessions = {
         conversations: [],
         metadata: { total_sessions: 0, total_projects: 0, total_prompts: 0, extracted_at: '' },
@@ -984,7 +1063,6 @@ describe('CodeFluentViewProvider', () => {
 
       // Prime the cache
       await sendMessage({ type: 'getUsage', requestId: 'req-cache-5' })
-      ;(getUsageData as jest.Mock).mockClear()
       ;(getAllConversations as jest.Mock).mockClear()
 
       // Send refreshData (fire-and-forget, no requestId)
@@ -994,8 +1072,7 @@ describe('CodeFluentViewProvider', () => {
       await new Promise(resolve => setImmediate(resolve))
       await new Promise(resolve => setImmediate(resolve))
 
-      // Background refresh should have called getUsageData and getAllSessions
-      expect(getUsageData).toHaveBeenCalledTimes(1)
+      // Background refresh now goes through conversations only (usage derives from same cache)
       expect(getAllConversations).toHaveBeenCalledTimes(1)
     })
 
