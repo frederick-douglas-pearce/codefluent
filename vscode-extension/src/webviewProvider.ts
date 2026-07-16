@@ -72,6 +72,18 @@ export class CodeFluentViewProvider implements vscode.WebviewViewProvider {
     return customPath || undefined
   }
 
+  /**
+   * Returns which higher-precedence slot (if any) currently holds an API key
+   * that would override a SecretStorage entry. Used by the setApiKey command
+   * to warn the user when their stored key won't actually be used.
+   * The API key is never cached in memory — each call re-reads from source.
+   */
+  public detectOverridingKeySource(): 'env' | 'dotenv' | undefined {
+    if (process.env.ANTHROPIC_API_KEY) return 'env'
+    if (this.readDotEnv()) return 'dotenv'
+    return undefined
+  }
+
   private readDotEnv(): string | undefined {
     const dirs: string[] = []
 

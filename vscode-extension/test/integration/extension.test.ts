@@ -5,6 +5,7 @@ jest.mock('../../src/webviewProvider', () => {
   const MockProvider = jest.fn().mockImplementation(() => ({
     focus: jest.fn(),
     resolveWebviewView: jest.fn(),
+    detectOverridingKeySource: jest.fn().mockReturnValue(undefined),
   })) as any
   MockProvider.viewType = 'codefluent.dashboard'
   return { CodeFluentViewProvider: MockProvider }
@@ -65,6 +66,15 @@ describe('Extension activation', () => {
     )
   })
 
+  it('registers the setApiKey command', () => {
+    activate(context)
+
+    expect(vscode.commands.registerCommand).toHaveBeenCalledWith(
+      'codefluent.setApiKey',
+      expect.any(Function),
+    )
+  })
+
   it('registers the webview view provider', () => {
     activate(context)
 
@@ -78,14 +88,16 @@ describe('Extension activation', () => {
   it('pushes all disposables to context.subscriptions', () => {
     activate(context)
 
-    // statusBar + webviewViewProvider + command = 3
-    expect(context.subscriptions.length).toBe(3)
+    // statusBar + webviewViewProvider + openPanel + setApiKey = 4
+    expect(context.subscriptions.length).toBe(4)
   })
 
   it('openPanel command calls provider.focus()', () => {
     activate(context)
 
-    const registerCall = (vscode.commands.registerCommand as jest.Mock).mock.calls[0]
+    const registerCall = (vscode.commands.registerCommand as jest.Mock).mock.calls.find(
+      c => c[0] === 'codefluent.openPanel',
+    )!
     const commandCallback = registerCall[1]
     const { CodeFluentViewProvider } = require('../../src/webviewProvider')
     const providerInstance = CodeFluentViewProvider.mock.results[0].value
@@ -93,6 +105,82 @@ describe('Extension activation', () => {
     commandCallback()
 
     expect(providerInstance.focus).toHaveBeenCalled()
+  })
+
+  describe('setApiKey command', () => {
+    const getSetApiKeyCallback = (): (() => Promise<void>) => {
+      const call = (vscode.commands.registerCommand as jest.Mock).mock.calls.find(
+        c => c[0] === 'codefluent.setApiKey',
+      )!
+      return call[1]
+    }
+
+    it('stores trimmed input in SecretStorage', async () => {
+      ;(vscode.window.showInputBox as jest.Mock).mockResolvedValue('  sk-ant-abc123  ')
+      activate(context)
+
+      await getSetApiKeyCallback()()
+
+      expect(context.secrets.store).toHaveBeenCalledWith(
+        'codefluent.anthropicApiKey',
+        'sk-ant-abc123',
+      )
+      expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
+        'CodeFluent: API key saved to SecretStorage.',
+      )
+    })
+
+    it('warns when an env var will override the stored key', async () => {
+      ;(vscode.window.showInputBox as jest.Mock).mockResolvedValue('sk-ant-xyz')
+      activate(context)
+      const { CodeFluentViewProvider } = require('../../src/webviewProvider')
+      const providerInstance = CodeFluentViewProvider.mock.results[0].value
+      providerInstance.detectOverridingKeySource.mockReturnValue('env')
+
+      await getSetApiKeyCallback()()
+
+      expect(context.secrets.store).toHaveBeenCalled()
+      expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+        expect.stringContaining('environment variable'),
+      )
+      expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+    })
+
+    it('warns when a workspace .env will override the stored key', async () => {
+      ;(vscode.window.showInputBox as jest.Mock).mockResolvedValue('sk-ant-xyz')
+      activate(context)
+      const { CodeFluentViewProvider } = require('../../src/webviewProvider')
+      const providerInstance = CodeFluentViewProvider.mock.results[0].value
+      providerInstance.detectOverridingKeySource.mockReturnValue('dotenv')
+
+      await getSetApiKeyCallback()()
+
+      expect(context.secrets.store).toHaveBeenCalled()
+      expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+        expect.stringContaining('workspace .env'),
+      )
+      expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+    })
+
+    it('does nothing when the user cancels the input box', async () => {
+      ;(vscode.window.showInputBox as jest.Mock).mockResolvedValue(undefined)
+      activate(context)
+
+      await getSetApiKeyCallback()()
+
+      expect(context.secrets.store).not.toHaveBeenCalled()
+      expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+    })
+
+    it('does nothing when the user enters only whitespace', async () => {
+      ;(vscode.window.showInputBox as jest.Mock).mockResolvedValue('   ')
+      activate(context)
+
+      await getSetApiKeyCallback()()
+
+      expect(context.secrets.store).not.toHaveBeenCalled()
+      expect(vscode.window.showInformationMessage).not.toHaveBeenCalled()
+    })
   })
 
   it('deactivate is a no-op function', () => {

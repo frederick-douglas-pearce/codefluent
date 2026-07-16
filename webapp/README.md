@@ -159,7 +159,9 @@ PORT=3000 uv run uvicorn main:app --reload --host 0.0.0.0 --port 3000
 
 ### API Key
 
-Set `ANTHROPIC_API_KEY` via environment variable or a `.env` file in the `webapp/` directory. Unlike the extension, the webapp does not support interactive prompting for the key — it must be configured before starting the server.
+Set `ANTHROPIC_API_KEY` via environment variable or a `.env` file in the `webapp/` directory. Unlike the extension, the webapp does not support interactive prompting for the key — it must be configured before starting the server, and there is no OS-keychain (SecretStorage) equivalent. The webapp is a single-process server with no per-user secret backend.
+
+**Rotation:** update the environment variable (or edit `webapp/.env`) and restart the uvicorn process. Reloading the browser is not enough — the API client is initialized at server startup. Environment variables set in a shell rc file will only take effect for `uvicorn` processes launched from a shell that has sourced the updated file.
 
 ### CORS
 

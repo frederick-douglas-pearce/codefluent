@@ -908,6 +908,52 @@ describe('CodeFluentViewProvider', () => {
     })
   })
 
+  describe('detectOverridingKeySource', () => {
+    afterEach(() => {
+      delete process.env.ANTHROPIC_API_KEY
+    })
+
+    it('returns "env" when the environment variable is set', () => {
+      process.env.ANTHROPIC_API_KEY = 'sk-from-env'
+
+      expect(provider.detectOverridingKeySource()).toBe('env')
+    })
+
+    it('returns "dotenv" when only a workspace .env has the key', () => {
+      delete process.env.ANTHROPIC_API_KEY
+      ;(vscode.workspace as any).workspaceFolders = [{ uri: { fsPath: '/mock/workspace' } }]
+      const fsMock = require('fs')
+      const origImpl = fsMock.readFileSync.getMockImplementation()
+      fsMock.readFileSync.mockImplementation((...args: any[]) => {
+        if (String(args[0]).endsWith('.env')) return 'ANTHROPIC_API_KEY=sk-from-dotenv\n'
+        return origImpl(...args)
+      })
+
+      try {
+        expect(provider.detectOverridingKeySource()).toBe('dotenv')
+      } finally {
+        fsMock.readFileSync.mockImplementation(origImpl)
+      }
+    })
+
+    it('returns undefined when neither env nor workspace .env has the key', () => {
+      delete process.env.ANTHROPIC_API_KEY
+      ;(vscode.workspace as any).workspaceFolders = []
+      const fsMock = require('fs')
+      const origImpl = fsMock.readFileSync.getMockImplementation()
+      fsMock.readFileSync.mockImplementation((...args: any[]) => {
+        if (String(args[0]).endsWith('.env')) throw new Error('ENOENT')
+        return origImpl(...args)
+      })
+
+      try {
+        expect(provider.detectOverridingKeySource()).toBeUndefined()
+      } finally {
+        fsMock.readFileSync.mockImplementation(origImpl)
+      }
+    })
+  })
+
   describe('view lifecycle', () => {
     it('clears view reference on dispose', () => {
       provider.resolveWebviewView(webviewView, {} as any, {} as any)

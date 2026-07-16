@@ -143,7 +143,22 @@ CodeFluent uses the following resolution order:
 2. `.env` file in your workspace root
 3. VS Code SecretStorage (persisted after first prompt)
 
-**Prefer SecretStorage over `.env` when you have the choice.** SecretStorage is backed by your OS keychain and never persists to a readable file. If you enter the key through the interactive prompt, CodeFluent stores it in SecretStorage automatically and you don't need a workspace `.env` at all. See the [Secrets handling](#secrets-handling) note below for why this matters.
+**Prefer SecretStorage — this is the recommended path for most users.** It's stored once and reused across every workspace, and it's backed by your OS keychain so it never persists to a readable file. See the [Secrets handling](#secrets-handling) note below for why this matters.
+
+**How to set or rotate the key in SecretStorage:**
+
+1. Open the Command Palette (`Ctrl+Shift+P` on Linux/Windows, `Cmd+Shift+P` on macOS)
+2. Type and select **`CodeFluent: Set API Key`**
+3. Paste your key from the [Anthropic console](https://console.anthropic.com/settings/keys) — it's stored securely in your OS keychain
+
+The same command works for both first-time setup and rotation. When you rotate at Anthropic, run this command once and every window picks up the new key on next scoring run — no per-workspace edits needed.
+
+Alternatively, if you have no key configured yet, scoring will trigger a one-time interactive prompt that stores the key in SecretStorage automatically.
+
+**Gotchas for the other slots:**
+
+- **`.env` is per-workspace.** Only the currently-open workspace's `.env` is read. If you use `.env` across multiple repos, you'll need to copy the key into each one, and rotate every copy when the key changes.
+- **Environment variables are captured at VS Code launch.** Reloading a window does not refresh `process.env` — a stale `export ANTHROPIC_API_KEY` in your shell rc (`~/.bashrc`, `~/.zshrc`, etc.) will silently override `.env` and SecretStorage in every window until you fully quit VS Code and relaunch from a shell where the variable is unset or updated.
 
 ## Privacy
 
@@ -163,6 +178,8 @@ The CodeFluent repository itself ships Claude Code hooks that block reads of `.e
 |---------|----------|
 | **No sessions found** | Check that `~/.claude/projects/` contains `.jsonl` session files. Claude Code creates these automatically during use. |
 | **API key not found** | The extension checks: env var → workspace `.env` → VS Code secrets → interactive prompt. Make sure `ANTHROPIC_API_KEY` is set in at least one location. |
+| **Scoring returns 401 in some workspaces but not others** | You're using `.env` in one workspace and it isn't present (or is stale) in another. Copy the current key into each workspace's `.env`, or clear it from every workspace to let SecretStorage take over. |
+| **Scoring returns 401 in every workspace after rotating the key** | A stale `ANTHROPIC_API_KEY` is exported in your shell rc and was inherited when VS Code launched. Env vars are captured at launch, not per-window — fully quit VS Code and relaunch from a shell where the variable is unset or updated. |
 | **Quick Wins shows no results** | Run `gh auth login` to authenticate the GitHub CLI. |
 | **Usage tab is empty** | Make sure you've used Claude Code in the current workspace so `~/.claude/projects/<workspace>/*.jsonl` files exist. The Usage tab is scoped to the current workspace project. |
 | **Extension doesn't activate** | Look for the CodeFluent icon in the activity bar. If missing, try reloading the window (`Ctrl+Shift+P` → "Reload Window"). |
