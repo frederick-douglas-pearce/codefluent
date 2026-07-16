@@ -32,8 +32,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:codefluent.dashboard",
-    "onCommand:codefluent.setApiKey"
+    "onView:codefluent.dashboard"
   ],
   "main": "./out/extension.js",
   "contributes": {

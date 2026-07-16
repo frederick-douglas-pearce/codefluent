@@ -911,6 +911,7 @@ describe('CodeFluentViewProvider', () => {
   describe('detectOverridingKeySource', () => {
     afterEach(() => {
       delete process.env.ANTHROPIC_API_KEY
+      ;(vscode.workspace as any).workspaceFolders = undefined
     })
 
     it('returns "env" when the environment variable is set', () => {
