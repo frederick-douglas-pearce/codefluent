@@ -17,7 +17,7 @@ CodeFluent parses your local Claude Code session files, scores your prompting be
 
 1. Install the `.vsix` package:
    ```
-   code --install-extension codefluent-1.2.1.vsix    # x-release-please-version
+   code --install-extension codefluent-1.3.0.vsix    # x-release-please-version
    ```
 2. Open the CodeFluent sidebar by clicking the activity bar icon
 3. When prompted, enter your Anthropic API key (stored securely in VS Code SecretStorage)
