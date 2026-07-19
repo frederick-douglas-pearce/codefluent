@@ -58,6 +58,10 @@
       {
         "command": "codefluent.openPanel",
         "title": "CodeFluent: Open Dashboard"
+      },
+      {
+        "command": "codefluent.setApiKey",
+        "title": "CodeFluent: Set API Key"
       }
     ],
     "configuration": {

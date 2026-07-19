@@ -42,6 +42,7 @@ export const window = {
   registerWebviewViewProvider: jest.fn(() => ({ dispose: jest.fn() })),
   showInputBox: jest.fn(),
   showInformationMessage: jest.fn(),
+  showWarningMessage: jest.fn(),
   showErrorMessage: jest.fn(),
   createTerminal: jest.fn(() => ({
     show: jest.fn(),

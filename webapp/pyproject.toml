@@ -14,10 +14,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=9.0.3",
-    "httpx>=0.28.1",
     "pytest-asyncio>=0.24",
     "playwright>=1.52.0",
     "pytest-playwright>=0.6.2",
+    "httpx2>=2.7.0",
 ]
 
 [tool.pytest.ini_options]
