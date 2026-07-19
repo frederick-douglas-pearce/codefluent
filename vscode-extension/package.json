@@ -111,12 +111,12 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^25.6.0",
     "@types/vscode": "1.116.0",
-    "jest": "^30.3.0",
-    "jest-environment-jsdom": "^30.0.0",
-    "ts-jest": "^29.4.9",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
+    "ts-jest": "^29.4.11",
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.92.0"
+    "@anthropic-ai/sdk": "^0.112.3"
   }
 }
