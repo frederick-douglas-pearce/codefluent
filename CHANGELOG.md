@@ -5,6 +5,25 @@ All notable changes to the CodeFluent project will be documented in this file. T
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.3.0](https://github.com/frederick-douglas-pearce/codefluent/compare/v1.2.1...v1.3.0) (2026-07-19)
+
+
+### Features
+
+* add setApiKey command and clarify key resolution docs ([#333](https://github.com/frederick-douglas-pearce/codefluent/issues/333)) ([3bf1bba](https://github.com/frederick-douglas-pearce/codefluent/commit/3bf1bba6ceb730361d0c0dd1bbdf454edfeaba67))
+* detect verification behaviors via tool sequence analysis ([#246](https://github.com/frederick-douglas-pearce/codefluent/issues/246)) ([#323](https://github.com/frederick-douglas-pearce/codefluent/issues/323)) ([6777086](https://github.com/frederick-douglas-pearce/codefluent/commit/6777086779d2c5957e33e1b98bdb43e3161463f9))
+* E2E items 4-10 via Playwright ([#312](https://github.com/frederick-douglas-pearce/codefluent/issues/312), Phase B) ([15bbef8](https://github.com/frederick-douglas-pearce/codefluent/commit/15bbef89edf44b9ea9ce27f0d37db480f48b838a))
+* E2E test infrastructure + items 1-3 via Playwright ([#312](https://github.com/frederick-douglas-pearce/codefluent/issues/312), Phase A) ([5a851d2](https://github.com/frederick-douglas-pearce/codefluent/commit/5a851d2bfa5d52784ac9ae314b8f01193a1e8a19))
+* extract system message subtypes for context/efficiency metrics ([#160](https://github.com/frederick-douglas-pearce/codefluent/issues/160)) ([#325](https://github.com/frederick-douglas-pearce/codefluent/issues/325)) ([46bf4f8](https://github.com/frederick-douglas-pearce/codefluent/commit/46bf4f8d9ec9666f237ab1e7009906a8a7dbaa34))
+* scan .claude/agents/ for subagent definitions in config maturity ([#238](https://github.com/frederick-douglas-pearce/codefluent/issues/238)) ([#322](https://github.com/frederick-douglas-pearce/codefluent/issues/322)) ([e14bd5c](https://github.com/frederick-douglas-pearce/codefluent/commit/e14bd5c830c6ed1509e4485690f01ec9a2274272))
+
+
+### Bug Fixes
+
+* aggregate Usage tab from JSONL, drop ccusage dependency ([#251](https://github.com/frederick-douglas-pearce/codefluent/issues/251)) ([#328](https://github.com/frederick-douglas-pearce/codefluent/issues/328)) ([5dc8c35](https://github.com/frederick-douglas-pearce/codefluent/commit/5dc8c35d737876d3d67606a6fc42f14e95a243a8))
+* make test/tsconfig.json self-contained for VS Code LSP ([#290](https://github.com/frederick-douglas-pearce/codefluent/issues/290)) ([00305f3](https://github.com/frederick-douglas-pearce/codefluent/commit/00305f3a05e86c5860cff825617c06c42fe4be17))
+* prevent Dependabot drift between @types/vscode and engines.vscode ([#293](https://github.com/frederick-douglas-pearce/codefluent/issues/293)) ([d4ebf04](https://github.com/frederick-douglas-pearce/codefluent/commit/d4ebf0486d8fdb61e94b25442ddb4afc50b6d9ad))
+
 ## [1.2.1](https://github.com/frederick-douglas-pearce/codefluent/compare/v1.2.0...v1.2.1) (2026-04-30)
 
 
